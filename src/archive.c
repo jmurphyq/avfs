@@ -34,7 +34,7 @@ static void arch_free_tree(struct entry *parent)
         ent = next;
     }
     
-    nod = av_namespace_get(parent);
+    nod = (struct archnode *) av_namespace_get(parent);
     av_unref_obj(nod);
     av_unref_obj(parent);
 }
@@ -164,7 +164,7 @@ static int get_archive(ventry *ve, struct archive **archp)
 
 static int lookup_check_node(struct entry *ent, const char *name)
 {
-    struct archnode *nod = av_namespace_get(ent);
+    struct archnode *nod = (struct archnode *) av_namespace_get(ent);
     
     if(nod == NULL)
         return -ENOENT;
@@ -215,7 +215,7 @@ static int arch_lookup(ventry *ve, const char *name, void **newp)
         type = 0;
     }
     else {
-        struct archnode *nod = av_namespace_get(ent);
+        struct archnode *nod = (struct archnode *) av_namespace_get(ent);
 
         if(nod != NULL)
             type = AV_TYPE(nod->st.mode);
@@ -269,7 +269,7 @@ static int arch_do_open(ventry *ve, int flags, avmode_t mode, void **resp)
     int res;
     struct archent *ae = arch_ventry_entry(ve);
     struct archfile *fil;
-    struct archnode *nod = av_namespace_get(ae->ent);
+    struct archnode *nod = (struct archnode *) av_namespace_get(ae->ent);
     struct archive *arch = ae->arch;
     vfile *basefile = NULL;
    
@@ -406,7 +406,7 @@ static struct archnode *arch_special_entry(int n, struct entry *ent,
 
     if(n == 0) {
         *namep = av_strdup(".");
-        nod = av_namespace_get(ent);
+        nod = (struct archnode *) av_namespace_get(ent);
         return nod;
     }
     else {
@@ -415,9 +415,9 @@ static struct archnode *arch_special_entry(int n, struct entry *ent,
         *namep = av_strdup("..");
         parent = av_namespace_parent(ent);
         if(parent != NULL)
-            nod = av_namespace_get(parent);
+            nod = (struct archnode *) av_namespace_get(parent);
         else
-            nod = av_namespace_get(ent);
+            nod = (struct archnode *) av_namespace_get(ent);
 
         av_unref_obj(parent);
         return nod;
@@ -447,7 +447,7 @@ static struct archnode *arch_nth_entry(int n, struct entry *parent,
         return NULL;
 
     *namep = av_namespace_name(ent);
-    nod = av_namespace_get(ent);
+    nod = (struct archnode *) av_namespace_get(ent);
     av_unref_obj(ent);
 
     return nod;
@@ -507,7 +507,7 @@ static int arch_readlink(ventry *ve, char **bufp)
     struct archive *arch = ae->arch;
 
     AV_LOCK(arch->lock);
-    nod = av_namespace_get(ae->ent);
+    nod = (struct archnode *) av_namespace_get(ae->ent);
     if(nod == NULL)
         res = -ENOENT;
     else if(!AV_ISLNK(nod->st.mode))

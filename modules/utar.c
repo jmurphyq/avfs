@@ -251,7 +251,7 @@ static int read_entry(vfile *vf, struct tar_entinfo *tinf)
             if(res < 0) break;
 
             sres = av_lseek(vf, AV_DIV(tinf->size, BLOCKSIZE) * BLOCKSIZE, 
-                              AVSEEK_CUR);
+                            AVSEEK_CUR);
             if(sres < 0)
                 break;
 
@@ -364,7 +364,7 @@ static int check_existing(struct entry *ent, struct avstat *tarstat)
 {
     struct archnode *nod;
     
-    nod = av_namespace_get(ent);
+    nod = (struct archnode *) av_namespace_get(ent);
 
     if(AV_ISDIR(nod->st.mode)) {
         if(AV_ISDIR(tarstat->mode)) {
@@ -397,11 +397,12 @@ static void fill_link(struct archive *arch, struct entry *ent,
 
     link = av_arch_resolve(arch, linkname, 0);
     if(link != NULL)
-        nod = av_namespace_get(link);
+        nod = (struct archnode *) av_namespace_get(link);
 
-    if(nod == NULL)
+    if(nod == NULL || AV_ISDIR(nod->st.mode))
         av_log(AVLOG_WARNING, "utar: Illegal hard link");
     else {
+        nod->st.nlink ++;
         av_namespace_set(ent, nod);
         av_ref_obj(ent);
         av_ref_obj(nod);
@@ -422,16 +423,20 @@ static void fill_node(struct archive *arch, struct entry *ent,
     struct tarnode *tn;
     union block *header = &tinf->header;
 
-    nod = av_arch_new_node(arch, ent);
+    nod = av_arch_new_node(arch, ent, AV_ISDIR(tarstat->mode));
 
-    tarstat->dev = nod->st.dev;
-    tarstat->ino = nod->st.ino;
-    tarstat->blocks = AV_BLOCKS(tinf->size);
-    tarstat->blksize = BLOCKSIZE;
-    tarstat->atime = tarstat->mtime;  /* FIXME */
-    tarstat->ctime = tarstat->mtime;
+    /* keep dev, ino, nlink */
+    nod->st.mode = tarstat->mode;
+    nod->st.uid = tarstat->uid;
+    nod->st.gid = tarstat->gid;
+    nod->st.rdev = tarstat->rdev;
+    nod->st.size = tarstat->size;
+    nod->st.blksize = BLOCKSIZE;
+    nod->st.blocks = AV_BLOCKS(tinf->size);
+    nod->st.atime = tarstat->mtime; /* FIXME */
+    nod->st.mtime = tarstat->mtime;
+    nod->st.ctime = tarstat->mtime;
 
-    nod->st = *tarstat;
     nod->offset = tinf->datastart;
     nod->realsize = tinf->size;
 
@@ -459,7 +464,7 @@ static void fill_tarentry(struct archive *arch, struct entry *ent,
     union block *header = &tinf->header;
     struct archnode *nod;
 
-    nod = av_namespace_get(ent);
+    nod = (struct archnode *) av_namespace_get(ent);
     if(nod != NULL) {
         res = check_existing(ent, tarstat);
         if(res != 1)

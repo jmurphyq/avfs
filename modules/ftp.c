@@ -812,7 +812,7 @@ static int ftp_init_localfile(struct ftplocalfile *lf, int sock)
     if(res < 0)
         return res;
 
-    lf->fd = open(lf->tmpfile, O_RDWR | O_CREAT | O_TRUNC | O_APPEND, 0700);
+    lf->fd = open(lf->tmpfile, O_RDWR | O_CREAT | O_TRUNC | O_APPEND, 0600);
     if(lf->fd == -1)
         return -errno;
 

@@ -14,11 +14,12 @@ static void archnode_destroy(struct archnode *nod)
     av_unref_obj(nod->data);
 }
 
-struct archnode *av_arch_new_node(struct archive *arch, struct entry *ent)
+struct archnode *av_arch_new_node(struct archive *arch, struct entry *ent,
+                                  int isdir)
 {
     struct archnode *nod;
 
-    nod = av_namespace_get(ent);
+    nod = (struct archnode *) av_namespace_get(ent);
     if(nod != NULL) {
         av_unref_obj(nod);
         av_unref_obj(ent);
@@ -46,6 +47,22 @@ struct archnode *av_arch_new_node(struct archive *arch, struct entry *ent)
     nod->st.mtime = arch->st.mtime;
     nod->st.atime = nod->st.mtime;
     nod->st.ctime = nod->st.mtime;
+    if(!isdir)
+        nod->st.nlink = 1;
+    else {
+        struct entry *parent;
+        struct archnode *parnod;
+
+        nod->st.nlink = 2;        
+        parent = av_namespace_parent(ent);
+        if(parent != NULL) {
+            parnod = (struct archnode *) av_namespace_get(parent);
+            if(parnod != NULL) 
+                parnod->st.nlink ++;
+
+            av_unref_obj(parent);
+        }
+    }
 
     av_namespace_set(ent, nod);
     av_ref_obj(ent);
@@ -57,7 +74,7 @@ void av_arch_del_node(struct entry *ent)
 {
     struct archnode *nod;
 
-    nod = av_namespace_get(ent);
+    nod = (struct archnode *) av_namespace_get(ent);
     av_namespace_set(ent, NULL);
     av_unref_obj(nod);
     av_unref_obj(ent);
@@ -68,7 +85,7 @@ struct archnode *av_arch_default_dir(struct archive *arch, struct entry *ent)
     struct archnode *nod;
     avmode_t mode;
 
-    nod = av_arch_new_node(arch, ent);
+    nod = av_arch_new_node(arch, ent, 1);
 
     mode = (arch->st.mode & 0777) | AV_IFDIR;
     if (mode & 0400) mode |= 0100;
@@ -102,7 +119,7 @@ struct entry *av_arch_resolve(struct archive *arch, const char *path,
         if(!*p)
             break;
 
-        nod = av_namespace_get(ent);
+        nod = (struct archnode *) av_namespace_get(ent);
         if(nod == NULL) {
             if(!create) {
                 av_unref_obj(ent);

@@ -27,6 +27,7 @@ i_overlaydir = $(install_root)/overlay
 i_devdir = $(install_root)/dev
 i_codadev0 = $(i_devdir)/cfs0
 i_codadev1 = $(i_devdir)/cfs1
+i_emacsstart = $(install_root)/etc/emacs/site-start.d
 
 INSTALL = @INSTALL@
 
@@ -64,8 +65,11 @@ install_flushredir:
 	$(INSTALL) -m 755 flushredir $(i_sbindir)/flushredir
 
 install: $(install_scriptcomps)
+	@../mkinstalldirs $(i_bindir)
 	$(INSTALL) -m 755 ftppass $(i_bindir)/ftppass
 	$(INSTALL) -m 755 davpass $(i_bindir)/davpass
+	@../mkinstalldirs $(i_emacsstart)
+	$(INSTALL) -m 644 avfscoda.el $(i_emacsstart)/avfscoda.el
 
 start:
 	$(absrcscriptdir)/avfscoda start

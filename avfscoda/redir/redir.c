@@ -9,6 +9,8 @@
 #include <linux/coda_psdev.h>
 #include <linux/version.h>
 
+MODULE_LICENSE("GPL");
+
 #if 0
 #define DEB(X) printk X
 #else

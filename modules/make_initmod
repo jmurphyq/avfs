@@ -9,13 +9,15 @@ done
 
 echo "/* This file was generated automatically by 'make_initmod' */"
 echo
-echo '#include "mod_static.h"'
+echo '#include "avfs.h"'
 echo
 
 for name in $modnames; do
   echo "int av_init_module_${name}(struct vmodule *module);"
 done
 
+echo
+echo "extern void av_init_static_modules();"
 echo
 echo "void av_init_static_modules()"
 echo "{"

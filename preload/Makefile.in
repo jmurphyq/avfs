@@ -1,27 +1,54 @@
-CC = gcc
-CFLAGS = -Wall -g -fPIC
-LDLIBS = -lsocket -lnsl -ldl -lposix4 -lavfs 
-LDFLAGS = -L../lib
-CPPFLAGS = -I../include -D_REENTRANT -D_POSIX_PTHREAD_SEMANTICS
+SHELL = /bin/sh
 
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+sbindir = @sbindir@
+top_srcdir = @top_srcdir@
 
-all: avfs_server avfs_preload.so
+i_sbindir = $(install_root)$(sbindir)
 
-avfs_server: avfs_server.o server.o send.o ../lib/libavfs.a
+CC = @CC@
+CFLAGS = -I$(top_srcdir)/include @CFLAGS@ -fPIC @CPPFLAGS@
+LDFLAGS = @LDFLAGS@ @LIBS@
 
-avfs_preload_objs = wrapper.o client.o send.o
+all: all-@preload_build@
+install: install-@preload_build@
+depend: depend-@preload_build@
+
+all-no:
+install-no:
+depend-no:
+
+all-yes: avfs_server avfs_preload.so
+
+#leak=leak.o
+
+avfs_server_objs = \
+	avfs_server.o          \
+	server.o               \
+	send.o                 \
+	../src/libavfs.a        \
+	../modules/libmodules.a \
+	../src/libavfs.a        \
+	$(leak)
+
+avfs_server: $(avfs_server_objs)
+	$(CC) -o avfs_server $(avfs_server_objs) $(LDFLAGS)
+
+avfs_preload_objs = \
+	client.o  \
+	utils.o   \
+	send.o    \
+	file.o    \
+	open.o    \
+	stat.o
+
 avfs_preload.so: $(avfs_preload_objs)
-	gcc -shared -o avfs_preload.so.tmp $(avfs_preload_objs) -lsocket
-	mv avfs_preload.so.tmp avfs_preload.so
+	$(CC) -shared -o avfs_preload.so $(avfs_preload_objs) -lsocket
 
-client: client.o send.o
+depend-yes:
+	cp -f Makefile Makefile.old
+	sed '/^# DO NOT REMOVE THIS LINE/q' < Makefile.old > Makefile
+	gcc -MM $(CFLAGS) *.c >> Makefile
 
-avfs_server.o: send.h
-send.o: send.h
-
-clean:
-	rm -f *.o
-
-realclean: clean
-	rm -f *.so
-	rm -f avfs_server
+# DO NOT REMOVE THIS LINE, OR "make depend" WILL NOT WORK

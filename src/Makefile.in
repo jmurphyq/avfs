@@ -1,0 +1,55 @@
+SHELL = /bin/sh
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+libdir = @libdir@
+moduledir = @moduledir@
+top_srcdir = @top_srcdir@
+
+CC = @CC@
+CFLAGS = -I$(top_srcdir)/include @CFLAGS@ @CPPFLAGS@
+
+avfs_objs = \
+	utils.o      \
+	sysdeps.o    \
+	tmpfile.o    \
+	alloc.o      \
+	parsels.o    \
+	ugid.o       \
+	parse.o      \
+	prog.o       \
+	cache.o      \
+	filebuf.o    \
+	local.o      \
+	default.o    \
+	oper.o       \
+	fdops.o      \
+	virtual.o    \
+	modload.o    \
+	remote.o     \
+	namespace.o  \
+	state.o      \
+	serialfile.o \
+	filtprog.o   \
+	filter.o     \
+	filecache.o  \
+	socket.o     \
+	passwords.o
+
+all: libavfs.a
+
+libavfs.a: $(avfs_objs)
+	$(AR) cr libavfs.a $(avfs_objs)
+
+utils.o: info.h
+
+info.h:
+	rm -f info.h
+	./make_info $(moduledir) > info.h
+
+depend: info.h
+	cp -f Makefile Makefile.old
+	sed '/^# DO NOT REMOVE THIS LINE/q' < Makefile.old > Makefile
+	gcc -MM $(CFLAGS) *.c >> Makefile
+
+# DO NOT REMOVE THIS LINE, OR "make depend" WILL NOT WORK

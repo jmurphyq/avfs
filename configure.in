@@ -31,6 +31,7 @@ cflags="$CFLAGS"
 AC_PROG_CC
 AC_PROG_CPP
 AC_PROG_INSTALL
+AC_PROG_RANLIB
 
 if test -z "$cflags"; then
    if test "$GCC" = yes; then
@@ -48,11 +49,12 @@ if test -z "$cflags"; then
    fi
 fi
 
+CPPFLAGS="$CPPFLAGS -D_REENTRANT -D_POSIX_PTHREAD_SEMANTICS"
 
 AC_CHECK_PROG(LD, ld, [ld -r], [$CC -Wl,-r -nostdlib])
 
-
 AC_CHECK_FUNCS(vsnprintf strncasecmp strcasecmp mkdtemp)
+AC_CHECK_FUNC(nanosleep, , [AC_CHECK_LIB(posix4, nanosleep)])
 AC_HEADER_MAJOR
 
 AC_CACHE_CHECK([for d_type in struct dirent], my_cv_struct_d_type,
@@ -63,6 +65,17 @@ if test $my_cv_struct_d_type = yes; then
   AC_DEFINE(HAVE_D_TYPE)
 fi
 
+dnl We require neon 0.12
+NEON_REQUIRE(0,12)
+
+dnl Build neon. We support a VPATH build.
+NEON_BUNDLED('${top_srcdir}/libneon', [
+    NEON_NORMAL_BUILD
+    NEON_XML_PARSER
+])
+
+LIBS=$NEONLIBS
+LIBS="$LIBS -ldl -lpthread"
 
 moduledir='${libdir}/avfs'
 
@@ -71,9 +84,11 @@ AC_SUBST(moduledir)
 os=`uname -s`
 
 if test "$os" = "Linux"; then
-    avfscoda=yes
+    avfscoda_build=yes
+    preload_build=no
 else
-    avfscoda=no
+    avfscoda_build=no
+    preload_build=yes
 fi
 
 dnl ================================================================
@@ -81,12 +96,9 @@ dnl == Now comes the stuff that is only for avfscoda              ==
 dnl ================================================================
 
 install_scriptcomps=
-avfscoda_all=
-avfscoda_install=
 
-if test "$avfscoda" = yes; then
-	avfscoda_all=avfscoda_all
-	avfscoda_install=avfscoda_install
+
+if test $avfscoda_build = yes; then
 
 	kernsrcver=
 	kernrunver=
@@ -223,10 +235,11 @@ printf("%s", UTS_RELEASE);
 fi
 
 AC_SUBST(install_scriptcomps)
-AC_SUBST(avfscoda_all)
-AC_SUBST(avfscoda_install)
 
-AC_OUTPUT(lib/Makefile include/Makefile avfscoda/Makefile lib/modules/Makefile lib/zlib/Makefile avfscoda/redir/Makefile extfs/Makefile scripts/Makefile test/Makefile)
+AC_SUBST(avfscoda_build)
+AC_SUBST(preload_build)
+
+AC_OUTPUT(src/Makefile modules/Makefile include/Makefile avfscoda/Makefile avfscoda/redir/Makefile preload/Makefile libneon/Makefile extfs/Makefile scripts/Makefile test/Makefile)
 
 
 

@@ -3,39 +3,50 @@ SHELL = /bin/sh
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 sbindir = @sbindir@
-
-DAV_LIBS = -lneon -lxml -lz
+top_srcdir = @top_srcdir@
 
 i_sbindir = $(install_root)$(sbindir)
 
 CC = @CC@
-CFLAGS = @CFLAGS@
-CPPFLAGS = @CPPFLAGS@ -I../include -D_REENTRANT -D_POSIX_PTHREAD_SEMANTICS 
-LDFLAGS = -Wl,-E -ldl -lpthread $(DAV_LIBS)
+CFLAGS = -I$(top_srcdir)/include @CFLAGS@ @CPPFLAGS@
+LDFLAGS = @LDFLAGS@ @LIBS@
 
 INSTALL = @INSTALL@
 
-all: @avfscoda_all@
-install: @avfscoda_install@
+all: all-@avfscoda_build@
+install: install-@avfscoda_build@
+depend: depend-@avfscoda_build@
 
-avfscoda_all: avfscoda
+all-no:
+install-no:
+depend-no:
+
+all-yes: avfscoda
 	$(MAKE) -C redir all
 
 #leak=leak.o
 
-avfscoda_objs=avfscoda.o mount.o dispatch.o child.o $(leak)
+avfscoda_objs = \
+	avfscoda.o              \
+	mount.o                 \
+	dispatch.o              \
+	child.o                 \
+	../src/libavfs.a        \
+	../modules/libmodules.a \
+	../src/libavfs.a        \
+	$(leak)
 
-avfscoda: $(avfscoda_objs) ../lib/libavfs.a
-	$(CC) -o avfscoda $(avfscoda_objs) ../lib/libavfs.a $(LDFLAGS)
+avfscoda: $(avfscoda_objs)
+	$(CC) -o avfscoda $(avfscoda_objs) $(LDFLAGS)
 
-avfscoda_install:
+install-yes:
 	@../mkinstalldirs $(i_sbindir)
 	$(INSTALL) -m 755 avfscoda $(i_sbindir)/avfscoda
 	$(MAKE) -C redir install
 
-depend:
+depend-yes:
 	cp -f Makefile Makefile.old
 	sed '/^# DO NOT REMOVE THIS LINE/q' < Makefile.old > Makefile
-	gcc -MM $(CPPFLAGS) *.c >> Makefile
+	gcc -MM $(CFLAGS) *.c >> Makefile
 
 # DO NOT REMOVE THIS LINE, OR "make depend" WILL NOT WORK

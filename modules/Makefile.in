@@ -1,0 +1,49 @@
+SHELL = /bin/sh
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+libdir = @libdir@
+moduledir = @moduledir@
+top_srcdir = @top_srcdir@
+
+CC = @CC@
+CFLAGS = -I$(top_srcdir)/include @CFLAGS@ @CPPFLAGS@ 
+
+modules = \
+	volatile.o   \
+	rsh.o        \
+	http.o       \
+	ftp.o        \
+	ugz.o        \
+	dav.o        \
+	uz.o         \
+	gz.o         \
+	ubz2.o       \
+	bz2.o
+
+#	utar.o       \
+#	urar.o       \
+#	uar.o        \
+#	uzip.o       \
+#	floppy.o     \
+#	extfs.o 
+
+modules_objs = \
+	$(modules)   \
+	mod_static.o \
+	dav_ls.o
+
+all: libmodules.a
+
+libmodules.a: $(modules_objs)
+	$(AR) cr libmodules.a $(modules_objs)
+
+mod_static.c: make_initmod
+	./make_initmod $(modules) > mod_static.c
+
+depend:
+	cp -f Makefile Makefile.old
+	sed '/^# DO NOT REMOVE THIS LINE/q' < Makefile.old > Makefile
+	gcc -MM $(CFLAGS) $(CPPFLAGS) *.c >> Makefile
+
+# DO NOT REMOVE THIS LINE, OR "make depend" WILL NOT WORK

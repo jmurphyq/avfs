@@ -1522,7 +1522,7 @@ static void process_kernel_req()
 
                 break;
 
-            default:                
+            default:;
             }
 
             release_fids(op->req);

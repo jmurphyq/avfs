@@ -8,7 +8,7 @@ top_srcdir = @top_srcdir@
 
 CC = @CC@
 LD = @LD@
-CFLAGS = -I$(top_srcdir)/include @CFLAGS@ @CPPFLAGS@
+CFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/zlib @CFLAGS@ @CPPFLAGS@
 
 core_objs = \
 	utils.o      \
@@ -37,7 +37,8 @@ core_objs = \
 	filter.o     \
 	filecache.o  \
 	socket.o     \
-	passwords.o
+	passwords.o  \
+	zread.o
 
 all: core.o
 

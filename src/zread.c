@@ -18,6 +18,21 @@
 #define INBUFSIZE 16384
 #define OUTBUFSIZE 32768
 
+/* This is the 'cost' of the restoration from the index cache */
+#define ZCACHE_EXTRA_DIST 45000
+
+/* It is not worth it to compress the state better */
+#define STATE_COMPRESS_LEVEL 1
+
+struct streamcache {
+    int id;
+    z_stream s;
+};
+
+static struct streamcache scache;
+static int zread_nextid;
+static AV_LOCK_DECL(zread_lock);
+
 struct zindex {
     avoff_t offset;          /* The number of output bytes */
     avoff_t indexoffset;     /* Offset in the indexfile */
@@ -26,32 +41,147 @@ struct zindex {
 };
 
 struct zcache {
-    avmutex lock;
     char *indexfile;
     avoff_t filesize;
     avoff_t nextindex;
+    int id;
     struct zindex *indexes;
 };
 
 struct zfile {
     z_stream s;
     int iseof;
+    int id; /* Hack: the id of the last used zcache */
     
     vfile *infile;
     avoff_t dataoff;
     char inbuf[INBUFSIZE];
 };
 
+static int zfile_compress_state(char *state, int statelen, char **resp)
+{
+    int res;
+    z_stream s;
+    int bufsize = sizeof(int) + statelen + statelen / 1000 + 1 + 12;
+    char *cstate = av_malloc(bufsize);
+    
+    s.next_in = state;
+    s.avail_in = statelen;
+    s.next_out = cstate + sizeof(int);
+    s.avail_out = bufsize - sizeof(int);
+    s.zalloc = NULL;
+    s.zfree = NULL;
+
+    ((int *) cstate)[0] = statelen;
+
+    res = deflateInit(&s, STATE_COMPRESS_LEVEL);
+    if(res != Z_OK) {
+        av_log(AVLOG_ERROR, "ZFILE: compress state failed");
+        av_free(cstate);
+        return -EIO;
+    }
+
+    res = deflate(&s, Z_FINISH);
+    if(res != Z_STREAM_END) {
+        av_log(AVLOG_ERROR, "ZFILE: compress state failed");
+        av_free(cstate);
+        return -EIO;
+    }
+    
+    res = deflateEnd(&s);
+    if(res != Z_OK) {
+        av_log(AVLOG_ERROR, "ZFILE: compress state failed");
+        av_free(cstate);
+        return -EIO;
+    }
+    
+    *resp = cstate;
+    return sizeof(int) + s.total_out;
+}
+
+static int zfile_uncompress_state(char *cstate, int cstatelen, char **resp)
+{
+    int res;
+    z_stream s;
+    int statelen = ((int *) cstate)[0];
+    char *state = av_malloc(statelen);
+    
+    s.next_in = cstate + sizeof(int);
+    s.avail_in = cstatelen - sizeof(int);
+    s.next_out = state;
+    s.avail_out = statelen;
+    s.zalloc = NULL;
+    s.zfree = NULL;
+
+    res = inflateInit(&s);
+    if(res != Z_OK) {
+        av_log(AVLOG_ERROR, "ZFILE: compress state failed");
+        av_free(state);
+        return -EIO;
+    }
+
+    res = inflate(&s, Z_FINISH);
+    if(res != Z_STREAM_END) {
+        av_log(AVLOG_ERROR, "ZFILE: compress state failed");
+        av_free(state);
+        return -EIO;
+    }
+    
+    res = inflateEnd(&s);
+    if(res != Z_OK) {
+        av_log(AVLOG_ERROR, "ZFILE: compress state failed");
+        av_free(state);
+        return -EIO;
+    }
+    
+    *resp = state;
+    return 0;
+}
+
+static void zfile_scache_save(int id, z_stream *s)
+{
+    int res;
+
+    if(id == 0) {
+        res = inflateEnd(s);
+        if(res != Z_OK) {
+            av_log(AVLOG_ERROR, "ZFILE: inflateEnd: %s (%i)",
+                   s->msg == NULL ? "" : s->msg, res);
+        }
+        return;
+    }
+
+    if(scache.id != 0) {
+        res = inflateEnd(&scache.s);
+        if(res != Z_OK) {
+            av_log(AVLOG_ERROR, "ZFILE: inflateEnd: %s (%i)",
+                   scache.s.msg == NULL ? "" : scache.s.msg, res);
+        }
+    }
+
+    scache.id = id;
+    scache.s = *s;
+
+    scache.s.avail_in = 0;
+    scache.s.next_in = NULL;
+    scache.s.avail_out = 0;
+    scache.s.next_out = NULL;
+}
+
 static int zfile_reset(struct zfile *fil)
 {
     int res;
 
-    res = inflateReset(&fil->s);
+    /* FIXME: Is it a good idea to save the previous state or not? */
+    zfile_scache_save(fil->id, &fil->s);
+    memset(&fil->s, 0, sizeof(z_stream));
+    res = inflateInit2(&fil->s, -MAX_WBITS);
     if(res != Z_OK) {
-        av_log(AVLOG_ERROR, "ZFILE: inflateReset: %s (%i)",
+        av_log(AVLOG_ERROR, "ZFILE: inflateInit: %s (%i)",
                fil->s.msg == NULL ? "" : fil->s.msg, res);
         return -EIO;
     }
+
     fil->iseof = 0;
 
     return 0;
@@ -98,10 +228,12 @@ static int zfile_save_state(struct zcache *zc, char *state, int statesize,
     return 0;
 }
 
+
 static int zfile_save_index(struct zfile *fil, struct zcache *zc)
 {
     int res;
     char *state;
+    char *cstate;
 
     res = inflateSave(&fil->s, &state);
     if(res < 0) {
@@ -109,8 +241,13 @@ static int zfile_save_index(struct zfile *fil, struct zcache *zc)
         return -EIO;
     }
     
-    res = zfile_save_state(zc, state, res, fil->s.total_out);
+    res = zfile_compress_state(state, res, &cstate);
     free(state);
+    if(res < 0)
+        return res;
+
+    res = zfile_save_state(zc, cstate, res, fil->s.total_out);
+    av_free(cstate);
 
     return res;
 }
@@ -120,14 +257,11 @@ static int zfile_seek_index(struct zfile *fil, struct zcache *zc,
 {
     int fd;
     int res;
+    char *cstate;
     char *state;
 
-    res = inflateEnd(&fil->s);
-    if(res != Z_OK) {
-        av_log(AVLOG_ERROR, "ZFILE: inflateEnd: %s (%i)",
-               fil->s.msg == NULL ? "" : fil->s.msg, res);
-        return -EIO;
-    }
+    /* FIXME: Is it a good idea to save the previous state or not? */
+    zfile_scache_save(fil->id, &fil->s);
     memset(&fil->s, 0, sizeof(z_stream));
 
     fd = open(zc->indexfile, O_RDONLY, 0);
@@ -139,14 +273,19 @@ static int zfile_seek_index(struct zfile *fil, struct zcache *zc,
     
     lseek(fd, zi->indexoffset, SEEK_SET);
 
-    state = av_malloc(zi->indexsize);
-    res = read(fd, state, zi->indexsize);
+    cstate = av_malloc(zi->indexsize);
+    res = read(fd, cstate, zi->indexsize);
     close(fd);
     if(res != zi->indexsize) {
-        av_free(state);
+        av_free(cstate);
         av_log(AVLOG_ERROR, "ZFILE: Error in indexfile %s", zc->indexfile);
         return -EIO;
     }
+
+    res = zfile_uncompress_state(cstate, zi->indexsize, &state);
+    av_free(cstate);
+    if(res < 0)
+        return res;
 
     res = inflateRestore(&fil->s, state);
     av_free(state);
@@ -210,17 +349,18 @@ static int zfile_inflate(struct zfile *fil, struct zcache *zc)
         return -EIO;
     }
     
-    AV_LOCK(zc->lock);
+    AV_LOCK(zread_lock);
     if(fil->s.total_out >= zc->nextindex)
         res = zfile_save_index(fil, zc);
     else
         res = 0;
-    AV_UNLOCK(zc->lock);
+    AV_UNLOCK(zread_lock);
     if(res < 0)
         return res;
 
     return 0;
 }
+
 
 static int zfile_read(struct zfile *fil, struct zcache *zc, char *buf,
                       avsize_t nbyte)
@@ -244,8 +384,7 @@ static int zfile_skip_to(struct zfile *fil, struct zcache *zc, avoff_t offset)
     char outbuf[OUTBUFSIZE];
     
     while(fil->s.total_out < offset && !fil->iseof) {
-        /* FIXME: Save us just a little of this rubbish :(,
-           That would do much good to tar */
+        /* FIXME: Maybe cache some data as well */
         fil->s.next_out = outbuf;
         fil->s.avail_out = AV_MIN(OUTBUFSIZE, offset - fil->s.total_out);
 
@@ -259,31 +398,41 @@ static int zfile_skip_to(struct zfile *fil, struct zcache *zc, avoff_t offset)
 
 static int zfile_seek(struct zfile *fil, struct zcache *zc, avoff_t offset)
 {
-    int res;
     struct zindex *zi;
     avoff_t curroff = fil->s.total_out;
+    avoff_t zcdist;
+    avoff_t scdist;
+    avoff_t dist;
 
-    AV_LOCK(zc->lock);
+    if(offset >= curroff)
+        dist = offset - curroff;
+    else
+        dist = -1;
+
     zi = zcache_find_index(zc, offset);
-    if(offset < curroff || (zi != NULL && zi->offset > curroff)) {
-        if(zi == NULL) {
-            av_log(AVLOG_DEBUG, "seek to %lli, reseting", offset);
-            res = zfile_reset(fil);
-        }
-        else {
-            av_log(AVLOG_DEBUG, "seek to %lli, using %lli", offset,
-                   zi->offset);
-            res = zfile_seek_index(fil, zc, zi);
+    if(zi != NULL)
+        zcdist = offset - zi->offset + ZCACHE_EXTRA_DIST;
+    else
+        zcdist = offset;
+
+    if(scache.id == zc->id && offset >= scache.s.total_out) {
+        scdist = offset - scache.s.total_out;
+        if((dist == -1 || scdist < dist) && scdist < zcdist) {
+            z_stream tmp = fil->s;
+            fil->s = scache.s;
+            scache.s = tmp;
+            return 0;
         }
     }
-    else
-        res = 0;
-    AV_UNLOCK(zc->lock);
 
-    if(res < 0)
-        return res;
+    if(dist == -1 || zcdist < dist) {
+        if(zi == NULL)
+            return zfile_reset(fil);
+        else
+            return zfile_seek_index(fil, zc, zi);
+    }
     
-    return zfile_skip_to(fil, zc, offset);
+    return 0;
 }
 
 avssize_t av_zfile_pread(struct zfile *fil, struct zcache *zc, char *buf,
@@ -291,8 +440,16 @@ avssize_t av_zfile_pread(struct zfile *fil, struct zcache *zc, char *buf,
 {
     avssize_t res;
 
+    fil->id = zc->id;
+
     if(offset != fil->s.total_out) {
+        AV_LOCK(zread_lock);
         res = zfile_seek(fil, zc, offset);
+        AV_UNLOCK(zread_lock);
+        if(res < 0)
+            return res;
+
+        res = zfile_skip_to(fil, zc, offset);
         if(res < 0)
             return res;
     }
@@ -304,15 +461,9 @@ avssize_t av_zfile_pread(struct zfile *fil, struct zcache *zc, char *buf,
 
 static void zfile_destroy(struct zfile *fil)
 {
-    if(fil->s.state != NULL) {
-        int res;
-        
-        res = inflateEnd(&fil->s);
-        if(res != Z_OK) {
-            av_log(AVLOG_ERROR, "ZFILE: inflateEnd: %s (%i)",
-                   fil->s.msg == NULL ? "" : fil->s.msg, res);
-        }
-    }
+    AV_LOCK(zread_lock);
+    zfile_scache_save(fil->id, &fil->s);
+    AV_UNLOCK(zread_lock);
 }
 
 struct zfile *av_zfile_new(vfile *vf, avoff_t dataoff)
@@ -325,6 +476,7 @@ struct zfile *av_zfile_new(vfile *vf, avoff_t dataoff)
     fil->iseof = 0;
     fil->infile = vf;
     fil->dataoff = dataoff;
+    fil->id = 0;
 
     res = inflateInit2(&fil->s, -MAX_WBITS);
     if(res != Z_OK)
@@ -339,7 +491,6 @@ static void zcache_destroy(struct zcache *zc)
     struct zindex *zi;
     struct zindex *nextzi;
 
-    AV_FREELOCK(zc->lock);
     av_del_tmpfile(zc->indexfile);
     
     for(zi = zc->indexes; zi != NULL; zi = nextzi) {
@@ -353,11 +504,17 @@ struct zcache *av_zcache_new()
     struct zcache *zc;
 
     AV_NEW_OBJ(zc, zcache_destroy);
-    AV_INITLOCK(zc->lock);
     zc->indexfile = NULL;
     zc->nextindex = 0;
     zc->indexes = NULL;
     zc->filesize = 0;
+
+    AV_LOCK(zread_lock);
+    if(zread_nextid == 0)
+        zread_nextid = 1;
+
+    zc->id = zread_nextid ++;
+    AV_UNLOCK(zread_lock);
     
     av_get_tmpfile(&zc->indexfile);
     

@@ -30,6 +30,16 @@ struct gzfile {
     struct gznode *node;
 };
 
+#define GZBUFSIZE 1024
+
+struct gzbuf {
+    vfile *vf;
+    unsigned char buf[GZBUFSIZE];
+    unsigned char *next;
+    unsigned int avail;
+    unsigned int total;
+};
+
 #define GZHEADER_SIZE 10
 #define GZFOOTER_SIZE 8
 
@@ -50,37 +60,65 @@ struct gzfile {
 #define QBYTE(ptr) (BI(ptr,0) | (BI(ptr,1)<<8) | \
                    (BI(ptr,2)<<16) | (BI(ptr,3)<<24))
 
-static int gz_read_sure(vfile *vf, char *buf, avsize_t nbyte)
+static int gzbuf_getbyte(struct gzbuf *gb)
 {
-    avssize_t res;
-  
-    res = av_read(vf, buf, nbyte);
-    if(res < 0)
-        return res;
+    if(gb->avail == 0) {
+        avssize_t res = av_read(gb->vf, gb->buf, GZBUFSIZE);
+        if(res < 0)
+            return res;
 
-    if((avsize_t) res != nbyte) {
+        gb->next = gb->buf;
+        gb->avail = res;
+    }
+    
+    if(gb->avail == 0) {
         av_log(AVLOG_ERROR, "UGZ: Premature end of file");
         return -EIO;
     }
-  
+    
+    gb->avail --;
+    gb->total ++;
+    return *gb->next ++;
+}
+
+static int gzbuf_skip_string(struct gzbuf *gb)
+{
+    int c;
+
+    do {
+        c = gzbuf_getbyte(gb);
+        if(c < 0)
+            return c;
+    } while(c != '\0');
+
     return 0;
 }
 
-static int gz_skip_options(vfile *vf, int flags)
+static int gzbuf_read(struct gzbuf *gb, char *buf, avsize_t nbyte)
 {
-    /* FIXME: handle options */
-    av_log(AVLOG_ERROR, "UGZ: Cannot handle options");
-    return -EIO;
+    for(; nbyte; nbyte--) {
+        int c = gzbuf_getbyte(gb);
+        if(c < 0)
+            return c;
+
+        *buf ++ = c;
+    }
+    return 0;
 }
+
 
 static int gz_read_header(vfile *vf, struct gznode *nod)
 {
     int res;
+    struct gzbuf gb;
     unsigned char buf[GZHEADER_SIZE];
     int method, flags;
-    int mask;
+    
+    gb.vf = vf;
+    gb.avail = 0;
+    gb.total = 0;
 
-    res = gz_read_sure(vf, buf, GZHEADER_SIZE);
+    res = gzbuf_read(&gb, buf, GZHEADER_SIZE);
     if(res < 0)
         return res;
 
@@ -106,24 +144,51 @@ static int gz_read_header(vfile *vf, struct gznode *nod)
   
     /* Ignore bytes 8 and 9 */
 
-    mask = GZFL_EXTRA_FIELD | GZFL_ORIG_NAME | GZFL_COMMENT | GZFL_HEAD_CRC;
-    if((flags & mask) != 0) {
-        res = gz_skip_options(vf, flags);
+    if((flags & GZFL_EXTRA_FIELD) != 0) {
+        avsize_t len;
+
+        res = gzbuf_read(&gb, buf, 2);
         if(res < 0)
             return res;
 
-        nod->dataoff = res;
+        for(len = DBYTE(buf); len; len--) {
+            res = gzbuf_getbyte(&gb);
+            if(res < 0)
+                return res;
+        }
     }
-    else
-        nod->dataoff = GZHEADER_SIZE;
-    
+
+    if((flags & GZFL_ORIG_NAME) != 0) {
+        res = gzbuf_skip_string(&gb);
+        if(res < 0)
+            return res;
+    }
+
+    if((flags & GZFL_COMMENT) != 0) {
+        res = gzbuf_skip_string(&gb);
+        if(res < 0)
+            return res;
+    }
+    if((flags & GZFL_HEAD_CRC) != 0) {
+        res = gzbuf_read(&gb, buf, 2);
+        if(res < 0)
+            return res;
+    }
+
+    nod->dataoff = gb.total;
+
     res = av_lseek(vf, -4, AVSEEK_END);
     if(res < 0)
         return res;
 
-    res = gz_read_sure(vf, buf, 4);
+    res = av_read(vf, buf, 4);
     if(res < 0)
         return res;
+
+    if(res != 4) {
+        av_log(AVLOG_ERROR, "UGZ: Short read");
+        return -EIO;
+    }
 
     nod->size = QBYTE(buf);
 

@@ -40,14 +40,18 @@ if test -z "$cflags"; then
       else 
          CFLAGS="-Wall -O3"
       fi
+      ZLIB_CFLAGS="-Wall -O3"
    else
       if test "$debug" = yes; then
          CFLAGS="-g"
       else
          CFLAGS="-O"
       fi
+      ZLIB_CFLAGS="-O"
    fi
 fi
+
+AC_SUBST(ZLIB_CFLAGS)
 
 CPPFLAGS="$CPPFLAGS -D_REENTRANT -D_POSIX_PTHREAD_SEMANTICS"
 

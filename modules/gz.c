@@ -26,5 +26,6 @@ int av_init_module_gz(struct vmodule *module)
     gz_args[0] = "gzip";
     gz_args[1] = NULL;
 
+    /* FIXME: compression level argument */
     return av_init_filt(module, AV_VER, "gz", gz_args, ugz_args, NULL, &avfs);
 }

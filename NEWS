@@ -1,3 +1,31 @@
+Changes from 0.5.2 to 0.9.1
+  - Major rewrite touching almost all interfaces and code
+  - Magic char changed from '@' to '#'. I hope this is the last such
+    change ;)
+  - New handlers:
+      o ftp (read only for the moment)
+      o http
+      o rsh
+      o dav (contributed by Justin Mason)
+  - Other improvements:
+      o Indexing of gzip and bzip2 files. This achieves fast random
+        access to the uncompressed files without caching to whole file.
+      o Better disk cache management, tunable parameters in
+        /#avfsstat/cache
+      o Multi-threaded operation for avfscoda and preload
+      o Philosophy change for preload method: only a thin client is
+        preloaded, work done in a server
+      o Write support is working in avfscoda, redir doesn't fully
+        support this yet
+      o Support for avfscoda with reiserfs (2.4.4 and above)
+   - Degradations:
+      o ugz, utar, floppy, are now read only. Will be fixed.
+      o Preload is only supported on Solaris, old Linux libc's are now
+        not supported.
+      o A few things are missing from the preload method (you can't
+        'cd' into archive, mmap() doesn't work, etc.), Will eventually
+        be fixed.
+
 Changes from 0.5.1 to 0.5.2
   - Fixed redir.c compilation problems with newer LIBCs
   - Made redir.c work on 2.4.x kernels

@@ -1,35 +1,36 @@
-Handlers:
+Write support for:
+  - ftp
+  - floppy
+  - dav
+  - ugz
+  - ubz2
+  - utar
 
- - Built in
-    o FTP
-    o HTTP
+Flush file caches
 
-Library:
+Redir should support operations:
+  - open(..., O_CREAT, ...)
+  - creat
+  - truncate
+  - utime
+  - chmod
+  - chown
+  - lchown
+  - unlink
+  - rmdir
+  - mkdir
+  - mknod
+  - symlink
+  - rename
+  - link
 
- - Test with GLIBC 2.1
- - Make input/output redirection work
+Redir can't support following symlinks to virtual files. Find better solution
 
-Misc:
+Avfscoda:
+  - Clean soloution to file access permissions
+  - Faster random access to files (at least streaming access)
 
- - Documentation
- - Make it LGPL (ask permission from the GNU tar people)
- - automated testing!
+Preload:
+  - remember cwd after exec
+  - add missing operations
 
-
-coda:
-- holds onto files which are closed          DONE
-- module reference count is not decremented  DONE
-
-avfscoda:
-- attributes are (wrongly) cached
-- lutime(), lchmod() call (???)
-
-avfs:
-- cached files are held open (filter handler)
-
-kernel:
-- shrink_dcache_sb: checks d_count in dentry_unused. Why???
-- check if coda mount allows suid/sgid
-
-nredir:	
-- make it SMP safe

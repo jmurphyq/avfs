@@ -3,7 +3,6 @@
    WARNING   WARNING   WARNING   WARNING   WARNING   WARNING
 ---------------------------------------------------------------
  
-
 Avfscoda changes the behavior of the kernel. This change is simple,
 and in theory it is quite harmless, but regardless you should be
 aware! Backing up important data is always a good idea.
@@ -127,13 +126,15 @@ should want to do that).
     
  2) Check if the CODA device, '/dev/cfs0' exists:
 
-     'ls -l /dev/cfs0' should show it like this:
+     'ls -l /dev/cfs*' should show it like this:
 
        crw-------   1 root     root      67,   0 Jan 20  1999 /dev/cfs0
+       crw-------   1 root     root      67,   1 Jan 20  1999 /dev/cfs1
 
      If not, then you need to create it with the command:
 
        mknod -m 600 /dev/cfs0 c 67 0
+       mknod -m 600 /dev/cfs1 c 67 1
 
  3) Check if the CODA filesystem is in your kernel:
 
@@ -161,7 +162,7 @@ should want to do that).
  5) Check if the overlay directory is mounted and virtual files are
     accessible. 
 
-      cat /overlay/@avfsstat
+      ls /overlay/#avfsstat
     
     If not, then there is probably something wrong with the coda
     filesystem, or the avfsocda module (see 1-4).
@@ -180,19 +181,19 @@ should want to do that).
 
  7) Check if you can access virtual files:
 
-        cat /@avfsstat
-        ls -al targzfile.tgz@/
+        cat /#avfsstat/copyright
+        ls -al targzfile.tgz#/
       
     If not, then try to turn on AVFS in your shell:
 
-        cd /@avfs-on
+        cd /#avfs-on
 
-    It should print 'cd: /@avfs-on: File exists', if not then the
+    It should print 'cd: /#avfs-on: File exists', if not then the
     redirection module probably does not work (see 6).
 
   8) Check handlers:
 
-        cat /@avfsstat-m
+        cat /#avfsstat/modules
 
      This should list all supported handlers. If things like "rpm" and
      "deb" are not listed, then the 'extfs' modules have not been
@@ -209,8 +210,29 @@ should want to do that).
      'scripts' directory of the source distribution to /etc/profile.d.
 
      If there is no /etc/profile.d, you may try to edit the files
-     /etc/profile, and /etc/csh.cshrc and insert the contents of
-     'avfscoda.sh' and 'avfscoda.csh' respectively.
+     /etc/profile, and /etc/csh.cshrc and source the files
+     'avfscoda.sh' and 'avfscoda.csh' respectively:
+
+/etc/csh.cshrc:
+-------------------------------------------------------------------------------
+# /etc/csh.cshrc: system-wide .cshrc file for csh(1)/tcsh(1).
+.....
+
+if ( -f /etc/avfscoda.csh ) then
+  source /etc/avfscoda.csh
+endif
+-------------------------------------------------------------------------------
+
+/etc/profile:
+-------------------------------------------------------------------------------
+# /etc/profile: system-wide .profile file for the Bourne shell (sh(1))
+.....
+
+if [ -f /etc/avfscoda.sh ]; then
+  source /etc/avfscoda.sh
+fi
+-------------------------------------------------------------------------------
+
      
 How Does It Work
 ----------------

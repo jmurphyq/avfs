@@ -26,6 +26,7 @@ int av_init_module_bz2(struct vmodule *module)
     bz2_args[0] = "bzip2";
     bz2_args[1] = NULL;
 
+    /* FIXME: compression level argument */
     return av_init_filt(module, AV_VER, "bz2", bz2_args, ubz2_args,
                         NULL, &avfs);
 }

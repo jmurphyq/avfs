@@ -3,12 +3,12 @@ Here is the description of the virtual path format:
 The canonical form
 ==================
 
-   [basepath]@handler[options][:parameters][/internalpath]
+   [basepath]#handler[options][:parameters][/internalpath]
 
 'basepath', if given is an ordinary file path (can be a regular file,
 or a directory).
 
-'@' is the character that prefixes the handler name and is
+'#' is the character that prefixes the handler name and is
 defined by VDEV_SEP_CHAR. 
 
 'handler' is the name of the file handler (filter, remote file
@@ -30,12 +30,12 @@ structure. It is prefixed by '/'.
 
 Notes: 
 
-   The only special characters are '@' and '/'.
+   The only special characters are '#' and '/'.
 
-   If an ordinary (non virtual) file name contains a '@', then this
+   If an ordinary (non virtual) file name contains a '#', then this
    file can be accessed normaly (i.e. existing files take
-   precedence over virtual ones). If a virtual path contains '@'
-   (even in the real path part) they must be represented by '@@'.
+   precedence over virtual ones). If a virtual path contains '#'
+   (even in the real path part) they must be represented by '##'.
 
    (This way a situation can arrise, where you can't access a
    virtual file, because a real file 'shadows' it. This is a case
@@ -43,25 +43,25 @@ Notes:
 
 Examples (not all of these are implemented yet): 
 
-   /home/user/archive.tar.gz@ugz@utar/path/file
-   /@ftp:host.dom.org/pub/README
-   /@http:www.dom.org|some|where|index.html
-   /@http:localhost:8000|~user|file 
-   file@gz-9
-   /@floppy-a/xyz
+   /home/user/archive.tar.gz#ugz#utar/path/file
+   /#ftp:host.dom.org/pub/README
+   /#http:www.dom.org|some|where|index.html
+   /#http:localhost:8000|~user|file 
+   file#gz-9
+   /#floppy:a/xyz
    
 The non-canonical virtual paths
 ===============================
 
 This is to make life easier for the user.
 
-   dir/file.ext@[/extrapath]
+   dir/file.ext#[/extrapath]
 
-With this notation, the '@' is substituted with the handler(s)
-determined from the file's extension. Any parameters after the @ are
+With this notation, the '#' is substituted with the handler(s)
+determined from the file's extension. Any parameters after the # are
 passed to the last expanded handler.
 
 Examples:
-   file.gz@             == file.gz@ugz
-   archive.tar.gz@/dir  == archive.tar.gz@ugz@utar/dir
-   archive.tar.gz@+/dir == archive.tar.gz@ugz@utar+/dir	
+   file.gz#             == file.gz#ugz
+   archive.tar.gz#/dir  == archive.tar.gz#ugz#utar/dir
+   archive.tar.gz#+/dir == archive.tar.gz#ugz#utar+/dir	

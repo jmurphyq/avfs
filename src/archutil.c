@@ -139,7 +139,7 @@ struct entry *av_arch_resolve(struct archive *arch, const char *path,
             break;
         }
         
-        next = av_namespace_lookup_all(NULL, ent, p);
+        next = av_namespace_lookup_all(arch->ns, ent, p);
         if(next != NULL) {
             av_unref_obj(ent);
             ent = next;

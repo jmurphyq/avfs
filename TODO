@@ -8,6 +8,12 @@ Write support for:
 
 Flush file caches
 
+uzip - symlinks
+ucpio - builtin
+namespace - use hash table for lookup
+
+automatic handler detection based on extension AND content
+
 Redir should support operations:
   - open(..., O_CREAT, ...)
   - creat

@@ -20,6 +20,8 @@
 
 #define DEFAULT_DEV "/dev/cfs0"
 #define SECONDARY_DEV "/dev/cfs1"
+#define DEFAULT_DEVFS_DEV "/dev/coda/0"
+#define SECONDARY_DEVFS_DEV "/dev/coda/1"
 #define DEFAULT_DIR "/overlay"
 
 static pid_t mount_pid = -1;
@@ -204,6 +206,16 @@ int main(int argc, char *argv[])
 
     if(cfs == -1) {
 	codadev = SECONDARY_DEV;
+	cfs = open(codadev, O_RDWR);
+    }
+
+    if(cfs == -1) {
+	codadev = DEFAULT_DEVFS_DEV;
+	cfs = open(codadev, O_RDWR);
+    }
+
+    if(cfs == -1) {
+	codadev = SECONDARY_DEVFS_DEV;
 	cfs = open(codadev, O_RDWR);
     }
 

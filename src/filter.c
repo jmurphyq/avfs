@@ -14,6 +14,8 @@
 #include "internal.h"
 #include "oper.h"
 
+/* FIXME: If there was an error in read, this shouldn't be kept in cache */
+
 struct filtid {
     avino_t ino;
     avdev_t dev;

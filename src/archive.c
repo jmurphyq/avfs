@@ -341,10 +341,12 @@ static int arch_do_open(ventry *ve, int flags, avmode_t mode, void **resp)
     
     realopen = arch_real_open(flags);
     if(realopen) {
-        if(!(ap->flags & ARF_NOBASE) && arch->basefile == NULL) {
-            res = av_open(ve->mnt->base, AVO_RDONLY, 0, &arch->basefile);
-            if(res < 0)
-                return res;
+        if(!(ap->flags & ARF_NOBASE)) {
+            if(arch->basefile == NULL) {
+                res = av_open(ve->mnt->base, AVO_RDONLY, 0, &arch->basefile);
+                if(res < 0)
+                    return res;
+            }
 
             arch->numread ++;
             basefile = arch->basefile;

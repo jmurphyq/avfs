@@ -7,18 +7,16 @@
 
 #define REDIR2_VERSION "0.0"
 
-#define TRIGFS_MAGIC	0x28476c62
+#define AVFS_MAGIC_CHAR '#'
 
 static struct dentry *(*orig_lookup)(struct inode *, struct dentry *,
 				     struct nameidata *);
 
 
-static struct file_system_type trigfs_fs_type;
-
 static int is_avfs(const unsigned char *name, unsigned int len)
 {
 	for (; len--; name++)
-		if (*name == (unsigned char) '@')
+		if (*name == AVFS_MAGIC_CHAR)
 			return 1;
 	return 0;
 }
@@ -44,78 +42,48 @@ static int is_avfs(const unsigned char *name, unsigned int len)
 	return orig_lookup(inode, dentry, nd);
 */
 #endif
+#if 0
+		result = d_alloc(dentry->d_parent, &dentry->d_name);
+		if (!result)
+			result = ERR_PTR(-ENOMEM);
+		else {
+			/* Take over the dentry */
+			d_drop(dentry);
+			dentry = result;
+			dentry->d_op = &redir2_dentry_operations;
+			d_add(dentry, NULL);
+		}
+#endif
 
-
-static int trigfs_follow_link(struct dentry *dentry, struct nameidata *nd)
+static inline int is_create(struct nameidata *nd)
 {
-	printk("trigfs_follow_link\n");
+	if (!nd)
+		return 1;
+	if ((nd->flags & LOOKUP_CREATE) && !(nd->flags & LOOKUP_CONTINUE))
+		return 1;
 	return 0;
 }
 
-static struct inode_operations trigfs_inode_operations = {
-	.follow_link	= trigfs_follow_link,
-};
 
-static struct dentry *redir2_lookup(struct inode *inode, struct dentry *dentry,
+static struct dentry *redir2_lookup(struct inode *dir, struct dentry *dentry,
 				    struct nameidata *nd)
 {
 	struct dentry *result;
 
-	result = orig_lookup(inode, dentry, nd);
-	if(nd && !result && !dentry->d_inode &&
-	   is_avfs(dentry->d_name.name, dentry->d_name.len)) {
-		printk("redir2_lookup: %.*s\n", 
-		       dentry->d_name.len,
+	result = orig_lookup(dir, dentry, nd);
+	if (!is_create(nd) && !result && !dentry->d_inode &&
+	    is_avfs(dentry->d_name.name, dentry->d_name.len)) {
+		printk("redir2_lookup: %.*s\n", dentry->d_name.len,
 		       dentry->d_name.name);
-
 		
+		d_add(dentry, (struct inode *) 1);
+		up(&dir->i_sem);
+		do_mount("none", "none", "none", 0, NULL);
+		down(&dir->i_sem);
+			
 	}
 	return result;	
 }
-
-static struct super_operations trigfs_ops = {
-};
-
-static int trigfs_fill_super(struct super_block * sb, void * data, int silent)
-{
-	struct inode * inode;
-	struct dentry * root;
-
-	sb->s_blocksize = 4096;
-	sb->s_blocksize_bits = 12;
-	sb->s_magic = TRIGFS_MAGIC;
-	sb->s_op = &trigfs_ops;
-
-	inode = new_inode(sb);
-	if (!inode)
-		return -ENOMEM;
-
-	inode->i_mode = S_IFDIR | 0777;
-	inode->i_op = &trigfs_inode_operations;
-
-	root = d_alloc_root(inode);
-	if (!root) {
-		iput(inode);
-		return -ENOMEM;
-	}
-	sb->s_root = root;
-	return 0;
-}
-
-static struct super_block *trigfs_get_sb(struct file_system_type *fs_type,
-	int flags, const char *dev_name, void *data)
-{
-	return get_sb_single(fs_type, flags, data, trigfs_fill_super);
-}
-
-
-static struct file_system_type trigfs_fs_type = {
-	.owner		= THIS_MODULE,
-	.name		= "trigfs",
-	.get_sb		= trigfs_get_sb,
-	.kill_sb	= kill_anon_super,
-};
-
 
 static int __init init_redir2(void)
 {
@@ -124,14 +92,13 @@ static int __init init_redir2(void)
 	orig_lookup = current->fs->root->d_inode->i_op->lookup;
 	current->fs->root->d_inode->i_op->lookup = redir2_lookup;
 
-	return register_filesystem(&trigfs_fs_type);
+	return 0;
 }
 
 static void __exit exit_redir2(void)
 {
 	printk(KERN_INFO "redir2 cleanup\n");
 
-	unregister_filesystem(&trigfs_fs_type);
 	if(orig_lookup)
 		current->fs->root->d_inode->i_op->lookup = orig_lookup;
 }

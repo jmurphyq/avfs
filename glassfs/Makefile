@@ -1,4 +1,4 @@
-obj-m := glassfs.o
+obj-m := glassfs.o redir2.o
 
 #KERNDIR := /store/linux/uml/linux-2.6.4
 #EXTRA := ARCH=um

@@ -16,6 +16,9 @@
 static struct dentry *(*orig_lookup)(struct inode *, struct dentry *,
 				     struct nameidata *);
 
+static struct dentry *(**orig_lookup_ptr)(struct inode *, struct dentry *,
+				     struct nameidata *);
+
 
 static struct vfsmount *orig_mount;
 static struct semaphore redir2_sem;
@@ -119,7 +122,7 @@ static int mount_avfs(struct dentry *dentry, char *path, int mode)
 	ret = call_usermodehelper("/bin/mount", argv, envp, 1);
 	printk("mount ret: %i\n", ret);
 	if (ret) {
-		d_delete(dentry);
+		d_drop(dentry);
 		return -EINVAL;
 	}
 
@@ -188,7 +191,17 @@ static int redir2_dentry_revalidate(struct dentry *dentry,
 				    struct nameidata *nd)
 {
 	//printk("redir2_dentry_revalidate\n");
-	return 0;
+	if (dentry->d_flags & DCACHE_AUTOFS_PENDING) {
+		printk("redir2_dentry_revalidate: still pending\n");
+		down(&redir2_sem);
+		printk("redir2_dentry_revalidate: OK\n");
+		up(&redir2_sem);
+	}
+	if (dentry->d_flags & DCACHE_AUTOFS_PENDING)
+		BUG();
+	if (!dentry->d_inode || d_unhashed(dentry))
+		return 0;
+	return 1;
 }
 
 static struct dentry_operations redir2_dentry_operations = {
@@ -210,12 +223,14 @@ static struct dentry *lookup_maybeavfs(struct inode *dir,
 {
 	int err;
 
+	down(&redir2_sem);
 	dentry->d_op = &redir2_dentry_operations;
 	dentry->d_flags |= DCACHE_AUTOFS_PENDING;
-		
 	d_add(dentry, NULL);
 	up(&dir->i_sem);
 	err = lookup_avfs(dentry, nd);
+	dentry->d_flags &= ~DCACHE_AUTOFS_PENDING;
+	up(&redir2_sem);
 	down(&dir->i_sem);
 	if (err)
 		return ERR_PTR(err);
@@ -241,8 +256,9 @@ static int __init init_redir2(void)
 	sema_init(&redir2_sem, 1);
 	read_lock(&current->fs->lock);
 	orig_mount = mntget(current->fs->rootmnt);
-	orig_lookup = current->fs->root->d_inode->i_op->lookup;
-	current->fs->root->d_inode->i_op->lookup = redir2_lookup;
+	orig_lookup_ptr = &current->fs->root->d_inode->i_op->lookup;
+	orig_lookup = *orig_lookup_ptr;
+	*orig_lookup_ptr = redir2_lookup;
 	read_unlock(&current->fs->lock);
 
 	return 0;
@@ -252,8 +268,8 @@ static void __exit exit_redir2(void)
 {
 	printk(KERN_INFO "redir2 cleanup\n");
 
-	if(orig_lookup)
-		current->fs->root->d_inode->i_op->lookup = orig_lookup;
+	if(orig_lookup_ptr)
+		*orig_lookup_ptr = orig_lookup;
 	mntput(orig_mount);
 }
 

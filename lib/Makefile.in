@@ -33,7 +33,7 @@ all-yes: libavfs.so.0.0.0
 avfs_objs = ../src/core.o ../modules/modules.o ../zlib/zlib.o ../bzlib/libbz.o
 
 libavfs.so.0.0.0: $(avfs_objs)
-	$(CC) -shared -o libavfs.so.0.0.0 -Wl,-soname -Wl,libavfs.so.0 $(avfs_objs) $(LDFLAGS)
+	$(CC) -shared -o libavfs.so.0.0.0 -Wl,--version-script=libavfs.map -Wl,-soname -Wl,libavfs.so.0 $(avfs_objs) $(LDFLAGS)
 
 avfs.o: $(avfs_objs)
 	$(LD) -o avfs.o $(avfs_objs)

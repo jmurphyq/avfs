@@ -6,8 +6,9 @@ or compressed files, or access remote files without recompiling the
 programs or changing the kernel.
 
 At the moment it supports floppies, tar and gzip files, zip, bzip2, ar
-and rar files, ftp sessions, http, webdav, rsh/rcp. Quite a few other
-handlers are implemented with the Midnight Commander's external FS.
+and rar files, ftp sessions, http, webdav, rsh/rcp, ssh/scp. Quite a
+few other handlers are implemented with the Midnight Commander's
+external FS.
 
 AVFS is (C) under the GNU GPL (see the file COPYING). The shared
 library supporting AVFS with LD_PRELOAD is (C) unred the GNU LGPL (see
@@ -123,7 +124,7 @@ recognized (most are), but you can always tell exactly what should be
 done with the file by using the second method.
 
 There are handlers which do not have a "base" file. The following
-handlers are like this: floppy, ftp, rsh, http, dav, avfsstat,
+handlers are like this: floppy, ftp, rsh, ssh, http, dav, avfsstat,
 volatile, rpms.
 
 Examples
@@ -131,6 +132,7 @@ Examples
   /#floppy:a                                 - a: drive
   /#a                                        - a: drive (alias for /#floppy:a)
   /#rsh:otherhost/foo/bar                    - /foo/bar on 'otherhost'
+  /#ssh:user@host/dir                        - /dir on 'host', login as 'user'
   /#ftp:ftp.funet.fi/pub/Linux               - anonymous ftp 
   /#ftp:user@host.domain.org/home/xyz/file   - ftp with username 'user'
   /#ftp_ctl:user@host.domain.org/password    - write the password to this file
@@ -164,6 +166,7 @@ The following "handelers" are available now:
   #floppy            floppy                 uses mtools (mdir, mcopy, ...)
   #a                 first floppy drive     alias for #floppy:a
   #rsh               rsh/rcp                only works if rsh needs no password
+  #ssh               ssh/scp                only works if ssh needs no password
   #ftp               ftp                    builtin
   #ftp_ctl           control ftp sessions   
   #dav               webdav                 builtin

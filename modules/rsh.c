@@ -92,24 +92,47 @@ static char *rsh_code_name(const char *name)
     return newname;
 }
 
+static char *rsh_split_hostpart(const char *hostpart, const char **hostp)
+{
+    unsigned int i;
+    
+    for(i = 0; hostpart[i] != '\0'; i++) {
+        if(hostpart[i] == '@') {
+            *hostp = hostpart + i + 1;
+            return av_strndup(hostpart, i);
+        }
+    }
+    *hostp = hostpart;
+    return NULL;
+}
+
 static int rsh_list(struct remote *rem, struct remdirlist *dl)
 {
     int res;
     struct program *pr;
-    const char *prog[6];
+    const char *prog[8];
     char *escaped_path;
+    unsigned int arg;
+    const char *host;
+    char *username;
 
     escaped_path = rsh_code_name(dl->hostpath.path);
+    username = rsh_split_hostpart(dl->hostpath.host, &host);
 
-    prog[0] = "rsh";
-    prog[1] = dl->hostpath.host;
-    prog[2] = "/bin/ls";
+    arg = 0;
+    prog[arg++] = rem->name;
+    if(username != NULL) {
+        prog[arg++] = "-l";
+        prog[arg++] = username;
+    }
+    prog[arg++] = host;
+    prog[arg++] = "/bin/ls";
     if((dl->flags & REM_LIST_SINGLE) != 0)
-        prog[3] = "-ldn";
+        prog[arg++] = "-ldn";
     else
-        prog[3] = "-lan";
-    prog[4] = escaped_path;
-    prog[5] = NULL;
+        prog[arg++] = "-lan";
+    prog[arg++] = escaped_path;
+    prog[arg++] = NULL;
   
     res = av_start_program(prog, &pr);
     if(res == 0) {
@@ -119,6 +142,7 @@ static int rsh_list(struct remote *rem, struct remdirlist *dl)
         av_unref_obj(pr);
     }
     av_free(escaped_path);
+    av_free(username);
 
     return res;
 }
@@ -140,6 +164,10 @@ static int rsh_get(struct remote *rem, struct remgetparam *gp)
     char *codedpath;
     char *path;
     const char *prog[4];
+    char progname[4];
+
+    strcpy(progname, "rcp");
+    progname[0] = rem->name[0];
 
     res = av_get_tmpfile(&tmpfile);
     if(res < 0)
@@ -154,7 +182,7 @@ static int rsh_get(struct remote *rem, struct remgetparam *gp)
 
     lf->tmpfile = tmpfile;
 
-    prog[0] = "rcp";
+    prog[0] = progname;
     prog[1] = path;
     prog[2] = lf->tmpfile;
     prog[3] = NULL;
@@ -206,24 +234,36 @@ static void rsh_destroy(struct remote *rem)
     av_free(rem);
 }
 
-extern int av_init_module_rsh(struct vmodule *module);
-
-int av_init_module_rsh(struct vmodule *module)
+static int init_rsh(struct vmodule *module, const char *name)
 {
-    int res;
     struct remote *rem;
     struct avfs *avfs;
 
     AV_NEW(rem);
 
     rem->data    = NULL;
-    rem->name    = av_strdup("rsh");
+    rem->name    = av_strdup(name);
     rem->list    = rsh_list;
     rem->get     = rsh_get;
     rem->wait    = rsh_wait;
     rem->destroy = rsh_destroy;
     
-    res = av_remote_init(module, rem, &avfs);
+    return av_remote_init(module, rem, &avfs);
+}
 
-    return res;
+extern int av_init_module_rsh(struct vmodule *module);
+
+int av_init_module_rsh(struct vmodule *module)
+{
+    int res;
+
+    res = init_rsh(module, "rsh");
+    if(res < 0)
+        return res;
+
+    res = init_rsh(module, "ssh");
+    if(res < 0)
+        return res;
+
+    return 0;
 }

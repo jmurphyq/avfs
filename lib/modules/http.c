@@ -73,30 +73,30 @@ static int http_get_line(struct localfile *lf, char **linep)
     char *line;
 
     while(1) {        
-        res = __av_filebuf_readline(lf->sockfb, &line);
+        res = av_filebuf_readline(lf->sockfb, &line);
         if(res < 0)
             return res;
         if(res == 1)
             break;
 
-        if(__av_filebuf_eof(lf->sockfb)) {
-            __av_log(AVLOG_ERROR, "HTTP: connection closed in header");
+        if(av_filebuf_eof(lf->sockfb)) {
+            av_log(AVLOG_ERROR, "HTTP: connection closed in header");
             return -EIO;
         }
 
-        res = __av_filebuf_check(&lf->sockfb, 1, HTTP_READ_TIMEOUT);
+        res = av_filebuf_check(&lf->sockfb, 1, HTTP_READ_TIMEOUT);
         if(res < 0)
             return res;
 
         if(res == 0) {
-            __av_log(AVLOG_ERROR, "HTTP: timeout in header");
+            av_log(AVLOG_ERROR, "HTTP: timeout in header");
             return -EIO;
         }
     }
     
     strip_crlf(line);
 
-    __av_log(AVLOG_DEBUG, "HTTP: %s", line);
+    av_log(AVLOG_DEBUG, "HTTP: %s", line);
     *linep = line;
 
     return 0;
@@ -150,7 +150,7 @@ static int http_check_header_line(struct localfile *lf)
         http_process_header_line(lf, line);
         res = 1;
     }
-    __av_free(line);
+    av_free(line);
 
     return res;
 }
@@ -169,7 +169,7 @@ static int http_ignore_header(struct localfile *lf)
         if(line[0] == '\0')
             end = 1;
 
-        __av_free(line);
+        av_free(line);
     } while(!end);
 
     return 0;
@@ -185,13 +185,13 @@ static int http_process_status_line(struct localfile *lf, char *line)
 
     if(s[0] != ' ' || !isdigit((int) s[1]) || !isdigit((int) s[2]) || 
        !isdigit((int) s[3])) {
-        __av_log(AVLOG_ERROR, "HTTP: bad status code: %s", s);
+        av_log(AVLOG_ERROR, "HTTP: bad status code: %s", s);
         return -EIO;
     }
     
     statuscode = (s[1] - '0') * 100 + (s[2] - '0') * 10 + (s[3] - '0');
     
-    __av_log(AVLOG_DEBUG, "HTTP: status code: %i", statuscode);
+    av_log(AVLOG_DEBUG, "HTTP: status code: %i", statuscode);
 
     if(statuscode / 100 == 1) {
         res = http_ignore_header(lf);
@@ -204,7 +204,7 @@ static int http_process_status_line(struct localfile *lf, char *line)
     if(statuscode / 100 == 2)
         return 1;
 
-    __av_log(AVLOG_WARNING, "HTTP: error: %s", s);
+    av_log(AVLOG_WARNING, "HTTP: error: %s", s);
     http_ignore_header(lf);
 
     if(statuscode / 100 == 3 || statuscode / 100 == 4)
@@ -224,7 +224,7 @@ static int http_check_status_line(struct localfile *lf)
             return res;
         
         res = http_process_status_line(lf, line);
-        __av_free(line);
+        av_free(line);
     } while(res == 0);
 
     if(res < 0)
@@ -266,9 +266,9 @@ static char *http_url_path(const char *url)
     s = http_strip_resource_type(url);
     s = strchr(s, '/');
     if(s == NULL)
-        return __av_strdup("/");
+        return av_strdup("/");
     else
-        return __av_strdup(s);
+        return av_strdup(s);
 }
 
 static char *http_url_host(const char *url)
@@ -279,9 +279,9 @@ static char *http_url_host(const char *url)
     s = http_strip_resource_type(url);
     t = strchr(s, '/');
     if(t == NULL)
-        return __av_strdup(s);
+        return av_strdup(s);
     else
-        return __av_strndup(s, t - s);
+        return av_strndup(s, t - s);
 }
 
 static int http_request_get(int sock, struct file *fil)
@@ -292,26 +292,26 @@ static int http_request_get(int sock, struct file *fil)
     char *host;
     
     if(fil->fs->proxyname != NULL)
-        url = __av_strdup(fil->ent->url);
+        url = av_strdup(fil->ent->url);
     else
         url = http_url_path(fil->ent->url);
 
     host = http_url_host(fil->ent->url);
 
-    req = __av_stradd(NULL, 
+    req = av_stradd(NULL, 
                       "GET ", url, " HTTP/1.1\r\n",
                       "Host: ", host, "\r\n"
                       "Connection: close\r\n"
                       "\r\n",
                       NULL);
 
-    __av_free(url);
-    __av_free(host);
+    av_free(url);
+    av_free(host);
 
-    __av_log(AVLOG_DEBUG, "HTTP: %s", req);
+    av_log(AVLOG_DEBUG, "HTTP: %s", req);
 
     res = write_socket(sock, req, strlen(req));
-    __av_free(req);
+    av_free(req);
 
     return res;
 }
@@ -319,7 +319,7 @@ static int http_request_get(int sock, struct file *fil)
 
 static void http_stop(struct localfile *lf)
 {
-    __av_unref_obj(lf->sockfb);
+    av_unref_obj(lf->sockfb);
 }
 
 static int http_start(void *data, void **resp)
@@ -332,7 +332,7 @@ static int http_start(void *data, void **resp)
     struct localfile *lf;
 
     if(fil->fs->proxyname != NULL) {
-        host = __av_strdup(fil->fs->proxyname);
+        host = av_strdup(fil->fs->proxyname);
         defaultport = 8000;
     }
     else {
@@ -340,13 +340,13 @@ static int http_start(void *data, void **resp)
         defaultport = 80;
     }
 
-    res = __av_sock_connect(host, defaultport);
-    __av_free(host);
+    res = av_sock_connect(host, defaultport);
+    av_free(host);
     if(res < 0)
         return res;
 
     sock = res;
-    __av_registerfd(sock);
+    av_registerfd(sock);
 
     res = http_request_get(sock, fil);
     if(res < 0) {
@@ -357,12 +357,12 @@ static int http_start(void *data, void **resp)
     fil->ent->size = -1;
 
     AV_NEW_OBJ(lf, http_stop);
-    lf->sockfb = __av_filebuf_new(sock, 0);
+    lf->sockfb = av_filebuf_new(sock, 0);
     lf->ent = fil->ent;
 
     res = http_wait_response(lf);
     if(res < 0) {
-        __av_unref_obj(lf);
+        av_unref_obj(lf);
         return res;
     }
 
@@ -377,20 +377,20 @@ static avssize_t http_sread(void *data, char *buf, avsize_t nbyte)
     struct localfile *lf = (struct localfile *) data;
 
     do {
-        res = __av_filebuf_read(lf->sockfb, buf, nbyte);
+        res = av_filebuf_read(lf->sockfb, buf, nbyte);
         if(res != 0)
             return res;
         
-        if(__av_filebuf_eof(lf->sockfb))
+        if(av_filebuf_eof(lf->sockfb))
             return 0;
         
-        res = __av_filebuf_check(&lf->sockfb, 1, HTTP_READ_TIMEOUT);
+        res = av_filebuf_check(&lf->sockfb, 1, HTTP_READ_TIMEOUT);
         if(res < 0)
             return res;
         
     } while(res == 1);
 
-    __av_log(AVLOG_ERROR, "HTTP: timeout in body");
+    av_log(AVLOG_ERROR, "HTTP: timeout in body");
     return -EIO;
 }
 
@@ -404,17 +404,17 @@ static struct sfile *http_get_serialfile(struct file *fil)
         http_sread
     };
 
-    sf = (struct sfile *) __av_cacheobj_get(ent->cobj);
+    sf = (struct sfile *) av_cacheobj_get(ent->cobj);
     if(sf != NULL)
         return sf;
 
     AV_NEW_OBJ(filcpy, NULL);
     *filcpy = *fil;
 
-    sf = __av_sfile_new(&func, filcpy, 0);
+    sf = av_sfile_new(&func, filcpy, 0);
 
-    __av_unref_obj(ent->cobj);
-    ent->cobj = __av_cacheobj_new(sf, ent->url);
+    av_unref_obj(ent->cobj);
+    ent->cobj = av_cacheobj_new(sf, ent->url);
 
     return sf;
 }
@@ -431,7 +431,7 @@ static struct entry *http_get_entry(struct filesys *fs, const char *url)
     }
 
     AV_NEW(ent);
-    ent->url = __av_strdup(url);
+    ent->url = av_strdup(url);
     ent->cobj = NULL;
     ent->next = NULL;
     
@@ -450,7 +450,7 @@ static int begins_with(const char *str, const char *beg)
 
 static char *http_ventry_url(ventry *ve)
 {
-    char *url = __av_strdup((char *) ve->data);
+    char *url = av_strdup((char *) ve->data);
     char *s;
 
     for(s = url; *s; s++) {
@@ -461,8 +461,8 @@ static char *http_ventry_url(ventry *ve)
     if(!begins_with(url, "http://") && !begins_with(url, "ftp://")) {
         char *newurl;
 
-        newurl = __av_stradd(NULL, "http://", url, NULL);
-        __av_free(url);
+        newurl = av_stradd(NULL, "http://", url, NULL);
+        av_free(url);
         url = newurl;
     }
 
@@ -484,16 +484,16 @@ static int http_open(ventry *ve, int flags, avmode_t mode, void **resp)
     AV_NEW(fil);
     fil->ent = http_get_entry(fs, url);
     fil->fs = fs;
-    __av_free(url);
+    av_free(url);
 
     sf = http_get_serialfile(fil);
-    res = __av_sfile_startget(sf);
-    __av_unref_obj(sf);
+    res = av_sfile_startget(sf);
+    av_unref_obj(sf);
 
     if(res == 0) 
         *resp = (void *) fil;
     else 
-        __av_free(fil);
+        av_free(fil);
 
     return res;
 }
@@ -502,7 +502,7 @@ static int http_close(vfile *vf)
 {
     struct file *fil = (struct file *) vf->data;
 
-    __av_free(fil);
+    av_free(fil);
 
     return 0;
 }
@@ -515,8 +515,8 @@ static avssize_t http_read(vfile *vf, char *buf, avsize_t nbyte)
     struct sfile *sf;
 
     sf = http_get_serialfile(fil);
-    res = __av_sfile_pread(sf, buf, nbyte, vf->ptr);
-    __av_unref_obj(sf);
+    res = av_sfile_pread(sf, buf, nbyte, vf->ptr);
+    av_unref_obj(sf);
 
     if(res > 0)
         vf->ptr += res;
@@ -534,14 +534,14 @@ static int http_getattr(vfile *vf, struct avstat *buf, int attrmask)
         struct sfile *sf;
 
         sf = http_get_serialfile(fil);
-        res = __av_sfile_startget(sf);
+        res = av_sfile_startget(sf);
         if(res < 0)
             return res;
 
         size = fil->ent->size;
         if(size == -1)
-            size = __av_sfile_size(sf);
-        __av_unref_obj(sf);
+            size = av_sfile_size(sf);
+        av_unref_obj(sf);
     }
 
     buf->dev = 1;
@@ -578,14 +578,14 @@ static void http_destroy(struct avfs *avfs)
     ent = fs->ents;
     while(ent != NULL) {
         nextent = ent->next;
-        __av_free(ent->url);
-        __av_unref_obj(ent->cobj);
-        __av_free(ent);
+        av_free(ent->url);
+        av_unref_obj(ent->cobj);
+        av_free(ent);
         ent = nextent;
     }
 
-    __av_free(fs->proxyname);
-    __av_free(fs);
+    av_free(fs->proxyname);
+    av_free(fs);
 }
 
 static void http_get_proxy(struct filesys *fs)
@@ -599,20 +599,20 @@ static void http_get_proxy(struct filesys *fs)
     if(begins_with(proxyenv, "http://"))
         proxyenv = http_strip_resource_type(proxyenv);
     
-    fs->proxyname = __av_strdup(proxyenv);
+    fs->proxyname = av_strdup(proxyenv);
 
-    __av_log(AVLOG_DEBUG, "HTTP: proxy = %s", fs->proxyname);
+    av_log(AVLOG_DEBUG, "HTTP: proxy = %s", fs->proxyname);
 }
 
-extern int __av_init_module_http(struct vmodule *module);
+extern int av_init_module_http(struct vmodule *module);
 
-int __av_init_module_http(struct vmodule *module)
+int av_init_module_http(struct vmodule *module)
 {
     int res;
     struct avfs *avfs;
     struct filesys *fs;
 
-    res = __av_new_avfs("http", NULL, AV_VER, AVF_ONLYROOT, module, &avfs);
+    res = av_new_avfs("http", NULL, AV_VER, AVF_ONLYROOT, module, &avfs);
     if(res < 0)
         return res;
 
@@ -631,7 +631,7 @@ int __av_init_module_http(struct vmodule *module)
     avfs->read      = http_read;
     avfs->access    = http_access;
 
-    __av_add_avfs(avfs);
+    av_add_avfs(avfs);
     
     return 0;
 }

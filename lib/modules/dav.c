@@ -75,7 +75,7 @@ static char *dav_hostpath_to_url (char *urlbuf, int buflen,
     int len;
 
     *urlbuf = '\0';
-    __av_log(AVLOG_DEBUG, "DAV: hostpath-to-URL: host=%s path='%s'",
+    av_log(AVLOG_DEBUG, "DAV: hostpath-to-URL: host=%s path='%s'",
                                 hp->host, hp->path);
 
     /* now rewrite the host bit into the urlbuf, adding:
@@ -113,7 +113,7 @@ static char *dav_hostpath_to_url (char *urlbuf, int buflen,
     /**
      * Finally, we've rewritten it.
      */
-    __av_log(AVLOG_DEBUG, "DAV: rewritten URL = '%s'", urlbuf);
+    av_log(AVLOG_DEBUG, "DAV: rewritten URL = '%s'", urlbuf);
 
     return urlbuf;
 }
@@ -122,7 +122,7 @@ static char *dav_hostpath_to_url (char *urlbuf, int buflen,
 
 static void dav_free_localfile(struct davlocalfile *lf)
 {
-  __av_free(lf->url);
+  av_free(lf->url);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -191,13 +191,13 @@ new_dav_conn (struct davdata *davdat)
         if (conn->sesh == NULL) {
             /* NULL session? This one hasn't been initted yet. */
 	    av_dav_conn_init (conn, davdat);
-            __av_log(AVLOG_DEBUG, "DAV: created new HTTP session");
+            av_log(AVLOG_DEBUG, "DAV: created new HTTP session");
         }
         conn->isbusy = 1;
         return conn;
     }
 
-    __av_log(AVLOG_ERROR, "DAV: out of connections");
+    av_log(AVLOG_ERROR, "DAV: out of connections");
     return NULL;
 }
 
@@ -208,7 +208,7 @@ http_error_to_errno (const char *method, int httpret, const char *errstr)
 {
     int errval = -EIO;
 
-    __av_log(AVLOG_ERROR, "DAV: %s failed: (neon err=%d) \"%s\"",
+    av_log(AVLOG_ERROR, "DAV: %s failed: (neon err=%d) \"%s\"",
                                     method, httpret, errstr);
 
     switch (httpret) {
@@ -266,12 +266,12 @@ http_error_to_errno (const char *method, int httpret, const char *errstr)
         break;
 
         default:
-        __av_log (AVLOG_ERROR, "Unknown HTTP error code for %s: %d %s",
+        av_log (AVLOG_ERROR, "Unknown HTTP error code for %s: %d %s",
                 method, httpret, errstr);
 	errval = -ENXIO;
         break;
     }
-    __av_log (AVLOG_DEBUG, "returning errno %d", errval);
+    av_log (AVLOG_DEBUG, "returning errno %d", errval);
     return errval;
 }
 
@@ -282,13 +282,13 @@ static void av_get_cb (void *userdata, const char *buf, size_t len)
     struct davlocalfile *lf = (struct davlocalfile *) userdata;
     int res;
 
-    __av_log(AVLOG_DEBUG, "DAV: GET cb: writing %d", len);
+    av_log(AVLOG_DEBUG, "DAV: GET cb: writing %d", len);
     res = write (lf->fd, buf, len);
     if (res < 0) {
-        __av_log (AVLOG_ERROR, "DAV: write failed: %s", strerror(errno));
+        av_log (AVLOG_ERROR, "DAV: write failed: %s", strerror(errno));
     }
     if (res != len) {
-        __av_log (AVLOG_ERROR, "DAV: short write to tmpfile (%i/%i)",
+        av_log (AVLOG_ERROR, "DAV: short write to tmpfile (%i/%i)",
                 res, len);
     }
     lf->currsize += len;
@@ -309,13 +309,13 @@ static int dav_http_get (struct davdata *davdat, struct davlocalfile *lf)
         || conn->uri.path == NULL
         || conn->uri.host == NULL)
     {
-        __av_log(AVLOG_ERROR, "DAV: Invalid URI '%s'", lf->url);
+        av_log(AVLOG_ERROR, "DAV: Invalid URI '%s'", lf->url);
         res = -1; goto error;
     }
 
     lf->fd = open (lf->tmpfile, O_WRONLY|O_CREAT|O_TRUNC|O_APPEND, 0700);
     if (lf->fd < 0) {
-        __av_log(AVLOG_ERROR, "DAV: failed to write to '%s': %s", lf->tmpfile,
+        av_log(AVLOG_ERROR, "DAV: failed to write to '%s': %s", lf->tmpfile,
                 strerror (errno));
         res = -1; goto error;
     }
@@ -325,7 +325,7 @@ static int dav_http_get (struct davdata *davdat, struct davlocalfile *lf)
     /* unfortunately the Neon API doesn't allow partial reads.
      * Perhaps redo this using the http.c code to avoid having
      * to download the entire file first */
-    __av_log(AVLOG_DEBUG, "DAV: GETting '%s'", lf->url);
+    av_log(AVLOG_DEBUG, "DAV: GETting '%s'", lf->url);
     res = http_read_file (conn->sesh, lf->url, av_get_cb, lf);
     close (lf->fd); lf->fd = -1;
 
@@ -364,7 +364,7 @@ static int dav_http_put (struct file *fil, struct davlocalfile *lf)
     || conn->uri.path == NULL
     || conn->uri.host == NULL)
   {
-    __av_log(AVLOG_ERROR, "DAV: Invalid URI '%s'", lf->url);
+    av_log(AVLOG_ERROR, "DAV: Invalid URI '%s'", lf->url);
     res = -1; goto error;
   }
 
@@ -428,7 +428,7 @@ static int dav_res_stat_to_avstat (struct av_dav_resource *res,
         break;
 
     case resr_reference:
-        __av_log(AVLOG_WARNING, "DAV: reference: TODO %d", res->type);
+        av_log(AVLOG_WARNING, "DAV: reference: TODO %d", res->type);
         /* symbolic link, doesn't seem to be supported by mod_dav
          * anyway
          */
@@ -441,7 +441,7 @@ static int dav_res_stat_to_avstat (struct av_dav_resource *res,
         break;
 
     default:
-        __av_log(AVLOG_WARNING, "DAV: unknown resource type %d", res->type);
+        av_log(AVLOG_WARNING, "DAV: unknown resource type %d", res->type);
         return -1;
     }
 
@@ -482,7 +482,7 @@ populate_av_tree_from_reslist (struct dirlist *dl, char *grepfor,
 
       /* are we trying to look at only 1 file? */
       if (grepfor != NULL && strcmp (grepfor, shortname)) {
-          __av_log(AVLOG_DEBUG, "DAV: skipping '%s': %s, only want %s",
+          av_log(AVLOG_DEBUG, "DAV: skipping '%s': %s, only want %s",
                   current->uri, shortname, grepfor);
           goto skip;
       }
@@ -499,14 +499,14 @@ populate_av_tree_from_reslist (struct dirlist *dl, char *grepfor,
           }
 
           if (dav_res_stat_to_avstat (current, &stbuf) < 0) {
-              __av_log (AVLOG_WARNING,
+              av_log (AVLOG_WARNING,
                                 "DAV: parsing direntry: to_avstat failed");
               goto skip;
           }
 
-          __av_log (AVLOG_DEBUG, "DAV: adding direntry \"%s\" mode=0%o",
+          av_log (AVLOG_DEBUG, "DAV: adding direntry \"%s\" mode=0%o",
                                         remname, stbuf.mode);
-          __av_remote_add (dl, remname, linkname, &stbuf);
+          av_remote_add (dl, remname, linkname, &stbuf);
       }
 
   skip:
@@ -530,7 +530,7 @@ static int dav_list(struct remote *rem, struct dirlist *dl)
     const char *err;
 
     url = dav_hostpath_to_url (urlbuf, 511, &(dl->hostpath));
-    __av_log (AVLOG_DEBUG, "DAV: dav_list called on '%s' flags=%x",
+    av_log (AVLOG_DEBUG, "DAV: dav_list called on '%s' flags=%x",
                                         url, dl->flags);
 
     conn = new_dav_conn (davdat);
@@ -549,7 +549,7 @@ static int dav_list(struct remote *rem, struct dirlist *dl)
       || conn->uri.path == NULL
       || conn->uri.host == NULL)
     {
-        __av_log(AVLOG_ERROR, "DAV: Invalid URI '%s'", url);
+        av_log(AVLOG_ERROR, "DAV: Invalid URI '%s'", url);
         res = -1; goto error;
     }
 
@@ -562,7 +562,7 @@ static int dav_list(struct remote *rem, struct dirlist *dl)
     }
 
     if (reslist == NULL) {
-        __av_log (AVLOG_WARNING, "DAV: no reslist");
+        av_log (AVLOG_WARNING, "DAV: no reslist");
         res = -1; goto error;
     }
 
@@ -588,14 +588,14 @@ static int dav_get(struct remote *rem, struct getparam *gp)
     struct davlocalfile *lf;
     char *tmpfile;
 
-    res = __av_get_tmpfile(&tmpfile);
+    res = av_get_tmpfile(&tmpfile);
     if(res < 0) {
         return res;
     }
 
     AV_NEW_OBJ(lf, dav_free_localfile);
 
-    lf->url = __av_strdup (dav_hostpath_to_url
+    lf->url = av_strdup (dav_hostpath_to_url
                                     (urlbuf, 511, &(gp->hostpath)));
     lf->tmpfile = tmpfile;
     lf->currsize = 0;
@@ -604,9 +604,9 @@ static int dav_get(struct remote *rem, struct getparam *gp)
     res = dav_http_get (davdat, lf);
 
     if (res < 0) {
-        __av_unref_obj(lf);
-        __av_free(lf->url);
-        __av_del_tmpfile(lf->tmpfile);
+        av_unref_obj(lf);
+        av_free(lf->url);
+        av_del_tmpfile(lf->tmpfile);
         return res;
     }
 
@@ -633,32 +633,32 @@ static int dav_init_ctl(struct vmodule *module, struct davdata *davdat)
     struct entry *ent;
     struct avfs *avfs;
 
-    res = __av_state_new(module, "dav_ctl", &ns, &avfs);
+    res = av_state_new(module, "dav_ctl", &ns, &avfs);
     if(res < 0)
         return res;
 
-    ent = __av_namespace_lookup(ns, NULL, "username");
+    ent = av_namespace_lookup(ns, NULL, "username");
     AV_NEW(stf);
     stf->data = &(davdat->sessions);
     stf->get = pass_username_get;
     stf->set = pass_username_set;
-    __av_namespace_set(ent, stf);
+    av_namespace_set(ent, stf);
 
-    ent = __av_namespace_lookup(ns, NULL, "password");
+    ent = av_namespace_lookup(ns, NULL, "password");
     AV_NEW(stf);
     stf->data = &(davdat->sessions);
     stf->get = pass_password_get;
     stf->set = pass_password_set;
-    __av_namespace_set(ent, stf);
+    av_namespace_set(ent, stf);
 
-    ent = __av_namespace_lookup(ns, NULL, "loggedin");
+    ent = av_namespace_lookup(ns, NULL, "loggedin");
     AV_NEW(stf);
     stf->data = &(davdat->sessions);
     stf->get = pass_loggedin_get;
     stf->set = pass_loggedin_set;
-    __av_namespace_set(ent, stf);
+    av_namespace_set(ent, stf);
 
-    __av_unref_obj(ns);
+    av_unref_obj(ns);
 
     return 0;
 }
@@ -669,21 +669,21 @@ static void dav_destroy(struct remote *rem)
 {
     struct davdata *davdat = (struct davdata *) rem->data;
 
-    __av_free (davdat);
-    __av_free (rem->name);
-    __av_free (rem);
+    av_free (davdat);
+    av_free (rem->name);
+    av_free (rem);
 }
 
 /* ---------------------------------------------------------------------- */
 
-int __av_init_module_dav(struct vmodule *module)
+int av_init_module_dav(struct vmodule *module)
 {
     int res;
     struct remote *rem;
     struct avfs *avfs;
     struct davdata *davdat;
 
-    __av_log(AVLOG_DEBUG, "DAV: initializing");
+    av_log(AVLOG_DEBUG, "DAV: initializing");
 
     sock_init();
 
@@ -695,17 +695,17 @@ int __av_init_module_dav(struct vmodule *module)
     AV_NEW(rem);
 
     rem->data    = davdat;
-    rem->name    = __av_strdup("dav");
+    rem->name    = av_strdup("dav");
     rem->list    = dav_list;
     rem->get     = dav_get;
     rem->wait    = dav_wait;
     rem->destroy = dav_destroy;
 
-    res = __av_remote_init(module, rem, &avfs);
+    res = av_remote_init(module, rem, &avfs);
     if (res == 0) {
 	res = dav_init_ctl (module, davdat);
 	if (res < 0) {
-	    __av_unref_obj(avfs);
+	    av_unref_obj(avfs);
 	}
     }
 

@@ -27,11 +27,11 @@ struct ugidcache {
 
 static void free_ugidcache(struct ugidcache *cache)
 {
-    __av_free(cache->uname);
-    __av_free(cache->gname);
+    av_free(cache->uname);
+    av_free(cache->gname);
 }
 
-struct ugidcache *__av_new_ugidcache()
+struct ugidcache *av_new_ugidcache()
 {
     struct ugidcache *cache;
 
@@ -46,7 +46,7 @@ struct ugidcache *__av_new_ugidcache()
     return cache;
 }
 
-char *__av_finduname(struct ugidcache *cache, int uid, const char *deflt)
+char *av_finduname(struct ugidcache *cache, int uid, const char *deflt)
 {
     if(cache->uname == NULL || uid != cache->uid) {
         int res;
@@ -57,25 +57,25 @@ char *__av_finduname(struct ugidcache *cache, int uid, const char *deflt)
 
         do {
             bufsize += 256;
-            buf = __av_realloc(buf, bufsize);
+            buf = av_realloc(buf, bufsize);
             res = getpwuid_r(uid, &pw, buf, bufsize, &pwres);
         } while(res == ERANGE);
 
         if(res != 0 || pwres == NULL) {
-            __av_free(buf);
-            return __av_strdup(deflt);
+            av_free(buf);
+            return av_strdup(deflt);
         }
 
-        __av_free(cache->uname);
+        av_free(cache->uname);
         cache->uid = pwres->pw_uid;
-        cache->uname = __av_strdup(pwres->pw_name);
-        __av_free(buf);
+        cache->uname = av_strdup(pwres->pw_name);
+        av_free(buf);
     }
     
-    return __av_strdup(cache->uname);
+    return av_strdup(cache->uname);
 }
 
-int __av_finduid(struct ugidcache *cache, const char *uname, int deflt)
+int av_finduid(struct ugidcache *cache, const char *uname, int deflt)
 {
     if(uname == NULL || !uname[0])
         return deflt == -1 ? cache->myuid : deflt;
@@ -89,25 +89,25 @@ int __av_finduid(struct ugidcache *cache, const char *uname, int deflt)
 
         do {
             bufsize += 256;
-            buf = __av_realloc(buf, bufsize);
+            buf = av_realloc(buf, bufsize);
             res = getpwnam_r(uname, &pw, buf, bufsize, &pwres);
         } while(res == ERANGE);
 
         if(res != 0 || pwres == NULL) {
-            __av_free(buf);
+            av_free(buf);
             return deflt == -1 ? cache->myuid : deflt;
         }
 
-        __av_free(cache->uname);
+        av_free(cache->uname);
         cache->uid = pwres->pw_uid;
-        cache->uname = __av_strdup(pwres->pw_name);
-        __av_free(buf);
+        cache->uname = av_strdup(pwres->pw_name);
+        av_free(buf);
     }
 
     return cache->uid;
 }
 
-char *__av_findgname(struct ugidcache *cache, int gid, const char *deflt)
+char *av_findgname(struct ugidcache *cache, int gid, const char *deflt)
 {
     if(cache->gname == NULL || gid != cache->gid) {
         int res;
@@ -118,25 +118,25 @@ char *__av_findgname(struct ugidcache *cache, int gid, const char *deflt)
 
         do {
             bufsize += 256;
-            buf = __av_realloc(buf, bufsize);
+            buf = av_realloc(buf, bufsize);
             res = getgrgid_r(gid, &gr, buf, bufsize, &grres);
         } while(res == ERANGE);
 
         if(res != 0 || grres == NULL) {
-            __av_free(buf);
-            return __av_strdup(deflt);
+            av_free(buf);
+            return av_strdup(deflt);
         }
 
-        __av_free(cache->gname);
+        av_free(cache->gname);
         cache->gid = grres->gr_gid;
-        cache->gname = __av_strdup(grres->gr_name);
-        __av_free(buf);
+        cache->gname = av_strdup(grres->gr_name);
+        av_free(buf);
     }
     
-    return __av_strdup(cache->gname);
+    return av_strdup(cache->gname);
 }
 
-int __av_findgid(struct ugidcache *cache, const char *gname, int deflt)
+int av_findgid(struct ugidcache *cache, const char *gname, int deflt)
 {
     if(gname == NULL || !gname[0])
         return deflt == -1 ? cache->mygid : deflt;
@@ -150,19 +150,19 @@ int __av_findgid(struct ugidcache *cache, const char *gname, int deflt)
 
         do {
             bufsize += 256;
-            buf = __av_realloc(buf, bufsize);
+            buf = av_realloc(buf, bufsize);
             res = getgrnam_r(gname, &gr, buf, bufsize, &grres);
         } while(res == ERANGE);
 
         if(res != 0 || grres == NULL) {
-            __av_free(buf);
+            av_free(buf);
             return deflt == -1 ? cache->mygid : deflt;
         }
 
-        __av_free(cache->gname);
+        av_free(cache->gname);
         cache->gid = grres->gr_gid;
-        cache->gname = __av_strdup(grres->gr_name);
-        __av_free(buf);
+        cache->gname = av_strdup(grres->gr_name);
+        av_free(buf);
     }
 
     return cache->gid;

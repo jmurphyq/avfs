@@ -14,7 +14,6 @@
 #include <ctype.h>
 #include <pthread.h>
 
-
 #ifndef __GNUC__
 #define __attribute__(x)
 #endif
@@ -158,10 +157,10 @@ typedef struct {
     ventry *ve;
 } rep_file;
 
-#define AV_NEW(ptr)   ptr = __av_calloc(sizeof(*(ptr)))
+#define AV_NEW(ptr)   ptr = av_calloc(sizeof(*(ptr)))
 
 #define AV_NEW_OBJ(ptr, destr) \
-   ptr = __av_new_obj(sizeof(*(ptr)), (void (*)(void *)) destr)
+   ptr = av_new_obj(sizeof(*(ptr)), (void (*)(void *)) destr)
 
 #define AV_LOCK_DECL(mutex) avmutex mutex
 #define AV_INITLOCK(mutex) pthread_mutex_init(&(mutex), NULL)
@@ -247,15 +246,15 @@ typedef struct {
 #define AV_ISGID  02000
 #define AV_ISUID  04000
 
-#define __AV_ISTYPE(mode, mask)  (((mode) & AV_IFMT) == (mask))
+#define AV_ISTYPE(mode, mask)  (((mode) & AV_IFMT) == (mask))
  
-#define AV_ISDIR(mode)  __AV_ISTYPE((mode), AV_IFDIR)
-#define AV_ISCHR(mode)  __AV_ISTYPE((mode), AV_IFCHR)
-#define AV_ISBLK(mode)  __AV_ISTYPE((mode), AV_IFBLK)
-#define AV_ISREG(mode)  __AV_ISTYPE((mode), AV_IFREG)
-#define AV_ISFIFO(mode) __AV_ISTYPE((mode), AV_IFIFO)
-#define AV_ISLNK(mode)  __AV_ISTYPE((mode), AV_IFLNK)
-#define AV_ISSOCK(mode) __AV_ISTYPE((mode), AV_IFSOCK)
+#define AV_ISDIR(mode)  AV_ISTYPE((mode), AV_IFDIR)
+#define AV_ISCHR(mode)  AV_ISTYPE((mode), AV_IFCHR)
+#define AV_ISBLK(mode)  AV_ISTYPE((mode), AV_IFBLK)
+#define AV_ISREG(mode)  AV_ISTYPE((mode), AV_IFREG)
+#define AV_ISFIFO(mode) AV_ISTYPE((mode), AV_IFIFO)
+#define AV_ISLNK(mode)  AV_ISTYPE((mode), AV_IFLNK)
+#define AV_ISSOCK(mode) AV_ISTYPE((mode), AV_IFSOCK)
 
 #define AV_TYPE(mode) (((mode) & AV_IFMT) >> 12)
 
@@ -270,61 +269,46 @@ typedef struct {
 #define AVF_ONLYROOT   (1 << 1)
 #define AVF_NOLOCK     (1 << 2)
 
-int        __av_new_avfs(const char *name, struct ext_info *exts,
-                         int version, int flags, struct vmodule *module,
-                         struct avfs **retp);
-void       __av_add_avfs(struct avfs *avfs);
-avino_t    __av_new_ino(struct avfs *avfs);
+int        av_new_avfs(const char *name, struct ext_info *exts, int version,
+                       int flags, struct vmodule *module, struct avfs **retp);
+void       av_add_avfs(struct avfs *avfs);
+avino_t    av_new_ino(struct avfs *avfs);
 
-int        __av_check_version(const char *modname, const char *name,
-                              int version, int need_ver, int provide_ver);
+int        av_check_version(const char *modname, const char *name, int version,
+                            int need_ver, int provide_ver);
 
-int        __av_copy_ventry(ventry *ve, ventry **retp);
-void       __av_free_ventry(ventry *ve);
+int        av_copy_ventry(ventry *ve, ventry **retp);
+void       av_free_ventry(ventry *ve);
           
-avdev_t    __av_mkdev(int major, int minor);
-void       __av_splitdev(avdev_t dev, int *majorp, int *minorp);
-void       __av_default_stat(struct avstat *stbuf);
+avdev_t    av_mkdev(int major, int minor);
+void       av_splitdev(avdev_t dev, int *majorp, int *minorp);
+void       av_default_stat(struct avstat *stbuf);
           
-void       __av_log(int level, const char *format, ...)
+void       av_log(int level, const char *format, ...)
     __attribute__ ((format (printf, 2, 3)));
-char      *__av_get_config(const char *param);
-void      *__av_malloc(avsize_t nbyte);
-void      *__av_calloc(avsize_t nbyte);
-void      *__av_realloc(void *ptr, avsize_t nbyte);
-void       __av_free(void *ptr);
+char      *av_get_config(const char *param);
+void      *av_malloc(avsize_t nbyte);
+void      *av_calloc(avsize_t nbyte);
+void      *av_realloc(void *ptr, avsize_t nbyte);
+void       av_free(void *ptr);
          
-void      *__av_new_obj(avsize_t nbyte, void (*destr)(void *));
-void       __av_ref_obj(void *obj);
-void       __av_unref_obj(void *obj);
+void      *av_new_obj(avsize_t nbyte, void (*destr)(void *));
+void       av_ref_obj(void *obj);
+void       av_unref_obj(void *obj);
           
-char      *__av_strdup(const char *s);
-char      *__av_strndup(const char *s, avsize_t len);
-char      *__av_stradd(char *s1, ...);
+char      *av_strdup(const char *s);
+char      *av_strndup(const char *s, avsize_t len);
+char      *av_stradd(char *s1, ...);
           
-void       __av_registerfd(int fd);
-void       __av_curr_time(avtimestruc_t *tim);
-avtime_t   __av_time();
-void       __av_sleep(unsigned long msec);
-avtime_t   __av_mktime(struct avtm *tp);
-void       __av_localtime(avtime_t t, struct avtm *tp);
-int        __av_get_tmpfile(char **retp);
-void       __av_del_tmpfile(char *tmpfile);
-int        __av_get_tmpfd();
-avoff_t    __av_tmp_free();
-int        __av_open(ventry *ve, int flags, avmode_t mode, vfile **retp);
-int        __av_close(vfile *vf);
-avssize_t  __av_read(vfile *vf, char *buf, avsize_t nbyte);
-avssize_t __av_write(vfile *vf, const char *buf, avsize_t nbyte);
-avssize_t  __av_pread(vfile *vf, char *buf, avsize_t nbyte,  avoff_t offset);
-avssize_t  __av_pwrite(vfile *vf, const char *buf, avsize_t nbyte,
-                       avoff_t offset);
-avoff_t    __av_lseek(vfile *vf, avoff_t offset, int whence);
-int        __av_truncate(vfile *vf, avoff_t length);
-int        __av_getattr(vfile *vf, struct avstat *buf, int attrmask);
-int        __av_setattr(vfile *vf, struct avstat *buf, int attrmask);
-int        __av_access(ventry *ve, int amode);
-int        __av_unlink(ventry *ve);
-
+void       av_registerfd(int fd);
+void       av_curr_time(avtimestruc_t *tim);
+avtime_t   av_time();
+void       av_sleep(unsigned long msec);
+avtime_t   av_mktime(struct avtm *tp);
+void       av_localtime(avtime_t t, struct avtm *tp);
+int        av_get_tmpfile(char **retp);
+void       av_del_tmpfile(char *tmpfile);
+int        av_get_tmpfd();
+avoff_t    av_tmp_free();
 
 #endif /* _AVFS_H */

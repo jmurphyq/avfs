@@ -16,5 +16,5 @@ struct statefile {
     int   (*set) (struct entry *ent, const char *param, const char *val);
 };
 
-int __av_state_new(struct vmodule *module, const char *name,
+int av_state_new(struct vmodule *module, const char *name,
                    struct namespace **resp, struct avfs **avfsp);

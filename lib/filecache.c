@@ -44,9 +44,9 @@ static void filecache_delete(struct filecache *fc)
 {
     filecache_remove(fc);
 
-    __av_unref_obj(fc->obj);
-    __av_free(fc->key);
-    __av_free(fc);
+    av_unref_obj(fc->obj);
+    av_free(fc->key);
+    av_free(fc);
 }
 
 static struct filecache *filecache_find(const char *key)
@@ -64,7 +64,7 @@ static struct filecache *filecache_find(const char *key)
     return fc;
 }
 
-void *__av_filecache_get(const char *key)
+void *av_filecache_get(const char *key)
 {
     struct filecache *fc;
     void *obj = NULL;
@@ -75,14 +75,14 @@ void *__av_filecache_get(const char *key)
         filecache_remove(fc);
         filecache_insert(fc);
         obj = fc->obj;
-        __av_ref_obj(obj);
+        av_ref_obj(obj);
     }
     AV_UNLOCK(fclock);
 
     return obj;
 }
 
-void __av_filecache_set(const char *key, void *obj)
+void av_filecache_set(const char *key, void *obj)
 {
     struct filecache *oldfc;
     struct filecache *fc;
@@ -91,9 +91,9 @@ void __av_filecache_set(const char *key, void *obj)
         return;
 
     AV_NEW(fc);
-    fc->key = __av_strdup(key);
+    fc->key = av_strdup(key);
     fc->obj = obj;
-    __av_ref_obj(obj);
+    av_ref_obj(obj);
     
     AV_LOCK(fclock);
     oldfc = filecache_find(key);
@@ -104,7 +104,7 @@ void __av_filecache_set(const char *key, void *obj)
     AV_UNLOCK(fclock);
 }
 
-void __av_init_filecache()
+void av_init_filecache()
 {
     fclist.next = &fclist;
     fclist.prev = &fclist;
@@ -112,7 +112,7 @@ void __av_init_filecache()
     fclist.key = NULL;
 }
 
-void __av_destroy_filecache()
+void av_destroy_filecache()
 {
     AV_LOCK(fclock);
     while(fclist.next != &fclist)

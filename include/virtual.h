@@ -6,8 +6,8 @@
     the GNU GPL. See the file COPYING.LIB and COPYING. 
 */
 
-#ifndef _AVFS_H
-#define _AVFS_H
+#ifndef _VIRTUAL_H
+#define _VIRTUAL_H
 
 #include <dirent.h>
 #include <utime.h>
@@ -47,4 +47,4 @@ int            virt_closedir  (DIR *dirp);
 struct dirent *virt_readdir   (DIR *dirp);
 void           virt_rewinddir (DIR *dirp);
 
-#endif /* _AVFS_H */
+#endif /* _VIRTUAL_H */

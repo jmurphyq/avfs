@@ -95,14 +95,14 @@ static void results(void *userdata, const char *uri,
   const char *clength, *modtime, *isexec, *abspath;
   const http_status *status = NULL;
   
-  __av_log (AVLOG_DEBUG, "DAV URI: %s", uri);
+  av_log (AVLOG_DEBUG, "DAV URI: %s", uri);
 
   newres = dav_propset_private(set);
   abspath = uri_abspath(uri);
 
   if (uri_compare(ctx->target, abspath) == 0 && !ctx->include_target) {
     /* This is the target URI, skip it */
-    __av_free(newres);
+    av_free(newres);
     return;
   }
 
@@ -197,7 +197,7 @@ void free_resource(struct av_dav_resource *res)
   HTTP_FREE(res->uri);
   HTTP_FREE(res->displayname);
   HTTP_FREE(res->error_reason);
-  __av_free(res);
+  av_free(res);
 }
 
 void free_resource_list(struct av_dav_resource *res)

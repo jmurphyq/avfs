@@ -14,5 +14,5 @@ struct filtdata {
     char **revprog;
 };
 
-struct sfile *__av_filtprog_new(vfile *vf, struct filtdata *fitdat);
-void __av_filtprog_change(struct sfile *sf, vfile *newvf);
+struct sfile *av_filtprog_new(vfile *vf, struct filtdata *fitdat);
+void av_filtprog_change(struct sfile *sf, vfile *newvf);

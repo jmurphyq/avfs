@@ -37,7 +37,7 @@ static avssize_t read_file(ave *v, arch_file *file, char *buf, avsize_t nbyte)
 {
     avssize_t res;
   
-    res = __av_read(v, file->fh, buf, nbyte);
+    res = av_read(v, file->fh, buf, nbyte);
     if(res == -1) return -1;
     file->ptr += res;
 
@@ -52,7 +52,7 @@ static int fill_arentry(ave *v, arch_entry *ent, struct ar_values *arv)
     if(ent->ino != AVNULL)
         return 0;
 
-    __av_default_stat(&filestat);
+    av_default_stat(&filestat);
 
     filestat.mode    = arv->mode;
     filestat.uid     = arv->uid;
@@ -66,7 +66,7 @@ static int fill_arentry(ave *v, arch_entry *ent, struct ar_values *arv)
     filestat.ctime   = filestat.mtime;
     filestat.size    = arv->size;
 
-    res = __av_new_inode(v, ent, &filestat);
+    res = av_new_inode(v, ent, &filestat);
     if(res == -1)
         return -1;
   
@@ -87,12 +87,12 @@ static int insert_arentry(ave *v, archive *arch, struct ar_values *arv,
     if((arv->mode & AV_IFMT) == 0)
         return 0; /* Broken header: illegal type */
 
-    ent = __av_find_entry(v, arch->root, name, FIND_CREATE, 0);
+    ent = av_find_entry(v, arch->root, name, FIND_CREATE, 0);
     if(ent == AVNULL)
         return -1;
   
     res = fill_arentry(v, ent, arv);
-    __av_unref_entry(ent);
+    av_unref_entry(ent);
 
     return res;
 }
@@ -113,7 +113,7 @@ static avulong getnum(const char *s, int len, int base)
 
 static int interpret_header(struct ar_header *hbuf, struct ar_values *arv)
 {
-    if(__av_strncmp(hbuf->endmagic, ENDMAGIC, 2) != 0) return -1;
+    if(av_strncmp(hbuf->endmagic, ENDMAGIC, 2) != 0) return -1;
 
     arv->mtime = getnum(hbuf->date, 12, 10);
     arv->uid   = getnum(hbuf->uid,  6,  10);
@@ -138,7 +138,7 @@ static int read_arfile(ave *v, arch_file *file, archive *arch)
   
     rres = read_file(v, file, magic, ARMAGICLEN);
     if(rres == -1) return -1;
-    if(rres != ARMAGICLEN || __av_strncmp(magic, ARMAGIC, ARMAGICLEN) != 0) {
+    if(rres != ARMAGICLEN || av_strncmp(magic, ARMAGIC, ARMAGICLEN) != 0) {
         v->errn = EIO;
         return -1;
     }
@@ -151,13 +151,13 @@ static int read_arfile(ave *v, arch_file *file, archive *arch)
         if(interpret_header(&hbuf, &arv) == -1) break; /* Broken archive */
         arv.offset = file->ptr;
 
-        if((__av_strncmp(hbuf.name, "//              ", 16) == 0 ||
-            __av_strncmp(hbuf.name, "ARFILENAMES/    ", 16) == 0)) {
+        if((av_strncmp(hbuf.name, "//              ", 16) == 0 ||
+            av_strncmp(hbuf.name, "ARFILENAMES/    ", 16) == 0)) {
             /* Long name table */
 
             if(longnames == AVNULL && arv.size > 0 && arv.size < (1 << 22)) {
                 longnameslen = arv.size;
-                longnames = __av_malloc(v, longnameslen);
+                longnames = av_malloc(v, longnameslen);
                 if(longnames != AVNULL) {
                     rres = read_file(v, file, longnames, longnameslen);
                     if(rres == -1) goto end;               /* Error */
@@ -196,8 +196,8 @@ static int read_arfile(ave *v, arch_file *file, archive *arch)
             arv.size -= namelen;
             arv.offset += namelen;
 
-            if(longnames != AVNULL) __av_free(longnames);
-            longnames = __av_malloc(v, namelen+1);
+            if(longnames != AVNULL) av_free(longnames);
+            longnames = av_malloc(v, namelen+1);
             if(longnames != AVNULL) {
                 rres = read_file(v, file, longnames, namelen);
                 if(rres == -1) goto end;                      /* Error */
@@ -207,12 +207,12 @@ static int read_arfile(ave *v, arch_file *file, archive *arch)
                 if(insert_arentry(v, arch, &arv, longnames) == -1) 
                     goto end;                                   /* Error */
 
-                __av_free(longnames);
+                av_free(longnames);
                 longnames = AVNULL;
             }
         }
         else if(hbuf.name[0] != '/' && 
-                __av_strncmp(hbuf.name, "__.SYMDEF       ", 16) != 0) {
+                av_strncmp(hbuf.name, "__.SYMDEF       ", 16) != 0) {
             /* Short name */
 
             for(i = 0; i < 16; i++) 
@@ -232,7 +232,7 @@ static int read_arfile(ave *v, arch_file *file, archive *arch)
         noff = arv.offset + arv.size;
         if((noff & 1) != 0) noff++;
 
-        sres = __av_lseek(v, file->fh, noff, AVSEEK_SET);
+        sres = av_lseek(v, file->fh, noff, AVSEEK_SET);
 
         if(sres == -1) goto end;                       /* Error */
         file->ptr = sres;
@@ -241,7 +241,7 @@ static int read_arfile(ave *v, arch_file *file, archive *arch)
     ret = 0;
 
   end:
-    __av_free(longnames);
+    av_free(longnames);
     return ret;
 }
 
@@ -255,21 +255,21 @@ static int parse_arfile(ave *v, vpath *path, archive *arch)
         return -1;
     }
 
-    file.fh = __av_open(v, BASE(path), AVO_RDONLY, 0);
+    file.fh = av_open(v, BASE(path), AVO_RDONLY, 0);
     if(file.fh == -1) return -1;
     file.ptr = 0;
 
     res = read_arfile(v, &file, arch);
   
-    __av_close(DUMMYV, file.fh);
+    av_close(DUMMYV, file.fh);
     
     return res;  
 }
 
 
-extern int __av_init_module_uar(ave *v);
+extern int av_init_module_uar(ave *v);
 
-int __av_init_module_uar(ave *v)
+int av_init_module_uar(ave *v)
 {
     struct ext_info arexts[3];
     struct vdev_info *vdev;
@@ -279,12 +279,12 @@ int __av_init_module_uar(ave *v)
     INIT_EXT(arexts[1], ".deb", AVNULL);
     INIT_EXT(arexts[2], AVNULL, AVNULL);
 
-    vdev = __av_init_arch(v, "uar", arexts, AV_VER);
+    vdev = av_init_arch(v, "uar", arexts, AV_VER);
     if(vdev == AVNULL) return -1;
   
     dd = (arch_devd *) vdev->devdata;
     dd->parsefunc = parse_arfile;
 
-    return __av_add_vdev(v, vdev);
+    return av_add_vdev(v, vdev);
 }
 #endif

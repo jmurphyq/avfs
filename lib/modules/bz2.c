@@ -5,22 +5,25 @@
     This file can be distributed either under the GNU LGPL, or under
     the GNU GPL. See the file COPYING.LIB and COPYING. 
 
-    BZIP2 module
+    BZ2 module
 */
 
-#if 0
-#include "vdev.h"
 #include "filter.h"
 
-extern int __av_init_module_bz2(ave *v);
+extern int av_init_module_bz2(struct vmodule *module);
 
-int __av_init_module_bz2(ave *v)
+int av_init_module_bz2(struct vmodule *module)
 {
-    const char *bzip2_args[2];
+    struct avfs *avfs;
+    const char *ubz2_args[3];
+    const char *bz2_args[2];
+  
+    ubz2_args[0] = "bzip2";
+    ubz2_args[1] = "-d";
+    ubz2_args[2] = NULL;
 
-    bzip2_args[0] = "bzip2";
-    bzip2_args[1] = AVNULL;
+    bz2_args[0] = "bzip2";
+    bz2_args[1] = NULL;
 
-    return __av_init_filt(v, "bz2", bzip2_args, AVNULL, AV_VER);
+    return av_init_filt(module, "ubz2", bz2_args, ubz2_args, NULL, &avfs);
 }
-#endif

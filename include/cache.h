@@ -10,8 +10,8 @@
 
 struct cacheobj;
 
-struct cacheobj *__av_cacheobj_new(void *obj, const char *name);
-void *__av_cacheobj_get(struct cacheobj *cobj);
-void __av_cacheobj_setsize(struct cacheobj *cobj, avoff_t diskusage);
-void __av_cache_checkspace();
-void __av_cache_diskfull();
+struct cacheobj *av_cacheobj_new(void *obj, const char *name);
+void *av_cacheobj_get(struct cacheobj *cobj);
+void av_cacheobj_setsize(struct cacheobj *cobj, avoff_t diskusage);
+void av_cache_checkspace();
+void av_cache_diskfull();

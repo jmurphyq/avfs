@@ -5,30 +5,27 @@
     This file can be distributed either under the GNU LGPL, or under
     the GNU GPL. See the file COPYING.LIB and COPYING. 
 
-    UNZ (uncompress) module 
+    UZ (uncompress) module 
     using gzip
 */
-#if 0
-#include "vdev.h"
+
 #include "filter.h"
 
-extern int __av_init_module_uz(ave *v);
-
-int __av_init_module_uz(ave *v)
+int av_init_module_uz(struct vmodule *module)
 {
-    struct ext_info unz_exts[5];
-    const char *unz_args[3];
+    struct avfs *avfs;
+    struct ext_info uz_exts[5];
+    const char *uz_args[3];
 
-    INIT_EXT(unz_exts[0], ".Z", AVNULL);
-    INIT_EXT(unz_exts[1], ".tpz", ".tar");
-    INIT_EXT(unz_exts[2], ".tz", ".tar");
-    INIT_EXT(unz_exts[3], ".taz", ".tar");
-    INIT_EXT(unz_exts[4], AVNULL, AVNULL);
+    uz_exts[0].from = ".Z",   uz_exts[0].to = NULL;
+    uz_exts[1].from = ".tpz", uz_exts[1].to = ".tar";
+    uz_exts[2].from = ".tz",  uz_exts[2].to = ".tar";
+    uz_exts[3].from = ".taz", uz_exts[3].to = ".tar";
+    uz_exts[4].from = NULL;
+  
+    uz_args[0] = "gzip";
+    uz_args[1] = "-d";
+    uz_args[2] = NULL;
 
-    unz_args[0] = "gzip";
-    unz_args[1] = "-d";
-    unz_args[2] = AVNULL;
-
-    return __av_init_filt(v, "uz", unz_args, unz_exts, AV_VER);
+    return av_init_filt(module, "uz", uz_args, NULL, uz_exts, &avfs);
 }
-#endif

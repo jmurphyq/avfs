@@ -7,7 +7,7 @@
    is not the same the file found in the original zlib
    distribution. */
 
-/* @(#) $Id: zconf.h,v 1.1 2001/03/01 09:08:35 mszeredi Exp $ */
+/* @(#) $Id: zconf.h,v 1.2 2001/03/06 17:19:07 mszeredi Exp $ */
 
 #ifndef _ZCONF_H
 #define _ZCONF_H
@@ -19,7 +19,7 @@
 #define Z_PREFIX
 
 #ifdef Z_PREFIX
-#define ZPREF(x) __av_z_ ## x
+#define ZPREF(x) av_z_ ## x
 #  define deflateInit_          ZPREF(deflateInit_)
 #  define deflate               ZPREF(deflate)
 #  define deflateEnd            ZPREF(deflateEnd)

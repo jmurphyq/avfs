@@ -41,7 +41,7 @@ static struct pass_session *pass_find_session(struct pass_session *passd,
 	return NULL;
     }
     for(fts = passd->next; fts != NULL && fts != passd; fts = fts->next) {
-	__av_log(AVLOG_DEBUG, "passwords: lookup '%s' == '%s'", account, fts->account);
+	av_log(AVLOG_DEBUG, "passwords: lookup '%s' == '%s'", account, fts->account);
         if(fts->account != NULL && strcmp(account, fts->account) == 0)
             return fts;
     }
@@ -63,7 +63,7 @@ static struct pass_session *pass_get_session(struct pass_session *passd,
         struct pass_session *prev;
 
         AV_NEW(fts);
-        fts->account = __av_strdup(account);
+        fts->account = av_strdup(account);
         fts->password = NULL;
 
         fts->next = next = passd->next;
@@ -85,9 +85,9 @@ void pass_remove_session(struct pass_session *fts)
     next->prev = prev;
     prev->next = next;
 
-    __av_free(fts->account);
-    __av_free(fts->password);
-    __av_free(fts);
+    av_free(fts->account);
+    av_free(fts->password);
+    av_free(fts);
 }
 
 struct pass_session *pass_get_password(struct pass_session *passd,
@@ -100,47 +100,47 @@ struct pass_session *pass_get_password(struct pass_session *passd,
 	return NULL;
     }
     if (fts == NULL) {
-	account = __av_stradd(NULL, user, USER_SEP_STR, host, NULL);
+	account = av_stradd(NULL, user, USER_SEP_STR, host, NULL);
 	fts = pass_find_session(passd, account);
-	__av_free(account);
+	av_free(account);
     }
 
     if(fts == NULL) {
-        account = __av_stradd(NULL, user, USER_SEP_STR, NULL);
+        account = av_stradd(NULL, user, USER_SEP_STR, NULL);
         fts = pass_find_session(passd, account);
-        __av_free(account);
+        av_free(account);
     }
 
     if(fts == NULL) {
-        account = __av_stradd(NULL, USER_SEP_STR, host, NULL);
+        account = av_stradd(NULL, USER_SEP_STR, host, NULL);
         fts = pass_find_session(passd, account);
-        __av_free(account);
+        av_free(account);
     }
 
-    __av_log(AVLOG_DEBUG, "passwords: fts=%lx", (long) fts);
+    av_log(AVLOG_DEBUG, "passwords: fts=%lx", (long) fts);
     return fts;
 }
 
 
 int pass_username_get(struct entry *ent, const char *param, char **resp)
 {
-    *resp = __av_strdup("");
+    *resp = av_strdup("");
     return 0;
 }
 
 int pass_username_set(struct entry *ent, const char *param, const char *val)
 {
     struct pass_session *fts;
-    struct statefile *sf = (struct statefile *) __av_namespace_get(ent);
+    struct statefile *sf = (struct statefile *) av_namespace_get(ent);
     struct pass_session *passd = (struct pass_session *) sf->data;
     unsigned int len;
 
     AV_LOCK(pass_lock);
     fts = pass_get_session(passd, param);
-    __av_log(AVLOG_DEBUG, "passwords: setting username '%s' %s'", param, val);
+    av_log(AVLOG_DEBUG, "passwords: setting username '%s' %s'", param, val);
 
-    __av_free(fts->username);
-    fts->username = __av_strdup(val);
+    av_free(fts->username);
+    fts->username = av_strdup(val);
     len = strlen(fts->username);
     if(fts->username[len - 1] == '\n')
         fts->username[len - 1] = '\0';
@@ -152,24 +152,24 @@ int pass_username_set(struct entry *ent, const char *param, const char *val)
 
 int pass_password_get(struct entry *ent, const char *param, char **resp)
 {
-    *resp = __av_strdup("");
+    *resp = av_strdup("");
     return 0;
 }
 
 int pass_password_set(struct entry *ent, const char *param, const char *val)
 {
     struct pass_session *fts;
-    struct statefile *sf = (struct statefile *) __av_namespace_get(ent);
+    struct statefile *sf = (struct statefile *) av_namespace_get(ent);
     struct pass_session *passd = (struct pass_session *) sf->data;
     unsigned int len;
 
     AV_LOCK(pass_lock);
     fts = pass_get_session(passd, param);
-    /* __av_log(AVLOG_DEBUG, "passwords: setting password '%s' %s'",
+    /* av_log(AVLOG_DEBUG, "passwords: setting password '%s' %s'",
      * param, val);*/
 
-    __av_free(fts->password);
-    fts->password = __av_strdup(val);
+    av_free(fts->password);
+    fts->password = av_strdup(val);
     len = strlen(fts->password);
     if(fts->password[len - 1] == '\n')
         fts->password[len - 1] = '\0';
@@ -182,15 +182,15 @@ int pass_password_set(struct entry *ent, const char *param, const char *val)
 int pass_loggedin_get(struct entry *ent, const char *param, char **resp)
 {
     struct pass_session *fts;
-    struct statefile *sf = (struct statefile *) __av_namespace_get(ent);
+    struct statefile *sf = (struct statefile *) av_namespace_get(ent);
     struct pass_session *passd = (struct pass_session *) sf->data;
 
     AV_LOCK(pass_lock);
     fts = pass_find_session(passd, param);
     if(fts == NULL)
-        *resp = __av_strdup("0\n");
+        *resp = av_strdup("0\n");
     else
-        *resp = __av_strdup("1\n");
+        *resp = av_strdup("1\n");
     AV_UNLOCK(pass_lock);
 
     return 0;
@@ -222,7 +222,7 @@ int pass_loggedin_set(struct entry *ent, const char *param, const char *val)
 {
     int res;
     struct pass_session *fts;
-    struct statefile *sf = (struct statefile *) __av_namespace_get(ent);
+    struct statefile *sf = (struct statefile *) av_namespace_get(ent);
     struct pass_session *passd = (struct pass_session *) sf->data;
 
     AV_LOCK(pass_lock);

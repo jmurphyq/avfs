@@ -11,6 +11,7 @@
 #include "filecache.h"
 #include "cache.h"
 #include "internal.h"
+#include "oper.h"
 
 struct filtid {
     avino_t ino;
@@ -39,12 +40,15 @@ static char **filt_copy_prog(const char *prog[])
     char **copyprog;
     int i;
 
+    if(prog == NULL)
+        return NULL;
+
     for(num = 0, curr = prog; *curr != NULL; curr++, num++);
     
-    copyprog = (char **) __av_malloc(sizeof(char *) * (num + 1));
+    copyprog = (char **) av_malloc(sizeof(char *) * (num + 1));
 
     for(i = 0; i < num; i++)
-        copyprog[i] = __av_strdup(prog[i]);
+        copyprog[i] = av_strdup(prog[i]);
 
     copyprog[i] = NULL;
 
@@ -53,12 +57,14 @@ static char **filt_copy_prog(const char *prog[])
 
 static void filt_free_prog(char **prog)
 {
-    char **curr;
+    if(prog != NULL) {
+        char **curr;
 
-    for(curr = prog; *curr != NULL; curr++)
-        __av_free(*curr);
-
-    __av_free(prog);
+        for(curr = prog; *curr != NULL; curr++)
+            av_free(*curr);
+        
+        av_free(prog);
+    }
 }
 
 static int filt_lookup(ventry *ve, const char *name, void **newp)
@@ -68,10 +74,10 @@ static int filt_lookup(ventry *ve, const char *name, void **newp)
     if(path == NULL) {
         if(name[0] != '\0')
             return -ENOENT;
-        path = __av_strdup(name);
+        path = av_strdup(name);
     }
     else if(name == NULL) {
-        __av_free(path);
+        av_free(path);
         path = NULL;
     }
     else 
@@ -84,8 +90,8 @@ static int filt_lookup(ventry *ve, const char *name, void **newp)
 
 static void filtfile_free(struct filtfile *ff)
 {
-    __av_unref_obj(ff->sf);
-    __av_close(ff->vf);
+    av_unref_obj(ff->sf);
+    av_close(ff->vf);
     AV_FREELOCK(ff->lock)
 }
 
@@ -130,21 +136,21 @@ static struct filtfile *filt_newfile(ventry *ve, vfile *vf, const char *key,
     AV_NEW_OBJ(ff, filtfile_free);
     AV_INITLOCK(ff->lock);
     ff->vf = vf;
-    ff->sf = __av_filtprog_new(vf, filtdat);
+    ff->sf = av_filtprog_new(vf, filtdat);
     filt_id_set(&ff->id, buf);
     filt_mod_set(&ff->mod, buf);
-    ff->ino = __av_new_ino(ve->mnt->avfs);
+    ff->ino = av_new_ino(ve->mnt->avfs);
     ff->writers = 0;
 
     if((flags & AVO_TRUNC) != 0)
-       __av_sfile_truncate(ff->sf, 0);
+       av_sfile_truncate(ff->sf, 0);
 
     if(AV_ISWRITE(flags))
         ff->writers ++;
 
-    cobj = __av_cacheobj_new(ff, key);
-    __av_filecache_set(key, cobj);
-    __av_unref_obj(cobj);
+    cobj = av_cacheobj_new(ff, key);
+    av_filecache_set(key, cobj);
+    av_unref_obj(cobj);
 
     return ff;
 }
@@ -155,30 +161,30 @@ static int filt_validate_file(struct filtfile *ff, ventry *ve, vfile *vf,
     if(ff->writers == 0 && !filt_unmodif_file(&ff->mod, buf)) {
         struct filtdata *filtdat = (struct filtdata *) ve->mnt->avfs->data;
         
-        __av_unref_obj(ff->sf);
-        __av_close(ff->vf);
-        ff->sf = __av_filtprog_new(vf, filtdat);
+        av_unref_obj(ff->sf);
+        av_close(ff->vf);
+        ff->sf = av_filtprog_new(vf, filtdat);
         ff->vf = vf;
         filt_mod_set(&ff->mod, buf);
     }
     else if(ff->writers == 0 && AV_ISWRITE(flags)) {
-        avoff_t pos = __av_lseek(ff->vf, 0, AVSEEK_CUR);
+        avoff_t pos = av_lseek(ff->vf, 0, AVSEEK_CUR);
 
         if(pos > 0)
-            pos = __av_lseek(vf, pos, AVSEEK_SET);
+            pos = av_lseek(vf, pos, AVSEEK_SET);
         
         if(pos < 0)
             return pos;
         
-        __av_filtprog_change(ff->sf, vf);
-        __av_close(ff->vf);
+        av_filtprog_change(ff->sf, vf);
+        av_close(ff->vf);
         ff->vf = vf;
     }
     else
-        __av_close(vf);
+        av_close(vf);
 
     if((flags & AVO_TRUNC) != 0)
-       __av_sfile_truncate(ff->sf, 0);
+       av_sfile_truncate(ff->sf, 0);
 
     if(AV_ISWRITE(flags))
         ff->writers ++;
@@ -195,16 +201,16 @@ static int filt_getfile(ventry *ve, vfile *vf, int flags, const char *key,
     struct avstat buf;
     int attrmask = AVA_INO | AVA_DEV | AVA_SIZE | AVA_MTIME;
 
-    res = __av_getattr(vf, &buf, attrmask);
+    res = av_getattr(vf, &buf, attrmask);
     if(res < 0)
         return res;
 
-    cobj = (struct cacheobj *) __av_filecache_get(key);
+    cobj = (struct cacheobj *) av_filecache_get(key);
     if(cobj == NULL)
         ff = NULL;
     else {
-        ff = (struct filtfile *) __av_cacheobj_get(cobj);
-        __av_unref_obj(cobj);
+        ff = (struct filtfile *) av_cacheobj_get(cobj);
+        av_unref_obj(cobj);
     }
 
     if(ff == NULL || !filt_same_file(&ff->id, &buf)) {
@@ -267,23 +273,23 @@ static int filt_open(ventry *ve, int flags, avmode_t mode, void **resp)
         else
             flags |= AVO_TRUNC;
     }
-    res = __av_open(ve->mnt->base, baseflags, mode, &vf);
+    res = av_open(ve->mnt->base, baseflags, mode, &vf);
     if(res == -ENOENT && maybecreat) {
         baseflags |= AVO_CREAT;
         flags |= AVO_TRUNC;
-        res = __av_open(ve->mnt->base, baseflags, mode, &vf);
+        res = av_open(ve->mnt->base, baseflags, mode, &vf);
     }
     if(res < 0)
         return res;
 
-    res = __av_generate_path(ve->mnt->base, &key);
+    res = av_generate_path(ve->mnt->base, &key);
     if(res == 0) {
-        key = __av_stradd(key, AVFS_SEP_STR, ve->mnt->avfs->name, NULL);
+        key = av_stradd(key, AVFS_SEP_STR, ve->mnt->avfs->name, NULL);
         res = filt_getfile(ve, vf, flags, key, &ff);
-        __av_free(key);
+        av_free(key);
     }
     if(res < 0) {
-        __av_close(vf);
+        av_close(vf);
         return res;
     }
     
@@ -298,7 +304,7 @@ static avssize_t filt_read(vfile *vf, char *buf, avsize_t nbyte)
     struct filtfile *ff = (struct filtfile *) vf->data;
     
     AV_LOCK(ff->lock);
-    res = __av_sfile_pread(ff->sf, buf, nbyte, vf->ptr);
+    res = av_sfile_pread(ff->sf, buf, nbyte, vf->ptr);
     AV_UNLOCK(ff->lock);
 
     if(res > 0)
@@ -316,7 +322,7 @@ static avssize_t filt_write(vfile *vf, const char *buf, avsize_t nbyte)
     if((vf->flags & AVO_APPEND) != 0) {
         avoff_t pos;
 
-        pos = __av_sfile_size(ff->sf);
+        pos = av_sfile_size(ff->sf);
         if(pos < 0) {
             AV_UNLOCK(ff->lock);
             return pos;
@@ -324,9 +330,9 @@ static avssize_t filt_write(vfile *vf, const char *buf, avsize_t nbyte)
         
         vf->ptr = pos;
     }
-    res = __av_sfile_pwrite(ff->sf, buf, nbyte, vf->ptr);
+    res = av_sfile_pwrite(ff->sf, buf, nbyte, vf->ptr);
     if(res >= 0)
-        __av_curr_time(&ff->mod.mtime);
+        av_curr_time(&ff->mod.mtime);
     AV_UNLOCK(ff->lock);
         
     if(res > 0)
@@ -341,7 +347,7 @@ static int filt_truncate(vfile *vf, avoff_t length)
     struct filtfile *ff = (struct filtfile *) vf->data;
     
     AV_LOCK(ff->lock);
-    res = __av_sfile_truncate(ff->sf, length);
+    res = av_sfile_truncate(ff->sf, length);
     AV_UNLOCK(ff->lock);
 
     return res;
@@ -357,15 +363,15 @@ static int filt_close(vfile *vf)
         ff->writers --;
 
         if(ff->writers == 0) {
-            res = __av_sfile_flush(ff->sf);
-            __av_close(ff->vf);
+            res = av_sfile_flush(ff->sf);
+            av_close(ff->vf);
             ff->vf = NULL;
             ff->mod.size = -1;
         }
     }
     AV_UNLOCK(ff->lock);
 
-    __av_unref_obj(ff);
+    av_unref_obj(ff);
 
     return res;
 }
@@ -381,9 +387,9 @@ static int filt_getattr(vfile *vf, struct avstat *buf, int attrmask)
 
     AV_LOCK(ff->lock);
     ino = ff->ino;
-    res = __av_getattr(ff->vf, &origbuf, AVA_ALL & ~AVA_SIZE);
+    res = av_getattr(ff->vf, &origbuf, AVA_ALL & ~AVA_SIZE);
     if(res == 0) { 
-        size = __av_sfile_size(ff->sf);
+        size = av_sfile_size(ff->sf);
         if(size < 0)
             res = size;
     }
@@ -414,7 +420,7 @@ static int filt_setattr(vfile *vf, struct avstat *buf, int attrmask)
     struct filtfile *ff = (struct filtfile *) vf->data;
 
     AV_LOCK(ff->lock);
-    res = __av_setattr(ff->vf, buf, attrmask);
+    res = av_setattr(ff->vf, buf, attrmask);
     AV_UNLOCK(ff->lock);
 
     return res;    
@@ -422,7 +428,7 @@ static int filt_setattr(vfile *vf, struct avstat *buf, int attrmask)
 
 static int filt_access(ventry *ve, int amode)
 {
-    return __av_access(ve->mnt->base, amode);
+    return av_access(ve->mnt->base, amode);
 }
 
 static int filt_rename(ventry *ve, ventry *newve)
@@ -432,7 +438,7 @@ static int filt_rename(ventry *ve, ventry *newve)
 
 static int filt_unlink(ventry *ve)
 {
-    return __av_unlink(ve->mnt->base);
+    return av_unlink(ve->mnt->base);
 }
 
 static void filt_destroy(struct avfs *avfs)
@@ -441,10 +447,10 @@ static void filt_destroy(struct avfs *avfs)
 
     filt_free_prog(filtdat->prog);
     filt_free_prog(filtdat->revprog);
-    __av_free(filtdat);
+    av_free(filtdat);
 }
 
-int __av_init_filt(struct vmodule *module, const char *name,
+int av_init_filt(struct vmodule *module, const char *name,
                    const char *prog[], const char *revprog[],
                    struct ext_info *exts, struct avfs **resp)
 {
@@ -453,7 +459,7 @@ int __av_init_filt(struct vmodule *module, const char *name,
     struct filtdata *filtdat;
     
 
-    res = __av_new_avfs(name, exts, AV_VER, AVF_NOLOCK, module, &avfs);
+    res = av_new_avfs(name, exts, AV_VER, AVF_NOLOCK, module, &avfs);
     if(res < 0)
         return res;
 
@@ -476,7 +482,7 @@ int __av_init_filt(struct vmodule *module, const char *name,
     avfs->setattr  = filt_setattr;
     avfs->truncate = filt_truncate;
 
-    __av_add_avfs(avfs);
+    av_add_avfs(avfs);
     
     *resp = avfs;
 

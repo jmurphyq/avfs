@@ -62,7 +62,7 @@ static int local_open(ventry *ve, int flags, avmode_t mode, void **resp)
             return -errno;
         
         if(fd != -1)
-            __av_registerfd(fd);
+            av_registerfd(fd);
     }
     
     AV_NEW(fi);
@@ -70,7 +70,7 @@ static int local_open(ventry *ve, int flags, avmode_t mode, void **resp)
     fi->fd = fd;
     fi->dirp = dirp;
     fi->entctr = 0;
-    fi->path = __av_strdup(path);
+    fi->path = av_strdup(path);
 
     *resp = fi;
 
@@ -90,8 +90,8 @@ static int local_close(vfile *vf)
     if(res == -1)
         res = -errno;
 
-    __av_free(fi->path);
-    __av_free(fi);
+    av_free(fi->path);
+    av_free(fi);
 
     return 0;
 }
@@ -152,7 +152,7 @@ static int local_readdir(vfile *vf, struct avdirent *buf)
 	fi->entctr ++;
     } while(vf->ptr >= fi->entctr);
 
-    buf->name = __av_strdup(de->d_name);
+    buf->name = av_strdup(de->d_name);
     buf->ino = de->d_ino;
 #ifdef HAVE_D_TYPE
     buf->type = de->d_type;
@@ -305,10 +305,10 @@ static int local_readlink(ventry *ve, char **bufp)
     buf = NULL;
     do {
         bufsize += 1024;
-        buf = __av_realloc(buf, bufsize + 1);
+        buf = av_realloc(buf, bufsize + 1);
         res = readlink(path, buf, bufsize);
         if(res == -1) {
-            __av_free(buf);
+            av_free(buf);
             return -errno;
         }
     } while(res >= bufsize);
@@ -417,14 +417,14 @@ static int local_lookup(ventry *ve, const char *name, void **newp)
     else if(name != NULL) {
         if(path[0] == '/' && path[1] == '\0' && name[0] == '/')
             path[0] = '\0';
-        path = __av_stradd(path, name, NULL);
+        path = av_stradd(path, name, NULL);
     }
     else {
         char *s;
         s = strrchr(path, AV_DIR_SEP_CHAR);
         if(s == NULL) {
             path[0] = '\0';
-            path = __av_stradd(path, ".", NULL);
+            path = av_stradd(path, ".", NULL);
         }
         else if(s != path)
             s[0] = '\0';
@@ -437,13 +437,13 @@ static int local_lookup(ventry *ve, const char *name, void **newp)
     return 0;
 }
 
-int __av_init_module_local()
+int av_init_module_local()
 {
     int res;
     int flags = AVF_NEEDSLASH | AVF_NOLOCK;
     struct avfs *avfs;
 
-    res = __av_new_avfs("local", NULL, AV_VER, flags, NULL, &avfs);
+    res = av_new_avfs("local", NULL, AV_VER, flags, NULL, &avfs);
     if(res < 0)
         return res;
 
@@ -468,7 +468,7 @@ int __av_init_module_local()
     avfs->symlink    = local_symlink;
     avfs->truncate   = local_truncate;
 
-    __av_add_avfs(avfs);
+    av_add_avfs(avfs);
     
     return 0;
 }

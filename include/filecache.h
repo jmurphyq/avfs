@@ -6,5 +6,5 @@
     the GNU GPL. See the file COPYING.LIB and COPYING. 
 */
 
-void *__av_filecache_get(const char *key);
-void __av_filecache_set(const char *key, void *obj);
+void *av_filecache_get(const char *key);
+void av_filecache_set(const char *key, void *obj);

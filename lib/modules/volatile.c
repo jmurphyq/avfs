@@ -34,8 +34,8 @@ static void vol_unlink_entry(struct entry *ent)
         *ent->prevp = ent->next;
     if(ent->next != NULL)
         ent->next->prevp = ent->prevp;
-    __av_unref_obj(ent->parent);
-    __av_free(ent->name);
+    av_unref_obj(ent->parent);
+    av_free(ent->name);
 
     ent->prevp = NULL;
     ent->next = NULL;
@@ -53,14 +53,14 @@ static struct entry *vol_new_entry(const char *name)
     ent->next = NULL;
     ent->prevp = NULL;
     ent->parent = NULL;
-    ent->name = __av_strdup(name);
+    ent->name = av_strdup(name);
 
     return ent;
 }
 
 static void vol_free_node(struct node *nod)
 {
-    __av_free(nod->content);
+    av_free(nod->content);
 }
 
 static struct node *vol_new_node(struct avstat *initstat)
@@ -79,8 +79,8 @@ static struct node *vol_new_node(struct avstat *initstat)
 
 static void vol_link_node(struct entry *ent, struct node *nod)
 {
-    __av_ref_obj(ent);
-    __av_ref_obj(nod);
+    av_ref_obj(ent);
+    av_ref_obj(nod);
     ent->node = nod;
     
     if(AV_ISDIR(nod->st.mode)) {
@@ -116,8 +116,8 @@ static void vol_unlink_node(struct entry *ent)
 
 
     ent->node = NULL;
-    __av_unref_obj(nod);
-    __av_unref_obj(ent);
+    av_unref_obj(nod);
+    av_unref_obj(ent);
 }
 
 static void vol_free_tree(struct entry *ent)
@@ -141,16 +141,16 @@ static int vol_make_node(struct filesys *fs, struct entry *ent, avmode_t mode)
     if(ent->name == NULL)
         return -ENOENT;
 
-    __av_default_stat(&initstat);
+    av_default_stat(&initstat);
     
     initstat.dev = fs->avfs->dev;
-    initstat.ino = __av_new_ino(fs->avfs);
+    initstat.ino = av_new_ino(fs->avfs);
 
     nod = vol_new_node(&initstat);
     nod->st.mode = mode;
     
     vol_link_node(ent, nod);
-    __av_unref_obj(nod);
+    av_unref_obj(nod);
 
     return 0;
 }
@@ -177,18 +177,18 @@ static struct entry *vol_get_entry(struct entry *parent, const char *name)
 
     if(strcmp(name, ".") == 0) {
         ent = parent;
-	__av_ref_obj(ent);
+	av_ref_obj(ent);
 	return ent;
     }
     if(strcmp(name, "..") == 0) {
         ent = parent->parent;
-	__av_ref_obj(ent);
+	av_ref_obj(ent);
 	return ent;
     }
     for(entp = &parent->node->subdir; *entp != NULL; entp = &(*entp)->next)
 	if(strcmp(name, (*entp)->name) == 0) {
 	    ent = *entp;
-	    __av_ref_obj(ent);
+	    av_ref_obj(ent);
 	    return ent;
 	}
 
@@ -197,7 +197,7 @@ static struct entry *vol_get_entry(struct entry *parent, const char *name)
     *entp = ent;
     ent->prevp = entp;
     ent->parent = parent;
-    __av_ref_obj(parent);
+    av_ref_obj(parent);
 
     return ent;
 }
@@ -210,7 +210,7 @@ static int vol_do_lookup(struct entry *parent, const char *name,
 
     if(name == NULL) {
         *entp = parent->parent;
-        __av_ref_obj(*entp);
+        av_ref_obj(*entp);
         return 0;
     }
 
@@ -227,7 +227,7 @@ static struct entry *vol_get_root(ventry *ve)
     struct filesys *fs = vol_ventry_filesys(ve);
     struct entry *root = fs->root;
 
-    __av_ref_obj(root);
+    av_ref_obj(root);
 
     return root;
 }
@@ -249,7 +249,7 @@ static int vol_lookup(ventry *ve, const char *name, void **newp)
         if(res < 0)
             return res;
         
-        __av_unref_obj(parent);
+        av_unref_obj(parent);
     }
 
     *newp = ent;
@@ -265,11 +265,11 @@ static char *vol_create_path(struct entry *ent)
     char *path;
     
     if(ent->parent == NULL)
-        return __av_strdup("");
+        return av_strdup("");
     
     path = vol_create_path(ent->parent);
 
-    return __av_stradd(path, "/", ent->name, NULL);
+    return av_stradd(path, "/", ent->name, NULL);
 }
 
 static int vol_getpath(ventry *ve, char **resp)
@@ -285,14 +285,14 @@ static void vol_putent(ventry *ve)
 {
     struct entry *ent = vol_ventry_entry(ve);
 
-    __av_unref_obj(ent);
+    av_unref_obj(ent);
 }
 
 static int vol_copyent(ventry *ve, void **resp)
 {
     struct entry *ent = vol_ventry_entry(ve);
     
-    __av_ref_obj(ent);
+    av_ref_obj(ent);
 
     *resp = (void *) ent;
 
@@ -303,7 +303,7 @@ static void vol_truncate_node(struct node *nod, avoff_t length)
 {
     nod->st.size = length;
     nod->st.blocks = AV_DIV(nod->st.size, 512);
-    __av_curr_time(&nod->st.mtime);
+    av_curr_time(&nod->st.mtime);
 }
 
 static int vol_need_write(int flags)
@@ -374,7 +374,7 @@ static int vol_open(ventry *ve, int flags, avmode_t mode, void **resp)
     else if((flags & AVO_TRUNC) != 0)
         vol_truncate_node(ent->node, 0);
 
-    __av_ref_obj(ent->node);
+    av_ref_obj(ent->node);
     
     *resp = ent->node;
 
@@ -385,7 +385,7 @@ static int vol_close(vfile *vf)
 {
     struct node *nod = vol_vfile_node(vf);
 
-    __av_unref_obj(nod);
+    av_unref_obj(nod);
 
     return 0;
 }
@@ -420,14 +420,14 @@ static avssize_t vol_write(vfile *vf, const char *buf, avsize_t nbyte)
 
     end = vf->ptr + nbyte;
     if(end > nod->st.size) {
-        nod->content = __av_realloc(nod->content, end);
+        nod->content = av_realloc(nod->content, end);
         nod->st.size = end;
         nod->st.blocks = AV_DIV(nod->st.size, 512);
     }
 
     memcpy(nod->content + vf->ptr, buf, nbyte);
 
-    __av_curr_time(&nod->st.mtime);
+    av_curr_time(&nod->st.mtime);
 
     vf->ptr = end;
 
@@ -494,7 +494,7 @@ static int vol_readdir(vfile *vf, struct avdirent *buf)
     if(nod == NULL)
         return 0;
 
-    buf->name = __av_strdup(name);
+    buf->name = av_strdup(name);
     buf->ino = nod->st.ino;
     buf->type = AV_TYPE(nod->st.mode);
     
@@ -556,7 +556,7 @@ static int vol_readlink(ventry *ve, char **bufp)
     if(!AV_ISLNK(nod->st.mode))
         return -EINVAL;
 
-    *bufp = __av_strdup(nod->content);
+    *bufp = av_strdup(nod->content);
 
     return 0;
 }
@@ -751,7 +751,7 @@ static int vol_symlink(const char *path, ventry *newve)
     if(res < 0)
         return res;
     
-    ent->node->content = __av_strdup(path);
+    ent->node->content = av_strdup(path);
     ent->node->st.size = strlen(path);
 
     return 0;
@@ -762,19 +762,19 @@ static void vol_destroy(struct avfs *avfs)
     struct filesys *fs = (struct filesys *) avfs->data;
 
     vol_free_tree(fs->root);
-    __av_unref_obj(fs->root);
-    __av_free(fs);
+    av_unref_obj(fs->root);
+    av_free(fs);
 }
 
-extern int __av_init_module_volatile(struct vmodule *module);
+extern int av_init_module_volatile(struct vmodule *module);
 
-int __av_init_module_volatile(struct vmodule *module)
+int av_init_module_volatile(struct vmodule *module)
 {
     int res;
     struct avfs *avfs;
     struct filesys *fs;
 
-    res = __av_new_avfs("volatile", NULL, AV_VER, AVF_ONLYROOT, module, &avfs);
+    res = av_new_avfs("volatile", NULL, AV_VER, AVF_ONLYROOT, module, &avfs);
     if(res < 0)
         return res;
 
@@ -813,7 +813,7 @@ int __av_init_module_volatile(struct vmodule *module)
     avfs->link      = vol_link;
     avfs->symlink   = vol_symlink;
 
-    __av_add_avfs(avfs);
+    av_add_avfs(avfs);
     
     return 0;
 }

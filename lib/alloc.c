@@ -15,7 +15,7 @@
 static int malloctr;
 static AV_LOCK_DECL(mallock);
 
-void __av_check_malloc()
+void av_check_malloc()
 {
     int ctr;
 
@@ -24,19 +24,19 @@ void __av_check_malloc()
     AV_UNLOCK(mallock);
 
     if(ctr != 0) 
-        __av_log(AVLOG_WARNING, "Unfreed memory remaining (%i)", ctr);
+        av_log(AVLOG_WARNING, "Unfreed memory remaining (%i)", ctr);
     else
-        __av_log(AVLOG_DEBUG, "No unfreed memory remaining");
+        av_log(AVLOG_DEBUG, "No unfreed memory remaining");
 }
 
 static void out_of_memory()
 {
-    __av_log(AVLOG_ERROR, "Out of memory");
+    av_log(AVLOG_ERROR, "Out of memory");
     fprintf(stderr, "Out of memory\n");
     exit(127);
 }
 
-void *__av_malloc(avsize_t nbyte)
+void *av_malloc(avsize_t nbyte)
 {
     void *p;
 
@@ -54,7 +54,7 @@ void *__av_malloc(avsize_t nbyte)
     return p;
 }
 
-void *__av_calloc(avsize_t nbyte)
+void *av_calloc(avsize_t nbyte)
 {
     void *p;
 
@@ -72,7 +72,7 @@ void *__av_calloc(avsize_t nbyte)
     return p;
 }
 
-void *__av_realloc(void *ptr, avsize_t nbyte)
+void *av_realloc(void *ptr, avsize_t nbyte)
 {
     void *p;
     
@@ -93,7 +93,7 @@ void *__av_realloc(void *ptr, avsize_t nbyte)
     return p;
 }
 
-void __av_free(void *ptr)
+void av_free(void *ptr)
 {
     AV_LOCK(mallock);
     if(ptr != NULL)

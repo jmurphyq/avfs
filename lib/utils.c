@@ -24,16 +24,16 @@ struct av_obj {
 
 static AV_LOCK_DECL(objlock);
 
-int __av_check_version(const char *modname, const char *name,
+int av_check_version(const char *modname, const char *name,
                        int version, int need_ver, int provide_ver)
 {
     if(version < need_ver || version > provide_ver) {
         if(version < need_ver) 
-            __av_log(AVLOG_WARNING, 
+            av_log(AVLOG_WARNING, 
                      "%s: %s has version %i. Needs to be at least %i.",
                      modname, name, version, need_ver);
         else
-            __av_log(AVLOG_WARNING, 
+            av_log(AVLOG_WARNING, 
                      "%s: %s has version %i. Cannot handle above %i.",
                      modname, name, version, provide_ver);
     
@@ -59,7 +59,7 @@ static struct ext_info *copy_exts(struct ext_info *exts)
     }
     num = i;
 
-    newexts = __av_malloc((num + 1) * sizeof(*newexts) + len);
+    newexts = av_malloc((num + 1) * sizeof(*newexts) + len);
 
     pp = (char *) (&newexts[num + 1]);
   
@@ -86,10 +86,10 @@ static void free_avfs(struct avfs *avfs)
     avfs->destroy(avfs);
     AVFS_UNLOCK(avfs);
     
-    __av_free(avfs->name);
-    __av_free(avfs->exts);
+    av_free(avfs->name);
+    av_free(avfs->exts);
 
-    __av_unref_obj(avfs->module);
+    av_unref_obj(avfs->module);
     if(!(avfs->flags & AVF_NOLOCK))
         AV_FREELOCK(avfs->lock);
 }
@@ -108,7 +108,7 @@ static int new_minor()
     return res;
 }
 
-avino_t __av_new_ino(struct avfs *avfs)
+avino_t av_new_ino(struct avfs *avfs)
 {
     static AV_LOCK_DECL(lock);
     avino_t res;
@@ -121,13 +121,13 @@ avino_t __av_new_ino(struct avfs *avfs)
     return res;
 }
 
-int __av_new_avfs(const char *name, struct ext_info *exts, int version,
+int av_new_avfs(const char *name, struct ext_info *exts, int version,
                   int flags, struct vmodule *module, struct avfs **retp)
 {
     int ret;
     struct avfs *avfs;
 
-    ret = __av_check_version("CoreLib", name, version, NEED_VER, AV_VER);
+    ret = av_check_version("CoreLib", name, version, NEED_VER, AV_VER);
     if(ret < 0)
         return ret;
 
@@ -135,65 +135,65 @@ int __av_new_avfs(const char *name, struct ext_info *exts, int version,
     if(!(flags & AVF_NOLOCK))
         AV_INITLOCK(avfs->lock);
 
-    avfs->name = __av_strdup(name);
+    avfs->name = av_strdup(name);
 
     avfs->exts = copy_exts(exts);
     avfs->data = NULL;
     avfs->version = version;
     avfs->flags = flags;
     avfs->module = module;
-    avfs->dev = __av_mkdev(AVFS_MAJOR, new_minor());
+    avfs->dev = av_mkdev(AVFS_MAJOR, new_minor());
     avfs->inoctr = 2;
 
-    __av_ref_obj(module);
+    av_ref_obj(module);
     
-    __av_default_avfs(avfs);
+    av_default_avfs(avfs);
 
     *retp = avfs;
     return 0;
 }
 
-void __av_init_avfsstat()
+void av_init_avfsstat()
 {
     struct avfs *avfs;
 
-    __av_state_new(NULL, "avfsstat", &avfsstat_ns, &avfs);
-    __av_unref_obj(avfsstat_ns);
+    av_state_new(NULL, "avfsstat", &avfsstat_ns, &avfs);
+    av_unref_obj(avfsstat_ns);
 }
 
-void __av_avfsstat_register(const char *path, struct statefile *func)
+void av_avfsstat_register(const char *path, struct statefile *func)
 {
     struct entry *ent;
     struct statefile *stf;
 
-    ent = __av_namespace_resolve(avfsstat_ns, path);
+    ent = av_namespace_resolve(avfsstat_ns, path);
     AV_NEW(stf);
 
     *stf = *func;
-    __av_namespace_set(ent, stf);
+    av_namespace_set(ent, stf);
 }
 
-char *__av_strdup(const char *s)
+char *av_strdup(const char *s)
 {
     char *ns;
 
     if(s == NULL)
         return NULL;
   
-    ns = (char *) __av_malloc(strlen(s) + 1);
+    ns = (char *) av_malloc(strlen(s) + 1);
     strcpy(ns, s);
 
     return ns;
 }
 
-char *__av_strndup(const char *s, avsize_t len)
+char *av_strndup(const char *s, avsize_t len)
 {
     char *ns;
 
     if(s == NULL)
         return NULL;
   
-    ns = (char *) __av_malloc(len + 1);
+    ns = (char *) av_malloc(len + 1);
     strncpy(ns, s, len);
     
     ns[len] = '\0';
@@ -201,7 +201,7 @@ char *__av_strndup(const char *s, avsize_t len)
     return ns;
 }
 
-char *__av_stradd(char *str, ...)
+char *av_stradd(char *str, ...)
 {
     va_list ap;
     unsigned int origlen;
@@ -221,7 +221,7 @@ char *__av_stradd(char *str, ...)
     } while(s != NULL);
     va_end(ap);
   
-    str = __av_realloc(str, len + 1);
+    str = av_realloc(str, len + 1);
     ns = str + origlen;
     ns[0] = '\0';
     va_start(ap, str);
@@ -237,18 +237,18 @@ char *__av_stradd(char *str, ...)
     return str;
 }
 
-void *__av_new_obj(avsize_t nbyte, void (*destr)(void *))
+void *av_new_obj(avsize_t nbyte, void (*destr)(void *))
 {
     struct av_obj *ao;
 
-    ao = (struct av_obj *) __av_calloc(sizeof(*ao) + nbyte);
+    ao = (struct av_obj *) av_calloc(sizeof(*ao) + nbyte);
     ao->refctr = 1;
     ao->destr = destr;
     
     return (void *) (ao + 1);
 }
 
-void __av_ref_obj(void *obj)
+void av_ref_obj(void *obj)
 {
     if(obj != NULL) {
         struct av_obj *ao = ((struct av_obj *) obj) - 1;
@@ -261,11 +261,11 @@ void __av_ref_obj(void *obj)
         AV_UNLOCK(objlock);
 
         if(refctr <= 0)
-            __av_log(AVLOG_ERROR, "Referencing deleted object (%p)", obj);
+            av_log(AVLOG_ERROR, "Referencing deleted object (%p)", obj);
     }
 }
 
-void __av_unref_obj(void *obj)
+void av_unref_obj(void *obj)
 {
     if(obj != NULL) {
         struct av_obj *ao = ((struct av_obj *) obj) - 1;
@@ -281,9 +281,9 @@ void __av_unref_obj(void *obj)
             if(ao->destr != NULL)
                 ao->destr(obj);
 
-            __av_free(ao);
+            av_free(ao);
         }
         else if(refctr < 0)
-            __av_log(AVLOG_ERROR, "Unreferencing deleted object (%p)", obj);
+            av_log(AVLOG_ERROR, "Unreferencing deleted object (%p)", obj);
     }
 }

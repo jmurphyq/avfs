@@ -51,7 +51,7 @@ struct tar_entdat {
     char gname[UNAME_FIELD_SIZE];
 };
 
-#define ISSPACE(x) __av_isspace(x)
+#define ISSPACE(x) av_isspace(x)
 #define ISODIGIT(x) ((x) >= '0' && (x) < '8')
 
 /*------------------------------------------------------------------------.
@@ -133,7 +133,7 @@ static int find_next_block(ave *v, struct arch_file *file, union block *blk)
 {
     int res;
 
-    res = __av_read(v, file->fh, blk->buffer, BLOCKSIZE);
+    res = av_read(v, file->fh, blk->buffer, BLOCKSIZE);
     if(res == 0) return 0;
     if(res == -1) return -2;
     if(res < BLOCKSIZE) {
@@ -219,7 +219,7 @@ static int read_entry(ave *v, arch_file *file, struct tar_entinfo *tinf)
         if (unsigned_sum != recorded_sum && signed_sum != recorded_sum) {
             res = -1;
             v->errn = EIO;
-            __av_log(AVLOG_WARNING, "utar: Bad header");
+            av_log(AVLOG_WARNING, "utar: Bad header");
             break; /* HEADER_FAILURE */
         }
 
@@ -238,8 +238,8 @@ static int read_entry(ave *v, arch_file *file, struct tar_entinfo *tinf)
                      ? &next_long_name
                      : &next_long_link);
 
-            if (*longp) __av_free (*longp);
-            bp = *longp = (char *) __av_malloc (v, (avsize_t) tinf->size);
+            if (*longp) av_free (*longp);
+            bp = *longp = (char *) av_malloc (v, (avsize_t) tinf->size);
             if (bp == AVNULL) {
                 res = -2;
                 break;
@@ -253,7 +253,7 @@ static int read_entry(ave *v, arch_file *file, struct tar_entinfo *tinf)
                 if (written > size)
                     written = size;
 
-                __av_memcpy (bp, data_block.buffer, (avsize_t) written);
+                av_memcpy (bp, data_block.buffer, (avsize_t) written);
                 bp += written;
 	    }
             if(res < 0) break;
@@ -274,7 +274,7 @@ static int read_entry(ave *v, arch_file *file, struct tar_entinfo *tinf)
             }
             if(res < 0) break;
 
-            sres = __av_lseek(v, file->fh, 
+            sres = av_lseek(v, file->fh, 
                               AV_DIV(tinf->size, BLOCKSIZE) * BLOCKSIZE, 
                               AVSEEK_CUR);
             if(sres == -1) {
@@ -283,14 +283,14 @@ static int read_entry(ave *v, arch_file *file, struct tar_entinfo *tinf)
             }
             file->ptr = sres;
 
-            tinf->name = __av_strdup (v, next_long_name ? next_long_name
+            tinf->name = av_strdup (v, next_long_name ? next_long_name
                                       : header->header.name);
-            tinf->linkname = __av_strdup (v, next_long_link ? next_long_link
+            tinf->linkname = av_strdup (v, next_long_link ? next_long_link
                                           : header->header.linkname);
 
             if(tinf->name == AVNULL || tinf->linkname == AVNULL) {
-                __av_free(tinf->name);
-                __av_free(tinf->linkname);
+                av_free(tinf->name);
+                av_free(tinf->linkname);
                 res = -2;
             }
             else res = 1;
@@ -298,8 +298,8 @@ static int read_entry(ave *v, arch_file *file, struct tar_entinfo *tinf)
 	}
     }
 
-    __av_free(next_long_name);
-    __av_free(next_long_link);
+    av_free(next_long_name);
+    av_free(next_long_link);
     return res;
 }
 
@@ -311,9 +311,9 @@ static void decode_header (union block *header, struct avstat *stat_info,
     enum archive_format format;
     char ugname[UNAME_FIELD_SIZE+1];
 
-    if (__av_strcmp (header->header.magic, TMAGIC) == 0)
+    if (av_strcmp (header->header.magic, TMAGIC) == 0)
         format = POSIX_FORMAT;
-    else if (__av_strcmp (header->header.magic, OLDGNU_MAGIC) == 0)
+    else if (av_strcmp (header->header.magic, OLDGNU_MAGIC) == 0)
         format = OLDGNU_FORMAT;
     else
         format = V7_FORMAT;
@@ -369,12 +369,12 @@ static void decode_header (union block *header, struct avstat *stat_info,
     {
         ugname[UNAME_FIELD_SIZE] = '\0';
 
-        __av_strncpy(ugname, header->header.uname, UNAME_FIELD_SIZE);
-        stat_info->uid = __av_finduid(ugname, from_oct (8, header->header.uid),
+        av_strncpy(ugname, header->header.uname, UNAME_FIELD_SIZE);
+        stat_info->uid = av_finduid(ugname, from_oct (8, header->header.uid),
                                       cache);
 
-        __av_strncpy(ugname, header->header.gname, UNAME_FIELD_SIZE);
-        stat_info->gid = __av_findgid(ugname, from_oct (8, header->header.gid),
+        av_strncpy(ugname, header->header.gname, UNAME_FIELD_SIZE);
+        stat_info->gid = av_findgid(ugname, from_oct (8, header->header.gid),
                                       cache);
 
         switch (header->header.typeflag)
@@ -382,7 +382,7 @@ static void decode_header (union block *header, struct avstat *stat_info,
 	case BLKTYPE:
 	case CHRTYPE:
             stat_info->rdev = 
-                __av_mkdev (from_oct (8, header->header.devmajor),
+                av_mkdev (from_oct (8, header->header.devmajor),
                             from_oct (8, header->header.devminor));
             break;
 
@@ -397,7 +397,7 @@ static int check_existing(ave *v, arch_entry *ent, struct avstat *tarstat)
 {
     
      if(ent == ent->arch->root) {
-         __av_log(AVLOG_WARNING, "utar: Empty filename");
+         av_log(AVLOG_WARNING, "utar: Empty filename");
          return -1;
      }
      if(AV_ISDIR(ent->ino->st.mode)) {
@@ -410,13 +410,13 @@ static int check_existing(ave *v, arch_entry *ent, struct avstat *tarstat)
              return 0;
          }
          else {
-             __av_log(AVLOG_WARNING,
+             av_log(AVLOG_WARNING,
                       "utar: Overwriting directory with file");
              return -1;
          }
      }
 
-     __av_unlink_inode(ent);
+     av_unlink_inode(ent);
      return 1;
  }
 
@@ -425,14 +425,14 @@ static int check_existing(ave *v, arch_entry *ent, struct avstat *tarstat)
      archive *arch = ent->arch;
      arch_entry *entlink;
 
-     entlink = __av_find_entry(DUMMYV, arch->root, linkname, FIND_POSITIVE, 0);
+     entlink = av_find_entry(DUMMYV, arch->root, linkname, FIND_POSITIVE, 0);
      if(entlink == AVNULL) {
-         __av_log(AVLOG_WARNING, "utar: Illegal hard link");
+         av_log(AVLOG_WARNING, "utar: Illegal hard link");
          return -1; 
      }
      ent->ino = entlink->ino;
-    __av_link_inode(ent);
-    __av_unref_entry(entlink);
+    av_link_inode(ent);
+    av_unref_entry(entlink);
     
     return 0;
 }
@@ -449,7 +449,7 @@ static int fill_node(ave *v, arch_entry *ent, struct tar_entinfo *tinf,
     tarstat->atime = tarstat->mtime;  /* FIXME */
     tarstat->ctime = tarstat->mtime;
 
-    res = __av_new_inode(v, ent, tarstat);
+    res = av_new_inode(v, ent, tarstat);
     if(res == -1)
         return -2;
 
@@ -484,8 +484,8 @@ static int fill_entry(ave *v, arch_entry *ent, struct tar_entinfo *tinf,
 
     ed->uid = from_oct (8, header->header.uid);
     ed->gid = from_oct (8, header->header.gid);
-    __av_strncpy(ed->uname, header->header.uname, UNAME_FIELD_SIZE);
-    __av_strncpy(ed->gname, header->header.gname, UNAME_FIELD_SIZE);
+    av_strncpy(ed->uname, header->header.uname, UNAME_FIELD_SIZE);
+    av_strncpy(ed->gname, header->header.gname, UNAME_FIELD_SIZE);
 
     if(header->header.typeflag == LNKTYPE) 
         res = fill_link(v, ent, tinf->linkname);
@@ -495,7 +495,7 @@ static int fill_entry(ave *v, arch_entry *ent, struct tar_entinfo *tinf,
     if(res == 0)
         ent->udata = (void *) ed;
     else
-        __av_free(ed);
+        av_free(ed);
     
     return res;
 }
@@ -512,21 +512,21 @@ static int insert_tarentry(ave *v, archive *arch, struct tar_entinfo *tinf,
         arch->flags |= ARCHF_RDONLY;
         if(arch->readonly_reason == AVNULL)
             arch->readonly_reason =
-                __av_strdup(DUMMYV, "utar: Cannot modify archive containing sparsefiles");
+                av_strdup(DUMMYV, "utar: Cannot modify archive containing sparsefiles");
     }
 
     /* Appears to be a file.  But BSD tar uses the convention that a
        slash suffix means a directory.  */
     if(AV_ISREG(tarstat->mode) && 
-       tinf->name[__av_strlen(tinf->name)-1] == DIR_SEP_CHAR) 
+       tinf->name[av_strlen(tinf->name)-1] == DIR_SEP_CHAR) 
         tarstat->mode = (tarstat->mode & 07777) | AV_IFDIR;
     
-    ent = __av_find_entry(v, arch->root, tinf->name, FIND_CREATE, 0);
+    ent = av_find_entry(v, arch->root, tinf->name, FIND_CREATE, 0);
     if(ent == AVNULL)
         return -2;
 
     res = fill_entry(v, ent, tinf, tarstat);
-    __av_unref_entry(ent);
+    av_unref_entry(ent);
 
     return res;
 }
@@ -539,7 +539,7 @@ static int read_tarfile(ave *v, arch_file *file, archive *arch)
     struct avstat tarstat;
     int res;
 
-    __av_init_ugidcache(&cache);
+    av_init_ugidcache(&cache);
 
     while(1) {
         res = read_entry(v, file, &tinf);
@@ -549,19 +549,19 @@ static int read_tarfile(ave *v, arch_file *file, archive *arch)
 
             if(arch->readonly_reason == AVNULL) 
                 arch->readonly_reason = 
-                    __av_strdup(DUMMYV, "utar: Cannot modify archive with errors");
+                    av_strdup(DUMMYV, "utar: Cannot modify archive with errors");
 
             continue;
         }
         else if(res == 0)
             return 0;
 
-        __av_default_stat(&tarstat);
+        av_default_stat(&tarstat);
         decode_header(&tinf.header, &tarstat, &format, &cache);
 
         res = insert_tarentry(v, arch, &tinf, &tarstat);
-        __av_free(tinf.name);
-        __av_free(tinf.linkname);
+        av_free(tinf.name);
+        av_free(tinf.linkname);
 
         if(res == -2)
             return -1;
@@ -580,14 +580,14 @@ static int parse_tarfile(ave *v, vpath *path, archive *arch)
         return -1;
     }
 
-    file.fh = __av_open(v, BASE(path), AVO_RDONLY, 0);
+    file.fh = av_open(v, BASE(path), AVO_RDONLY, 0);
     if(file.fh == -1)
         return -1;
     file.ptr = 0;
 
     res = read_tarfile(v, &file, arch);
   
-    __av_close(DUMMYV, file.fh);
+    av_close(DUMMYV, file.fh);
     
     return res;  
 }
@@ -600,7 +600,7 @@ static int write_out(ave *v, int outfd, arch_file *file, avsize_t size)
     avsize_t at;
 
     for(at = 0; at < size;) {
-        rres = __av_read(v, file->fh, buf, AV_MIN(COPYBUFSIZE, size-at));
+        rres = av_read(v, file->fh, buf, AV_MIN(COPYBUFSIZE, size-at));
         if(rres == -1) return -1;
         at += rres;
         file->ptr += rres;
@@ -612,11 +612,11 @@ static int write_out(ave *v, int outfd, arch_file *file, avsize_t size)
     
         if(rres < COPYBUFSIZE) {
             len = AV_DIV(rres, BLOCKSIZE) * BLOCKSIZE;
-            if(len > rres) __av_memset(buf + rres, 0, len - rres);
+            if(len > rres) av_memset(buf + rres, 0, len - rres);
         }
         else len = COPYBUFSIZE;
     
-        wres = __av_write(v, outfd, buf, len);
+        wres = av_write(v, outfd, buf, len);
         if(wres == -1) return -1;
     }
 
@@ -628,7 +628,7 @@ static void finish_header(union block *blk)
     int i, sum;
     char *p;
 
-    __av_memset(blk->header.chksum, ' ', 8);
+    av_memset(blk->header.chksum, ' ', 8);
 
     /* Fill in the checksum field.  It's formatted differently from the
        other fields: it has [6] digits, a null, then a space -- rather than
@@ -654,30 +654,30 @@ static int long_name(ave *v, int outfd, const char *name, int type)
     int size;
     int at;
 
-    size = __av_strlen(name) + 1;
+    size = av_strlen(name) + 1;
 
-    __av_memset(blk.buffer, 0, BLOCKSIZE);
+    av_memset(blk.buffer, 0, BLOCKSIZE);
 
-    __av_strcpy(blk.header.name, "././@LongLink");
+    av_strcpy(blk.header.name, "././@LongLink");
     to_oct ((long) 0, 8, blk.header.mode);
     to_oct ((long) 0, 8, blk.header.uid);
     to_oct ((long) 0, 8, blk.header.gid);
     to_oct ((long) 0, 12, blk.header.mtime);
-    __av_strcpy(blk.header.uname, "root");
-    __av_strcpy(blk.header.gname, "root");
-    __av_strcpy(blk.header.magic, OLDGNU_MAGIC);
+    av_strcpy(blk.header.uname, "root");
+    av_strcpy(blk.header.gname, "root");
+    av_strcpy(blk.header.magic, OLDGNU_MAGIC);
     blk.header.typeflag = type;
     to_oct ((long) size, 12, blk.header.size);
 
     finish_header(&blk);
 
-    if(__av_write(v, outfd, blk.buffer, BLOCKSIZE) == -1) return -1;
+    if(av_write(v, outfd, blk.buffer, BLOCKSIZE) == -1) return -1;
   
     for(at = 0; at < size; at += BLOCKSIZE) {
-        __av_memset(blk.buffer, 0, BLOCKSIZE);
-        __av_strncpy(blk.buffer, name + at, BLOCKSIZE);
+        av_memset(blk.buffer, 0, BLOCKSIZE);
+        av_strncpy(blk.buffer, name + at, BLOCKSIZE);
 
-        if(__av_write(v, outfd, blk.buffer, BLOCKSIZE) == -1) return -1;    
+        if(av_write(v, outfd, blk.buffer, BLOCKSIZE) == -1) return -1;    
     }
   
     return 0;
@@ -695,7 +695,7 @@ static int create_entry(ave *v, arch_entry *ent, const char *path,
     int res;
     char ugname[AV_TUNMLEN];
 
-    __av_memset(blk.buffer, 0, BLOCKSIZE);
+    av_memset(blk.buffer, 0, BLOCKSIZE);
 
     to_oct ((long) ino->st.mode, 8, blk.header.mode);
     to_oct ((long) ino->st.mtime, 12, blk.header.mtime);
@@ -705,22 +705,22 @@ static int create_entry(ave *v, arch_entry *ent, const char *path,
     
         to_oct ((long) ted->uid, 8, blk.header.uid);
         to_oct ((long) ted->gid, 8, blk.header.gid);
-        __av_strncpy(blk.header.uname, ted->uname, UNAME_FIELD_SIZE);
-        __av_strncpy(blk.header.gname, ted->gname, UNAME_FIELD_SIZE);
+        av_strncpy(blk.header.uname, ted->uname, UNAME_FIELD_SIZE);
+        av_strncpy(blk.header.gname, ted->gname, UNAME_FIELD_SIZE);
     }
     else {
         to_oct ((long) ino->st.uid, 8, blk.header.uid);
         to_oct ((long) ino->st.gid, 8, blk.header.gid);
     
-        __av_finduname(ugname, ino->st.uid, cache);
-        __av_strncpy(blk.header.uname, ugname, UNAME_FIELD_SIZE);
+        av_finduname(ugname, ino->st.uid, cache);
+        av_strncpy(blk.header.uname, ugname, UNAME_FIELD_SIZE);
     
-        __av_findgname(ugname, ino->st.gid, cache);
-        __av_strncpy(blk.header.gname, ugname, UNAME_FIELD_SIZE);
+        av_findgname(ugname, ino->st.gid, cache);
+        av_strncpy(blk.header.gname, ugname, UNAME_FIELD_SIZE);
     }
 
     /* We only do OLDGNU for the moment */
-    __av_strcpy(blk.header.magic, OLDGNU_MAGIC);
+    av_strcpy(blk.header.magic, OLDGNU_MAGIC);
 
     if(AV_ISDIR(ino->st.mode)) 
         type = DIRTYPE;
@@ -748,7 +748,7 @@ static int create_entry(ave *v, arch_entry *ent, const char *path,
     if(type == CHRTYPE || type == BLKTYPE) {
         int major, minor;
 
-        __av_splitdev(ino->st.rdev, &major, &minor);
+        av_splitdev(ino->st.rdev, &major, &minor);
         to_oct ((long) major, 8, blk.header.devmajor);
         to_oct ((long) minor, 8, blk.header.devminor);
     }
@@ -762,31 +762,31 @@ static int create_entry(ave *v, arch_entry *ent, const char *path,
             linkname = ino->syml;
 
 
-        if(__av_strlen(linkname) >= NAME_FIELD_SIZE && 
+        if(av_strlen(linkname) >= NAME_FIELD_SIZE && 
            long_name(v, outfd, linkname, GNUTYPE_LONGLINK) == -1) return -1;
     
-        __av_strncpy(blk.header.linkname, linkname, NAME_FIELD_SIZE);
+        av_strncpy(blk.header.linkname, linkname, NAME_FIELD_SIZE);
         blk.header.linkname[NAME_FIELD_SIZE-1] = '\0';
     }
 
     if(!AV_ISDIR(ino->st.mode)) 
-        name = __av_strconcat(v, path, ent->name, AVNULL);
+        name = av_strconcat(v, path, ent->name, AVNULL);
     else
-        name = __av_strconcat(v, path, ent->name, "/", AVNULL);
+        name = av_strconcat(v, path, ent->name, "/", AVNULL);
 
     if(name == AVNULL) return -1;
 
-    if(__av_strlen(name) >= NAME_FIELD_SIZE && 
+    if(av_strlen(name) >= NAME_FIELD_SIZE && 
        long_name(v, outfd, name, GNUTYPE_LONGNAME) == -1) return -1;
 
-    __av_strncpy(blk.header.name, name, NAME_FIELD_SIZE);
+    av_strncpy(blk.header.name, name, NAME_FIELD_SIZE);
     blk.header.name[NAME_FIELD_SIZE-1] = '\0';
-    __av_free(name);
+    av_free(name);
 
 
     finish_header(&blk);
 
-    if(__av_write(v, outfd, blk.buffer, BLOCKSIZE) == -1) return -1;
+    if(av_write(v, outfd, blk.buffer, BLOCKSIZE) == -1) return -1;
 
     /* FIXME: sparse files */
     if(ino->typeflag == GNUTYPE_SPARSE) {
@@ -799,16 +799,16 @@ static int create_entry(ave *v, arch_entry *ent, const char *path,
             arch_file f;
       
             f.ptr = 0;
-            f.fh = __av_localopen(v, ino->tmpfile, AVO_RDONLY, 0);
+            f.fh = av_localopen(v, ino->tmpfile, AVO_RDONLY, 0);
             if(f.fh == -1) return -1;
 
             res = write_out(v, outfd, &f, size);
-            __av_localclose(DUMMYV, f.fh);
+            av_localclose(DUMMYV, f.fh);
 
             if(res == -1) return -1;
         }
         else {
-            file->ptr = __av_lseek(v, file->fh, ino->offset, AVSEEK_SET);
+            file->ptr = av_lseek(v, file->fh, ino->offset, AVSEEK_SET);
             if(file->ptr == -1) return -1;
 
             res = write_out(v, outfd, file, size);
@@ -837,7 +837,7 @@ static int write_tardir(ave *v, arch_file *file, arch_inode *dir, int outfd,
       
             if(!AV_ISDIR(ino->st.mode) && ino->st.nlink > 1 && 
                ino->udata == AVNULL) {
-                ino->udata = __av_strconcat(v, path, ent->name, AVNULL);
+                ino->udata = av_strconcat(v, path, ent->name, AVNULL);
                 if(ino->udata == AVNULL) return -1;
             }
         }
@@ -849,12 +849,12 @@ static int write_tardir(ave *v, arch_file *file, arch_inode *dir, int outfd,
             if(ted == AVNULL) dirchanged = 1; /* Renamed directory */
             else dirchanged = 0;
 
-            newpath = __av_strconcat(v, path, ent->name, "/", AVNULL);
+            newpath = av_strconcat(v, path, ent->name, "/", AVNULL);
             if(newpath == AVNULL) return -1;
 
             res = write_tardir(v, file, ino, outfd, newpath, dirchanged,
                                cache);
-            __av_free(newpath);
+            av_free(newpath);
       
             if(res == -1) return -1;
         }
@@ -868,7 +868,7 @@ static void clear_filenames(arch_inode *dir)
     arch_entry *ent;
 
     for(ent = dir->subdir; ent != AVNULL; ent = ent->next) {
-        __av_free(ent->ino->udata);
+        av_free(ent->ino->udata);
         ent->ino->udata = AVNULL;
         if(AV_ISDIR(ent->ino->st.mode)) clear_filenames(ent->ino);
     }
@@ -892,8 +892,8 @@ static int zero_block(ave *v, int outfd)
 {
     union block blk;
   
-    __av_memset(blk.buffer, 0, BLOCKSIZE);
-    if(__av_write(v, outfd, blk.buffer, BLOCKSIZE) == -1) return -1;
+    av_memset(blk.buffer, 0, BLOCKSIZE);
+    if(av_write(v, outfd, blk.buffer, BLOCKSIZE) == -1) return -1;
   
     return 0;
 }
@@ -905,14 +905,14 @@ static int flush_tarfile(ave *v, vpath *path, archive *arch)
     int res;
     struct ugidcache cache;
 
-    __av_init_ugidcache(&cache);
+    av_init_ugidcache(&cache);
 
-    rf = __av_get_replacement(v, BASE(path), need_origarch(arch->root->ino));
+    rf = av_get_replacement(v, BASE(path), need_origarch(arch->root->ino));
     if(rf == AVNULL) return -1;
 
-    file.fh = __av_open(v, BASE(path), AVO_RDONLY, 0);
+    file.fh = av_open(v, BASE(path), AVO_RDONLY, 0);
     if(file.fh == -1) {
-        __av_del_replacement(rf);
+        av_del_replacement(rf);
         return -1;
     }
     file.ptr = 0;
@@ -926,7 +926,7 @@ static int flush_tarfile(ave *v, vpath *path, archive *arch)
         /* This pads the size to 10 blocks */
         /* FIXME: Do it nicer. Maybe with buffering all the writes */
 
-        currsize = __av_lseek(v, rf->outfd, 0, AVSEEK_CUR);
+        currsize = av_lseek(v, rf->outfd, 0, AVSEEK_CUR);
         if(currsize == -1) res = -1;
         else {
             esize = AV_DIV(currsize + BLOCKSIZE, BIGBLOCKSIZE) * BIGBLOCKSIZE;
@@ -938,17 +938,17 @@ static int flush_tarfile(ave *v, vpath *path, archive *arch)
         }
     }
 
-    __av_close(DUMMYV, file.fh);
+    av_close(DUMMYV, file.fh);
 
     if(res == -1) {
-        __av_log(AVLOG_ERROR, "utar: Flush failed, errno: %i", v->errn);
-        __av_del_replacement(rf);
+        av_log(AVLOG_ERROR, "utar: Flush failed, errno: %i", v->errn);
+        av_del_replacement(rf);
         return -1;
     }
   
-    res = __av_replace_file(v, rf);
+    res = av_replace_file(v, rf);
     if(res == -1) {
-        __av_log(AVLOG_ERROR, "utar: Replace file failed, errno: %i", v->errn);
+        av_log(AVLOG_ERROR, "utar: Replace file failed, errno: %i", v->errn);
     }
   
     return res;
@@ -960,7 +960,7 @@ static int tar_close(ave *v, void *devinfo)
     arch_fdi *di = (arch_fdi *) devinfo;
     struct tar_fdidat *tfd = (struct tar_fdidat *) di->udata;
   
-    __av_free(tfd->sparsearray);
+    av_free(tfd->sparsearray);
   
     return (*di->vdev->close)(v, devinfo);
 }
@@ -969,7 +969,7 @@ static int tar_close(ave *v, void *devinfo)
 static void *tar_open(ave *v, vpath *path, int flags, int mode)
 {
     arch_fdi *di;
-    arch_devd *dd = (arch_devd *) __av_get_vdev(path)->devdata;
+    arch_devd *dd = (arch_devd *) av_get_vdev(path)->devdata;
     struct tar_fdidat *tfd;
 
     AV_NEW(v, tfd);
@@ -977,7 +977,7 @@ static void *tar_open(ave *v, vpath *path, int flags, int mode)
 
     di = (arch_fdi *) (*dd->vdev->open)(v, path, flags, mode);
     if(di == AVNULL) {
-        __av_free(tfd);
+        av_free(tfd);
         return AVNULL;
     }
   
@@ -998,7 +998,7 @@ static int read_sparsearray(ave *v, arch_fdi *di)
     struct tar_fdidat *tfd = (struct tar_fdidat *) di->udata;
     int size, len;
   
-    di->file.ptr = __av_lseek(v, di->file.fh, tfd->headeroff, AVSEEK_SET);
+    di->file.ptr = av_lseek(v, di->file.fh, tfd->headeroff, AVSEEK_SET);
     if(di->file.ptr == -1) return -1;
   
     res = find_next_block(v, &di->file, &header);
@@ -1007,7 +1007,7 @@ static int read_sparsearray(ave *v, arch_fdi *di)
     size = 10;
     len = 0;
     sparses = 
-        (struct sp_array *) __av_malloc(v, size * sizeof(struct sp_array));
+        (struct sp_array *) av_malloc(v, size * sizeof(struct sp_array));
     if(sparses == AVNULL) return -1;
 
     for (counter = 0; counter < SPARSES_IN_OLDGNU_HEADER; counter++) {
@@ -1036,7 +1036,7 @@ static int read_sparsearray(ave *v, arch_fdi *di)
 
                     size *= 2;
                     newarray = (struct sp_array *)
-                        __av_realloc (v, sparses, size * sizeof (struct sp_array));
+                        av_realloc (v, sparses, size * sizeof (struct sp_array));
                     if(newarray == AVNULL) goto error;
                     sparses = newarray;
                 }
@@ -1060,7 +1060,7 @@ static int read_sparsearray(ave *v, arch_fdi *di)
     return 0;
 
   error:
-    __av_free(sparses);
+    av_free(sparses);
     return -1;
 }
 
@@ -1096,7 +1096,7 @@ static avssize_t read_sparse(ave *v, arch_fdi *di, char *buf, avsize_t nbyte)
     start = di->ptr;
     end = start + nact;
 
-    __av_memset(buf, 0, nact);
+    av_memset(buf, 0, nact);
   
     realoff = 0;
     ctr = 0; 
@@ -1109,11 +1109,11 @@ static avssize_t read_sparse(ave *v, arch_fdi *di, char *buf, avsize_t nbyte)
             cmend   = AV_MIN(spend,   end);
 
             di->file.ptr = 
-                __av_lseek(v, di->file.fh,
+                av_lseek(v, di->file.fh,
                            realoff + offset + (cmstart - spstart), 
                            AVSEEK_SET);
             if(di->file.ptr == -1) return -1;
-            res = __av_read(v, di->file.fh, buf + (cmstart - start), 
+            res = av_read(v, di->file.fh, buf + (cmstart - start), 
                             cmend - cmstart);
             if(res == -1) {
                 di->file.ptr = -1;
@@ -1153,10 +1153,10 @@ static int copy_file(ave *v, arch_fdi *di)
     avssize_t rres, wres;
     int fd;
 
-    ino->tmpfile = __av_get_tmpfile(v);
+    ino->tmpfile = av_get_tmpfile(v);
     if(ino->tmpfile == AVNULL) return -1;
 
-    fd = __av_localopen(v, ino->tmpfile, AVO_RDWR | AVO_CREAT | AVO_EXCL,
+    fd = av_localopen(v, ino->tmpfile, AVO_RDWR | AVO_CREAT | AVO_EXCL,
                         0600);
     if(fd == -1) goto error;
   
@@ -1171,12 +1171,12 @@ static int copy_file(ave *v, arch_fdi *di)
             goto error;
         }
 
-        wres = __av_localwrite(v, fd, buf, rres);
+        wres = av_localwrite(v, fd, buf, rres);
 
         if(wres == -1) goto error;
     }
 
-    __av_close(DUMMYV, di->file.fh);
+    av_close(DUMMYV, di->file.fh);
     di->file.fh = fd;
     di->file.ptr = di->size;
     di->offset = 0;
@@ -1189,8 +1189,8 @@ static int copy_file(ave *v, arch_fdi *di)
     return 0;
 
   error:
-    if(fd != -1) __av_localclose(DUMMYV, fd);
-    __av_del_tmpfile(ino->tmpfile);
+    if(fd != -1) av_localclose(DUMMYV, fd);
+    av_del_tmpfile(ino->tmpfile);
     ino->tmpfile = AVNULL;
     return -1;
 }
@@ -1207,9 +1207,9 @@ static avssize_t tar_write(ave *v, void *devinfo, const char *buf,
     return (*di->vdev->write) (v, devinfo, buf, nbyte);
 }
 
-extern int __av_init_module_utar(ave *v);
+extern int av_init_module_utar(ave *v);
 
-int __av_init_module_utar(ave *v)
+int av_init_module_utar(ave *v)
 {
     struct ext_info tarexts[2];
     struct vdev_info *vdev;
@@ -1218,7 +1218,7 @@ int __av_init_module_utar(ave *v)
     INIT_EXT(tarexts[0], ".tar", AVNULL);
     INIT_EXT(tarexts[1], AVNULL, AVNULL);
 
-    vdev = __av_init_arch(v, "utar", tarexts, AV_VER);
+    vdev = av_init_arch(v, "utar", tarexts, AV_VER);
     if(vdev == AVNULL) return -1;
 
     dd = (arch_devd *) vdev->devdata;
@@ -1234,6 +1234,6 @@ int __av_init_module_utar(ave *v)
     vdev->read      = tar_read;
     vdev->write     = tar_write;
   
-    return __av_add_vdev(v, vdev);
+    return av_add_vdev(v, vdev);
 }
 #endif

@@ -49,9 +49,9 @@ static int unlink_recursive(const char *file)
         if(name[0] != '.' || (name[1] && (name[1] != '.' || name[2]))) {
             char *newname;
 
-            newname = __av_stradd(NULL, file, "/", name, NULL);
+            newname = av_stradd(NULL, file, "/", name, NULL);
             unlink_recursive(newname);
-            __av_free(newname);
+            av_free(newname);
         }
     }
     closedir(dirp);
@@ -60,19 +60,19 @@ static int unlink_recursive(const char *file)
 }
 
 
-void __av_delete_tmpdir()
+void av_delete_tmpdir()
 {
     AV_LOCK(tmplock);
     if(tmpdir != NULL) {
         unlink_recursive(tmpdir->path);
-        __av_free(tmpdir->path);
-        __av_free(tmpdir);
+        av_free(tmpdir->path);
+        av_free(tmpdir);
         tmpdir = NULL;
     }
     AV_UNLOCK(tmplock);
 }
 
-int __av_get_tmpfile(char **retp)
+int av_get_tmpfile(char **retp)
 {
     int ret = 0;
     char buf[64];
@@ -81,15 +81,15 @@ int __av_get_tmpfile(char **retp)
     if(tmpdir == NULL) {
         char *path;
 
-        path = __av_strdup("/tmp/.avfs_tmp_XXXXXX");
+        path = av_strdup("/tmp/.avfs_tmp_XXXXXX");
         mktemp(path);
         if(path[0] == '\0') {
 	    ret = -EIO;
-	    __av_log(AVLOG_ERROR, "mktemp failed for temporary directory");
+	    av_log(AVLOG_ERROR, "mktemp failed for temporary directory");
 	}
 	else if(mkdir(path, 0700) == -1) {
 	    ret = -EIO;
-	    __av_log(AVLOG_ERROR, "mkdir(%s) failed: %s", path,
+	    av_log(AVLOG_ERROR, "mkdir(%s) failed: %s", path,
 		     strerror(errno));
 	}
 	else {
@@ -100,7 +100,7 @@ int __av_get_tmpfile(char **retp)
     }
     if(tmpdir != NULL) {
 	sprintf(buf, "/atmp%06i", tmpdir->ctr++);
-	*retp = __av_stradd(NULL, tmpdir->path, buf, NULL);
+	*retp = av_stradd(NULL, tmpdir->path, buf, NULL);
     }
     AV_UNLOCK(tmplock);
 
@@ -108,35 +108,35 @@ int __av_get_tmpfile(char **retp)
 }
 
 
-void __av_del_tmpfile(char *tmpf)
+void av_del_tmpfile(char *tmpf)
 {
     if(tmpf != NULL) {
 	if(unlink(tmpf) == -1)
 	    rmdir(tmpf);
 	
-	__av_free(tmpf);
+	av_free(tmpf);
     }
 }
 
 
-int __av_get_tmpfd()
+int av_get_tmpfd()
 {
     char *tmpf;
     int res;
 
-    res = __av_get_tmpfile(&tmpf);
+    res = av_get_tmpfile(&tmpf);
     if(res < 0)
         return res;
   
     res = open(tmpf, O_RDWR | O_CREAT | O_EXCL, 0600);
     if(res == -1)
         res = -errno;
-    __av_del_tmpfile(tmpf);
+    av_del_tmpfile(tmpf);
   
     return res;
 }
 
-avoff_t __av_tmp_free()
+avoff_t av_tmp_free()
 {
     int res;
     struct statvfs stbuf;
@@ -152,7 +152,7 @@ avoff_t __av_tmp_free()
 
 #if 0    
     if(freebytes != -1)
-        __av_log(AVLOG_DEBUG, "free bytes in tmp directory: %lli", freebytes);
+        av_log(AVLOG_DEBUG, "free bytes in tmp directory: %lli", freebytes);
 #endif
 
     return freebytes;

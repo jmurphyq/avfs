@@ -25,13 +25,13 @@ static void *load_module(const char *modname, const char *moduledir)
     char *modpath;
     void *lib_handle;
 
-    modpath = __av_stradd(NULL, modname, "/", moduledir, NULL);
+    modpath = av_stradd(NULL, modname, "/", moduledir, NULL);
 
     lib_handle = dlopen(modpath, RTLD_NOW);
     if(lib_handle == NULL)
-        __av_log(AVLOG_ERROR, "load_module: %s", dlerror());
+        av_log(AVLOG_ERROR, "load_module: %s", dlerror());
 
-    __av_free(modpath);
+    av_free(modpath);
   
     return lib_handle;
 }
@@ -49,7 +49,7 @@ static int init_module(void *lib_handle, const char *initname)
 
     initfunc = (int (*)(struct vmodule *)) dlsym(lib_handle, initname);
     if(initfunc == NULL) {
-        __av_log(AVLOG_ERROR, "init_module: %s", dlerror());
+        av_log(AVLOG_ERROR, "init_module: %s", dlerror());
         return -EFAULT;
     }
 
@@ -57,7 +57,7 @@ static int init_module(void *lib_handle, const char *initname)
     module->handle = lib_handle;
 
     res = (*initfunc)(module);
-    __av_unref_obj(module);
+    av_unref_obj(module);
     
     return res;
 }
@@ -75,7 +75,7 @@ static char *get_modulename(const char *filename)
     if(strcmp(filename + i, ".so") != 0)
         return NULL;
 
-    return  __av_strndup(filename, i);
+    return  av_strndup(filename, i);
 }
 
 static void check_moduledir_entry(const char *moduledir, const char *filename)
@@ -93,23 +93,23 @@ static void check_moduledir_entry(const char *moduledir, const char *filename)
         char *initname;
         void *lib_handle = NULL;
 
-        initname = __av_stradd(NULL, "__av_init_module_", modulename);
+        initname = av_stradd(NULL, "av_init_module_", modulename, NULL);
         res = init_module(lib_handle, initname);
         if(res < 0 && lib_handle != NULL)
             dlclose(lib_handle);
 
-        __av_free(initname);
+        av_free(initname);
     }
-    __av_free(modulename);
+    av_free(modulename);
 }
 
-void __av_init_dynamic_modules(void)
+void av_init_dynamic_modules(void)
 {
     DIR *dirp;
     struct dirent *ent;
     char *moduledir;
 
-    moduledir = __av_get_config("moduledir");
+    moduledir = av_get_config("moduledir");
     if(moduledir == NULL)
         return;
 
@@ -120,6 +120,6 @@ void __av_init_dynamic_modules(void)
 
         closedir(dirp);
     }
-    __av_free(moduledir);
+    av_free(moduledir);
 }
 

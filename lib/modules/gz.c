@@ -5,21 +5,25 @@
     This file can be distributed either under the GNU LGPL, or under
     the GNU GPL. See the file COPYING.LIB and COPYING. 
 
-    GZIP module
+    GZ module
 */
-#if 0
-#include "vdev.h"
+
 #include "filter.h"
 
-extern int __av_init_module_gz(ave *v);
+extern int av_init_module_gz(struct vmodule *module);
 
-int __av_init_module_gz(ave *v)
+int av_init_module_gz(struct vmodule *module)
 {
-    const char *gzip_args[2];
+    struct avfs *avfs;
+    const char *ugz_args[3];
+    const char *gz_args[2];
 
-    gzip_args[0] = "gzip";
-    gzip_args[1] = AVNULL;
+    ugz_args[0] = "gzip";
+    ugz_args[1] = "-d";
+    ugz_args[2] = NULL;
 
-    return __av_init_filt(v, "gz", gzip_args, AVNULL, AV_VER);
+    gz_args[0] = "gzip";
+    gz_args[1] = NULL;
+
+    return av_init_filt(module, "gz", gz_args, ugz_args, NULL, &avfs);
 }
-#endif

@@ -10,7 +10,7 @@
 
 struct lscache;
 
-struct lscache *__av_new_lscache();
-int __av_parse_ls(struct lscache *cache,const char *line,
+struct lscache *av_new_lscache();
+int av_parse_ls(struct lscache *cache,const char *line,
                   struct avstat *stbuf, char **filename, char **linkname);
 

@@ -22,9 +22,9 @@ INSTALL = @INSTALL@
 
 core_objs =								  \
       utils.o sysdeps.o tmpfile.o alloc.o parsels.o ugid.o parse.o prog.o \
-      cache.o filebuf.o local.o default.o nodeops.o entryops.o		  \
+      cache.o filebuf.o local.o default.o oper.o fdops.o virtual.o        \
       modload.o remote.o namespace.o state.o serialfile.o filtprog.o      \
-      filter.o filecache.o socket.o dav_ls.o passwords.o
+      filter.o filecache.o socket.o passwords.o # dav_ls.o 
 
 avfs_objs = $(core_objs) zlib/zlib.o modules/modules.o mod_static.o
 

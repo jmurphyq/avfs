@@ -36,14 +36,14 @@ static void rsh_parse_line(struct lscache *lc, const char *line,
     char *linkname;
     struct avstat stbuf;
 
-    res = __av_parse_ls(lc, line, &stbuf, &filename, &linkname);
+    res = av_parse_ls(lc, line, &stbuf, &filename, &linkname);
     if(res != 1)
         return;
 
-    __av_remote_add(dl, filename, linkname, &stbuf);
+    av_remote_add(dl, filename, linkname, &stbuf);
 
-    __av_free(filename);
-    __av_free(linkname);
+    av_free(filename);
+    av_free(linkname);
 }
 
 
@@ -57,36 +57,36 @@ static int rsh_read_list(struct filebuf *outfb, struct filebuf *errfb,
     fbs[0] = outfb;
     fbs[1] = errfb;
 
-    lc = __av_new_lscache();
-    while(!__av_filebuf_eof(outfb) || !__av_filebuf_eof(errfb)) {
+    lc = av_new_lscache();
+    while(!av_filebuf_eof(outfb) || !av_filebuf_eof(errfb)) {
         char *line;
 
-        res = __av_filebuf_check(fbs, 2, RSH_LIST_TIMEOUT);
+        res = av_filebuf_check(fbs, 2, RSH_LIST_TIMEOUT);
         if(res < 0)
             break;
         if(res == 0) {
-            __av_log(AVLOG_ERROR, "rsh read list: timeout");
+            av_log(AVLOG_ERROR, "rsh read list: timeout");
             res = -EIO;
             break;
         }
         res = 0;
 
-        while((res = __av_filebuf_readline(outfb, &line)) == 1) {
+        while((res = av_filebuf_readline(outfb, &line)) == 1) {
             rsh_parse_line(lc, line, dl);
-            __av_free(line);
+            av_free(line);
         }
         if(res < 0)
             break;
 
-        while((res = __av_filebuf_readline(errfb, &line)) == 1) {
-            __av_log(AVLOG_WARNING, "rsh stderr: %s", line);
-            __av_free(line);
+        while((res = av_filebuf_readline(errfb, &line)) == 1) {
+            av_log(AVLOG_WARNING, "rsh stderr: %s", line);
+            av_free(line);
         }
         if(res < 0)
             break;
 
     }
-    __av_unref_obj(lc);
+    av_unref_obj(lc);
 
     return res;
 }
@@ -104,7 +104,7 @@ static int rsh_isspecial(int c)
 
 static char *rsh_code_name(const char *name)
 {
-    char *newname = (char *) __av_malloc(strlen(name) * 2 + 1);
+    char *newname = (char *) av_malloc(strlen(name) * 2 + 1);
     const char *s;
     char *d;
     
@@ -140,8 +140,8 @@ static int rsh_list(struct remote *rem, struct dirlist *dl)
         return res;
     }
 
-    __av_registerfd(pipeout[0]);
-    __av_registerfd(pipeerr[0]);
+    av_registerfd(pipeout[0]);
+    av_registerfd(pipeerr[0]);
 
     escaped_path = rsh_code_name(dl->hostpath.path);
 
@@ -155,36 +155,36 @@ static int rsh_list(struct remote *rem, struct dirlist *dl)
     prog[4] = escaped_path;
     prog[5] = NULL;
   
-    __av_init_proginfo(&pri);
+    av_init_proginfo(&pri);
     pri.prog = prog;
 
     pri.ifd = open("/dev/null", 0);
     pri.ofd = pipeout[1];
     pri.efd = pipeerr[1];
 
-    res = __av_start_prog(&pri);
+    res = av_start_prog(&pri);
     close(pri.ifd);
     close(pri.ofd);
     close(pri.efd);
 
     if(res == 0) {
-        struct filebuf *outfb = __av_filebuf_new(pipeout[0], 1);
-        struct filebuf *errfb = __av_filebuf_new(pipeerr[0], 1);
+        struct filebuf *outfb = av_filebuf_new(pipeout[0], 1);
+        struct filebuf *errfb = av_filebuf_new(pipeerr[0], 1);
 
         res = rsh_read_list(outfb, errfb, dl);
         if(res >= 0)
-            res = __av_wait_prog(&pri, 0, 0);
+            res = av_wait_prog(&pri, 0, 0);
         else
-            __av_wait_prog(&pri, 1, 0);
+            av_wait_prog(&pri, 1, 0);
 
-        __av_unref_obj(outfb);
-        __av_unref_obj(errfb);
+        av_unref_obj(outfb);
+        av_unref_obj(errfb);
     }
 
     close(pipeout[0]);
     close(pipeerr[0]);
 
-    __av_free(escaped_path);
+    av_free(escaped_path);
 
     if(res < 0)
         return res;
@@ -195,15 +195,15 @@ static int rsh_list(struct remote *rem, struct dirlist *dl)
 
 static void rsh_check_error(struct filebuf *errfb)
 {
-    if(!__av_filebuf_eof(errfb)) {
+    if(!av_filebuf_eof(errfb)) {
         int res;
         
-        res = __av_filebuf_check(&errfb, 1, 0);
+        res = av_filebuf_check(&errfb, 1, 0);
         if(res == 1) {
             char *line;
-            while(__av_filebuf_readline(errfb, &line) == 1) {
-                __av_log(AVLOG_WARNING, "rcp output: %s", line);
-                __av_free(line);
+            while(av_filebuf_readline(errfb, &line) == 1) {
+                av_log(AVLOG_WARNING, "rcp output: %s", line);
+                av_free(line);
             }
         }
     }
@@ -213,11 +213,11 @@ static void rsh_free_localfile(struct rshlocalfile *lf)
 {
     if(lf->running) {
         rsh_check_error(lf->errfb);
-        __av_wait_prog(&lf->pri, 1, 0);
+        av_wait_prog(&lf->pri, 1, 0);
     }
-    __av_unref_obj(lf->errfb);
+    av_unref_obj(lf->errfb);
     close(lf->errfd);
-    __av_free(lf->path);
+    av_free(lf->path);
 }
 
 static int rsh_get(struct remote *rem, struct getparam *gp)
@@ -232,23 +232,23 @@ static int rsh_get(struct remote *rem, struct getparam *gp)
     if(res == -1)
         return -errno;
 
-    res = __av_get_tmpfile(&tmpfile);
+    res = av_get_tmpfile(&tmpfile);
     if(res < 0) {
         close(pipeerr[0]);
         close(pipeerr[1]);
 	return res;
     }
 
-    __av_registerfd(pipeerr[0]);
+    av_registerfd(pipeerr[0]);
 
     AV_NEW_OBJ(lf, rsh_free_localfile);
 
-    __av_init_proginfo(&lf->pri);
+    av_init_proginfo(&lf->pri);
 
     codedpath = rsh_code_name(gp->hostpath.path);
     
-    lf->path = __av_stradd(NULL, gp->hostpath.host, ":", codedpath, NULL);
-    __av_free(codedpath);
+    lf->path = av_stradd(NULL, gp->hostpath.host, ":", codedpath, NULL);
+    av_free(codedpath);
 
     lf->errfd = pipeerr[0];
     lf->tmpfile = tmpfile;
@@ -264,18 +264,18 @@ static int rsh_get(struct remote *rem, struct getparam *gp)
     lf->pri.ofd = pipeerr[1];
     lf->pri.efd = lf->pri.ofd;
 
-    res = __av_start_prog(&lf->pri);
+    res = av_start_prog(&lf->pri);
     close(lf->pri.ifd);
     close(lf->pri.ofd);
 
     if(res < 0) { 
         close(lf->errfd);
-        __av_free(lf->path);
-        __av_del_tmpfile(lf->tmpfile);
+        av_free(lf->path);
+        av_del_tmpfile(lf->tmpfile);
         return res;
     }
     
-    lf->errfb = __av_filebuf_new(lf->errfd, 1);
+    lf->errfb = av_filebuf_new(lf->errfd, 1);
     lf->currsize = 0;
     lf->running = 1;
 
@@ -297,7 +297,7 @@ static int rsh_wait(struct remote *rem, void *data, avoff_t end)
         
         rsh_check_error(lf->errfb);
 
-        res = __av_wait_prog(&lf->pri, 0, 1);
+        res = av_wait_prog(&lf->pri, 0, 1);
         if(res < 0)
             return res;
 
@@ -311,7 +311,7 @@ static int rsh_wait(struct remote *rem, void *data, avoff_t end)
             lf->currsize = stbuf.st_size;
 
         if(lf->currsize < end)
-            __av_sleep(250);
+            av_sleep(250);
 
     } while(lf->currsize < end);
 
@@ -321,13 +321,13 @@ static int rsh_wait(struct remote *rem, void *data, avoff_t end)
 
 static void rsh_destroy(struct remote *rem)
 {
-    __av_free(rem->name);
-    __av_free(rem);
+    av_free(rem->name);
+    av_free(rem);
 }
 
-extern int __av_init_module_rsh(struct vmodule *module);
+extern int av_init_module_rsh(struct vmodule *module);
 
-int __av_init_module_rsh(struct vmodule *module)
+int av_init_module_rsh(struct vmodule *module)
 {
     int res;
     struct remote *rem;
@@ -336,13 +336,13 @@ int __av_init_module_rsh(struct vmodule *module)
     AV_NEW(rem);
 
     rem->data    = NULL;
-    rem->name    = __av_strdup("rsh");
+    rem->name    = av_strdup("rsh");
     rem->list    = rsh_list;
     rem->get     = rsh_get;
     rem->wait    = rsh_wait;
     rem->destroy = rsh_destroy;
     
-    res = __av_remote_init(module, rem, &avfs);
+    res = av_remote_init(module, rem, &avfs);
 
     return res;
 }

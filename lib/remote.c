@@ -73,18 +73,18 @@ static void rem_free_dir(struct dir *dir)
     
     while((de = dir->dirlist) != NULL) {
         dir->dirlist = de->next;
-        __av_free(de->name);
-        __av_free(de);
+        av_free(de->name);
+        av_free(de);
     }
 }
 
 static void rem_free_node(struct node *nod)
 {
-    __av_namespace_set(nod->ent, NULL);
-    __av_unref_obj(nod->ent);
+    av_namespace_set(nod->ent, NULL);
+    av_unref_obj(nod->ent);
     rem_free_dir(&nod->dir);
-    __av_free(nod->attr.linkname);
-    __av_unref_obj(nod->file);
+    av_free(nod->attr.linkname);
+    av_unref_obj(nod->file);
 
     AV_FREELOCK(nod->lock);
     AV_FREELOCK(nod->filelock);
@@ -97,7 +97,7 @@ static struct node *rem_new_node(struct filesys *fs)
     AV_NEW_OBJ(nod, rem_free_node);
     AV_INITLOCK(nod->lock);
     AV_INITLOCK(nod->filelock);
-    nod->ino = __av_new_ino(fs->avfs);
+    nod->ino = av_new_ino(fs->avfs);
     nod->attr.valid = 0;
     nod->attr.linkname = NULL;
     nod->dir.valid = 0;
@@ -131,17 +131,17 @@ static struct node *rem_get_node(struct filesys *fs, struct entry *ent)
     struct node *nod;
 
     AV_LOCK(rem_lock);
-    nod = (struct node *) __av_namespace_get(ent);
+    nod = (struct node *) av_namespace_get(ent);
     if(nod != NULL)
         rem_remove_node(nod);
     else {
         nod = rem_new_node(fs);
         nod->ent = ent;
-        __av_namespace_set(ent, nod);
-        __av_ref_obj(ent);
+        av_namespace_set(ent, nod);
+        av_ref_obj(ent);
     }
     rem_insert_node(fs, nod);
-    __av_ref_obj(nod);
+    av_ref_obj(nod);
     AV_UNLOCK(rem_lock);
 
     return nod;
@@ -154,10 +154,10 @@ static void rem_get_locked_node(struct filesys *fs, struct entry *ent,
     struct node *parent;
     struct entry *pent;
 
-    pent = __av_namespace_lookup(fs->ns, ent, NULL);
+    pent = av_namespace_lookup(fs->ns, ent, NULL);
     if(pent != NULL) {
         parent = rem_get_node(fs, pent);
-        __av_unref_obj(pent);
+        av_unref_obj(pent);
     }
     else
         parent = NULL;
@@ -178,8 +178,8 @@ static void rem_put_locked_node(struct node *nod, struct node *parent)
     if(parent != NULL)
         AV_UNLOCK(parent->lock);
 
-    __av_unref_obj(nod);
-    __av_unref_obj(parent);
+    av_unref_obj(nod);
+    av_unref_obj(parent);
 }
 
 
@@ -188,13 +188,13 @@ static void rem_free_dirlist(struct dirlist *dl)
     int i;
 
     for(i = 0; i < dl->num; i++) {
-        __av_free(dl->ents[i].name);
-        __av_free(dl->ents[i].linkname);
+        av_free(dl->ents[i].name);
+        av_free(dl->ents[i].linkname);
     }
 
-    __av_free(dl->ents);
-    __av_free(dl->hostpath.host);
-    __av_free(dl->hostpath.path);
+    av_free(dl->ents);
+    av_free(dl->hostpath.host);
+    av_free(dl->hostpath.path);
 }
 
 static void rem_fill_attr(struct filesys *fs, struct node *nod,
@@ -207,8 +207,8 @@ static void rem_fill_attr(struct filesys *fs, struct node *nod,
     attr->st = de->attr;
     attr->st.ino = nod->ino;
     attr->st.dev = fs->avfs->dev;
-    __av_free(attr->linkname);
-    attr->linkname = __av_strdup(de->linkname);
+    av_free(attr->linkname);
+    attr->linkname = av_strdup(de->linkname);
 }
 
 static void rem_fill_root(struct filesys *fs, struct node *nod)
@@ -241,7 +241,7 @@ static int rem_list_single(struct filesys *fs, struct node *nod,
         struct direlement *de = &dl->ents[i];
 
         if(strcmp(de->name, dl->hostpath.path) == 0) {
-            rem_fill_attr(fs, nod, de, __av_time());
+            rem_fill_attr(fs, nod, de, av_time());
             return 0;
         }
     }
@@ -257,7 +257,7 @@ static void rem_dir_add(struct dir *dir, struct direlement *dire)
     for(dp = &dir->dirlist; *dp != NULL; dp = &(*dp)->next);
     
     AV_NEW(de);
-    de->name = __av_strdup(dire->name);
+    de->name = av_strdup(dire->name);
     de->type = AV_TYPE(dire->attr.mode);
     de->next = NULL;
     
@@ -269,7 +269,7 @@ static void rem_dir_add_beg(struct dir *dir, const char *name, int type)
     struct direntry *de;
 
     AV_NEW(de);
-    de->name = __av_strdup(name);
+    de->name = av_strdup(name);
     de->type = type;
     de->next = dir->dirlist;
 
@@ -281,7 +281,7 @@ static int rem_list_dir(struct filesys *fs, struct node *nod,
                          struct node *need)
 {
     int i;
-    avtime_t now = __av_time();
+    avtime_t now = av_time();
     int found = 0;
     int gotdots = 0;
 
@@ -303,9 +303,9 @@ static int rem_list_dir(struct filesys *fs, struct node *nod,
             struct entry *cent;
             struct node *cnod;
 
-            cent = __av_namespace_lookup(fs->ns, nod->ent, de->name);
+            cent = av_namespace_lookup(fs->ns, nod->ent, de->name);
             cnod = rem_get_node(fs, cent);
-            __av_unref_obj(cent);
+            av_unref_obj(cent);
             if(cnod != child) {
                 AV_LOCK(cnod->lock);
                 rem_fill_attr(fs, cnod, de, now);
@@ -317,7 +317,7 @@ static int rem_list_dir(struct filesys *fs, struct node *nod,
             if(cnod == need)
                 found = 1;
 
-            __av_unref_obj(cnod);
+            av_unref_obj(cnod);
         }
     }
     
@@ -336,21 +336,21 @@ static int rem_list_dir(struct filesys *fs, struct node *nod,
 
 static void rem_get_hostpath(struct entry *ent, struct hostpath *hp)
 {
-    char *hostpath = __av_namespace_getpath(ent);
+    char *hostpath = av_namespace_getpath(ent);
     char *s;
 
     s = strchr(hostpath, '/');
     if(s == NULL) {
-        hp->host = __av_strdup(hostpath);
-        hp->path = __av_strdup("/");
+        hp->host = av_strdup(hostpath);
+        hp->path = av_strdup("/");
     }
     else {
         *s = '\0';
-        hp->host = __av_strdup(hostpath);
+        hp->host = av_strdup(hostpath);
         *s = '/';
-        hp->path = __av_strdup(s);
+        hp->path = av_strdup(s);
     }
-    __av_free(hostpath);
+    av_free(hostpath);
 }
 
 static int rem_get_attr(struct filesys *fs, struct node *nod,
@@ -384,7 +384,7 @@ static int rem_get_attr(struct filesys *fs, struct node *nod,
     rem_free_dirlist(&dl);
     
     if(res == -ENOENT) {
-        nod->attr.valid = __av_time() + REM_ST_VALID;
+        nod->attr.valid = av_time() + REM_ST_VALID;
         nod->attr.negative = 1;
     }
 
@@ -395,7 +395,7 @@ static int rem_check_node(struct filesys *fs, struct node *nod,
                           struct node *parent)
 {
     int res;
-    avtime_t now = __av_time();
+    avtime_t now = av_time();
 
     if(now < nod->attr.valid) {
         if(nod->attr.negative)
@@ -444,7 +444,7 @@ static int rem_get_dir(struct filesys *fs, struct node *nod)
 static int rem_check_dir(struct filesys *fs, struct node *nod)
 {
     int res;
-    avtime_t now = __av_time();
+    avtime_t now = av_time();
 
     if(now < nod->dir.valid)
         res = 0;
@@ -493,21 +493,6 @@ static struct filesys *rem_vfile_filesys(vfile *vf)
     return (struct filesys *) vf->mnt->avfs->data;
 }
 
-static struct entry *rem_do_lookup(struct namespace *ns, struct entry *prev,
-                                   const char *name)
-{
-    if(name != NULL) {
-        if(strcmp(name, ".") == 0) {
-            __av_ref_obj(prev);
-            return prev;
-        }
-        if(strcmp(name, "..") == 0)
-            name = NULL;
-    }
-
-    return __av_namespace_lookup(ns, prev, name);
-}
-
 static int rem_lookup(ventry *ve, const char *name, void **newp)
 {
     int res;
@@ -525,18 +510,18 @@ static int rem_lookup(ventry *ve, const char *name, void **newp)
             return -ENOTDIR;
     }
 
-    ent = rem_do_lookup(fs->ns, prev, name);
+    ent = av_namespace_lookup_all(fs->ns, prev, name);
     
     if(ent == NULL)
         type = 0;
     else {
         type = rem_node_type(fs, ent);
         if(type < 0) {
-            __av_unref_obj(ent);
+            av_unref_obj(ent);
             return type;
         }
     }
-    __av_unref_obj(prev);
+    av_unref_obj(prev);
     
     *newp = ent;
     return type;
@@ -546,7 +531,7 @@ static int rem_getpath(ventry *ve, char **resp)
 {
     struct entry *ent = rem_ventry_entry(ve);
 
-    *resp = __av_namespace_getpath(ent);
+    *resp = av_namespace_getpath(ent);
 
     return 0;
 }
@@ -555,14 +540,14 @@ static void rem_putent(ventry *ve)
 {
     struct entry *ent = rem_ventry_entry(ve);
 
-    __av_unref_obj(ent);
+    av_unref_obj(ent);
 }
 
 static int rem_copyent(ventry *ve, void **resp)
 {
     struct entry *ent = rem_ventry_entry(ve);
     
-    __av_ref_obj(ent);
+    av_ref_obj(ent);
     *resp =  (void *) ent;
 
     return 0;
@@ -576,14 +561,14 @@ static void rem_check_file(struct filesys * fs, struct entry *ent)
     struct file *fil;
 
     rem_get_locked_node(fs, ent, &nod, &parent);
-    fil = __av_cacheobj_get(nod->file);
+    fil = av_cacheobj_get(nod->file);
     if(fil != NULL) {
         res = rem_check_node(fs, nod, parent);
         if(res < 0 || !rem_signature_valid(&fil->sig, &nod->attr.st)) {
-            __av_unref_obj(nod->file);
+            av_unref_obj(nod->file);
             nod->file = NULL;
         }
-        __av_unref_obj(fil);
+        av_unref_obj(fil);
     }
     rem_put_locked_node(nod, parent);
 }
@@ -610,7 +595,7 @@ static int rem_open(ventry *ve, int flags, avmode_t mode, void **resp)
         rem_check_file(fs, ent);
     }
 
-    __av_ref_obj(ent);
+    av_ref_obj(ent);
 
     *resp = (void *) ent;
     return 0;
@@ -621,10 +606,10 @@ static struct entry *rem_dirent_lookup(struct namespace *ns,
 {
     struct entry *ent;
 
-    ent = rem_do_lookup(ns, parent, name);
+    ent = av_namespace_lookup_all(ns, parent, name);
     if(ent == NULL) {
         ent = parent;
-        __av_ref_obj(ent);
+        av_ref_obj(ent);
     }
 
     return ent;
@@ -655,12 +640,12 @@ static int rem_get_direntry(struct filesys *fs, struct node *nod,
     
     cent = rem_dirent_lookup(fs->ns, nod->ent, de->name);
     cnod = rem_get_node(fs, cent);
-    __av_unref_obj(cent);
+    av_unref_obj(cent);
     
-    buf->name = __av_strdup(de->name);
+    buf->name = av_strdup(de->name);
     buf->type = de->type;
     buf->ino = cnod->ino;
-    __av_unref_obj(cnod);
+    av_unref_obj(cnod);
     
     vf->ptr ++;
 
@@ -680,7 +665,7 @@ static int rem_readdir(vfile *vf, struct avdirent *buf)
     if(res == 0)
         res = rem_get_direntry(fs, nod, vf, buf);
     AV_UNLOCK(nod->lock);
-    __av_unref_obj(nod);
+    av_unref_obj(nod);
 
     return res;
 }
@@ -689,7 +674,7 @@ static int rem_close(vfile *vf)
 {
     struct entry *ent = rem_vfile_entry(vf);
 
-    __av_unref_obj(ent);
+    av_unref_obj(ent);
 
     return 0;
 }
@@ -714,8 +699,8 @@ static void rem_get_signature(struct filesys *fs, struct entry *ent,
 
 static void rem_delete_file(struct file *fil)
 {
-    __av_del_tmpfile(fil->localname);
-    __av_unref_obj(fil->data);
+    av_del_tmpfile(fil->localname);
+    av_unref_obj(fil->data);
 }
 
 static avoff_t rem_local_size(const char *localname)
@@ -740,22 +725,22 @@ static int rem_get_file(struct filesys *fs, struct node *nod,
     struct getparam gp;
     char *objname;
     
-    fil = (struct file *) __av_cacheobj_get(nod->file);
+    fil = (struct file *) av_cacheobj_get(nod->file);
     if(fil != NULL) {
         *resp = fil;
         return 0;
     }
 
     rem_get_hostpath(nod->ent, &gp.hostpath);
-    objname = __av_stradd(NULL, rem->name, ":", gp.hostpath.host,
+    objname = av_stradd(NULL, rem->name, ":", gp.hostpath.host,
                           gp.hostpath.path, NULL);
     
     res = rem->get(rem, &gp);
-    __av_free(gp.hostpath.host);
-    __av_free(gp.hostpath.path);
+    av_free(gp.hostpath.host);
+    av_free(gp.hostpath.path);
 
     if(res < 0) {
-        __av_free(objname);
+        av_free(objname);
         return res;
     }
 
@@ -764,12 +749,12 @@ static int rem_get_file(struct filesys *fs, struct node *nod,
     fil->data = gp.data;
     rem_get_signature(fs, nod->ent, &fil->sig);
 
-    __av_unref_obj(nod->file);
-    nod->file = __av_cacheobj_new(fil, objname);
-    __av_free(objname);
+    av_unref_obj(nod->file);
+    nod->file = av_cacheobj_new(fil, objname);
+    av_free(objname);
 
     if(res == 0)
-        __av_cacheobj_setsize(nod->file, rem_local_size(fil->localname));
+        av_cacheobj_setsize(nod->file, rem_local_size(fil->localname));
 
     *resp = fil;
 
@@ -790,9 +775,9 @@ static int rem_wait_data(struct filesys *fs, struct node *nod,
         return res;
 
     if(res == 0) {
-        __av_unref_obj(fil->data);
+        av_unref_obj(fil->data);
         fil->data = NULL;
-        __av_cacheobj_setsize(nod->file, rem_local_size(fil->localname));
+        av_cacheobj_setsize(nod->file, rem_local_size(fil->localname));
     }
 
     return 0;
@@ -841,13 +826,13 @@ static avssize_t rem_read(vfile *vf, char *buf, avsize_t nbyte)
             res = rem_real_read(fil, vf, buf, nbyte);
 
         if(res < 0) {
-            __av_unref_obj(nod->file);
+            av_unref_obj(nod->file);
             nod->file = NULL;
         }
-        __av_unref_obj(fil);
+        av_unref_obj(fil);
     }
     AV_UNLOCK(nod->filelock);
-    __av_unref_obj(nod);
+    av_unref_obj(nod);
 
     return res;
 }
@@ -901,7 +886,7 @@ static int rem_readlink(ventry *ve, char **bufp)
         if(!AV_ISLNK(nod->attr.st.mode))
             res = -EINVAL;
         else
-            *bufp = __av_strdup(nod->attr.linkname);
+            *bufp = av_strdup(nod->attr.linkname);
     }
     rem_put_locked_node(nod, parent);
 
@@ -914,12 +899,12 @@ static void rem_log_tree(struct namespace *ns, struct entry *ent)
     struct entry *next;
 
     while(ent != NULL) {
-        path = __av_namespace_getpath(ent);
-        __av_log(AVLOG_ERROR, "    %s", path);
-        __av_free(path);
-        rem_log_tree(ns, __av_namespace_subdir(ns, ent));
-        next = __av_namespace_next(ent);
-        __av_unref_obj(ent);
+        path = av_namespace_getpath(ent);
+        av_log(AVLOG_ERROR, "    %s", path);
+        av_free(path);
+        rem_log_tree(ns, av_namespace_subdir(ns, ent));
+        next = av_namespace_next(ent);
+        av_unref_obj(ent);
         ent = next;
     }
 }
@@ -936,45 +921,45 @@ static void rem_destroy(struct avfs *avfs)
     while(nod != &fs->list) {
         struct node *next = nod->next;
         
-        __av_unref_obj(nod);
+        av_unref_obj(nod);
         nod = next;
     }
     AV_UNLOCK(rem_lock);
     
-    root = __av_namespace_subdir(fs->ns, NULL);
+    root = av_namespace_subdir(fs->ns, NULL);
     if(root != NULL) {
-        __av_log(AVLOG_ERROR, "%s: busy entries after destroy:", avfs->name);
+        av_log(AVLOG_ERROR, "%s: busy entries after destroy:", avfs->name);
         rem_log_tree(fs->ns, root);
     }
-    __av_unref_obj(fs->ns);
+    av_unref_obj(fs->ns);
 
     rem->destroy(rem);
-    __av_free(fs);
+    av_free(fs);
 }
 
-void __av_remote_add(struct dirlist *dl, const char *name,
+void av_remote_add(struct dirlist *dl, const char *name,
                      const char *linkname, struct avstat *attr)
 {
     struct direlement *de;
 
-    dl->ents = __av_realloc(dl->ents, sizeof(*dl->ents) * (dl->num + 1));
+    dl->ents = av_realloc(dl->ents, sizeof(*dl->ents) * (dl->num + 1));
     de = &dl->ents[dl->num];
     dl->num++;
 
-    de->name = __av_strdup(name);
-    de->linkname = __av_strdup(linkname);
+    de->name = av_strdup(name);
+    de->linkname = av_strdup(linkname);
     de->attr = *attr;
 }
 
 
-int __av_remote_init(struct vmodule *module, struct remote *rem,
+int av_remote_init(struct vmodule *module, struct remote *rem,
                      struct avfs **resp)
 {
     int res;
     struct avfs *avfs;
     struct filesys *fs;
 
-    res = __av_new_avfs(rem->name, NULL, AV_VER, AVF_ONLYROOT | AVF_NOLOCK,
+    res = av_new_avfs(rem->name, NULL, AV_VER, AVF_ONLYROOT | AVF_NOLOCK,
                         module, &avfs);
     if(res < 0) {
         rem->destroy(rem);
@@ -982,7 +967,7 @@ int __av_remote_init(struct vmodule *module, struct remote *rem,
     }
 
     AV_NEW(fs);
-    fs->ns = __av_namespace_new();
+    fs->ns = av_namespace_new();
     fs->list.next = fs->list.prev = &fs->list;
     fs->rem = rem;
     fs->avfs = avfs;
@@ -1005,7 +990,7 @@ int __av_remote_init(struct vmodule *module, struct remote *rem,
     avfs->access    = rem_access;
     avfs->readlink  = rem_readlink;
 
-    __av_add_avfs(avfs);
+    av_add_avfs(avfs);
     
     *resp = avfs;
 

@@ -27,14 +27,14 @@ struct floppy_fdidat {
 static void strip_spaces(const char *buf, int *ip)
 {
     int i = *ip;
-    while(__av_isspace((int) buf[i])) i++;
+    while(av_isspace((int) buf[i])) i++;
     *ip = i;
 }
 
 static void strip_nonspace(const char *buf, int *ip)
 {
     int i = *ip;
-    while(!__av_isspace((int) buf[i])) i++;
+    while(!av_isspace((int) buf[i])) i++;
     *ip = i;
 }
 
@@ -129,18 +129,18 @@ static int process_dir_line(const char *buf, int vollabel, char *name,
 
     i = 0;
 
-    if(__av_strncmp(buf, " Volume in drive ", 17) == 0 && 
-       buf[17] && __av_strncmp(buf+18, " is ", 4) == 0 && buf[22]) {
+    if(av_strncmp(buf, " Volume in drive ", 17) == 0 && 
+       buf[17] && av_strncmp(buf+18, " is ", 4) == 0 && buf[22]) {
         if(vollabel) {
             i = 22;
-            namelen = __av_strlen(buf+i);
-            while(__av_isspace((int) buf[i+namelen-1])) namelen--;
-            __av_strcpy(name, ".vol-");
-            __av_strncpy(name+5, buf+i, namelen);
+            namelen = av_strlen(buf+i);
+            while(av_isspace((int) buf[i+namelen-1])) namelen--;
+            av_strcpy(name, ".vol-");
+            av_strncpy(name+5, buf+i, namelen);
             name[namelen+5] = '\0';
             st->mode = AV_IFREG | 0444;
             st->size = 0;
-            st->mtime = __av_gettime();
+            st->mtime = av_gettime();
         }
         else return -1;
     }
@@ -149,7 +149,7 @@ static int process_dir_line(const char *buf, int vollabel, char *name,
         if(!buf[i] || i == 0 || i > 8 || buf[0] == '.') return -1;
   
         namelen = i;
-        __av_strncpy(name, buf, namelen);
+        av_strncpy(name, buf, namelen);
         name[namelen] = '\0';
     
         strip_spaces(buf, &i);
@@ -162,7 +162,7 @@ static int process_dir_line(const char *buf, int vollabel, char *name,
             if(extlen > 3) return -1;
       
             name[namelen++] = '.';
-            __av_strncpy(name+namelen, buf+9, extlen);
+            av_strncpy(name+namelen, buf+9, extlen);
             namelen += extlen;
             name[namelen] = '\0';
       
@@ -178,7 +178,7 @@ static int process_dir_line(const char *buf, int vollabel, char *name,
         start = i;
         strip_nonspace(buf, &i);
     
-        if(__av_strncmp("<DIR>", buf + start, i - start) == 0) {
+        if(av_strncmp("<DIR>", buf + start, i - start) == 0) {
             st->size = 0;
             st->mode = AV_IFDIR | 0777;
         }
@@ -202,14 +202,14 @@ static int process_dir_line(const char *buf, int vollabel, char *name,
         if(conv_time(buf + start, &tms) == -1) return -1;
         strip_spaces(buf, &i);
     
-        st->mtime = __av_mktime(&tms);
+        st->mtime = av_mktime(&tms);
     
         if(buf[i]) {
-            namelen = __av_strlen(buf+i);
-            while(__av_isspace((int) buf[i+namelen-1]))
+            namelen = av_strlen(buf+i);
+            while(av_isspace((int) buf[i+namelen-1]))
                 namelen--;
             if(namelen > 256) namelen = 256;
-            __av_strncpy(name, buf+i, namelen);
+            av_strncpy(name, buf+i, namelen);
             name[namelen] = '\0';
         }
     }
@@ -221,7 +221,7 @@ static int get_drive(ave *v, vpath *path)
 {
     int drive = -1;
     const char *params = PARAM(path);
-    arch_devd *dd = (arch_devd *) __av_get_vdev(path)->devdata;
+    arch_devd *dd = (arch_devd *) av_get_vdev(path)->devdata;
 
     if(dd->udata != AVNULL) 
         drive = ((char *) dd->udata)[0];
@@ -243,14 +243,14 @@ static char *create_dosname(ave *v, int drive, const char *name)
 {
     char *dosname;
 
-    dosname = __av_malloc(v, __av_strlen(name) + 4);
+    dosname = av_malloc(v, av_strlen(name) + 4);
     if(dosname == AVNULL)
         return AVNULL;
 
     dosname[0] = drive;
     dosname[1] = ':';
     dosname[2] = '/';
-    __av_strcpy(dosname + 3, name);
+    av_strcpy(dosname + 3, name);
 
     return dosname;
 }
@@ -260,7 +260,7 @@ static char *get_dosname(ave *v, vpath *path)
     char *name;
     char *dosname;
     int drive;
-    arch_devd *dd = (arch_devd *) __av_get_vdev(path)->devdata;
+    arch_devd *dd = (arch_devd *) av_get_vdev(path)->devdata;
 
     drive = get_drive(v, path);
     if(drive == -1)
@@ -271,7 +271,7 @@ static char *get_dosname(ave *v, vpath *path)
         return AVNULL;
 
     dosname =  create_dosname(v, drive, name);
-    __av_free(name);
+    av_free(name);
 
     return dosname;
 }
@@ -295,34 +295,34 @@ static filebuf *start_mdir(ave *v, char drive, const char *path,
     prog[2] = dirname;
     prog[3] = AVNULL;
 
-    __av_init_proginfo(pri);
+    av_init_proginfo(pri);
     pri->prog = prog;
 
-    if(__av_pipe(v, pipeout) == -1) {
-        __av_free(dirname);
+    if(av_pipe(v, pipeout) == -1) {
+        av_free(dirname);
         return AVNULL;
     }
 
-    __av_registerfd(pipeout[0]);
+    av_registerfd(pipeout[0]);
   
-    pri->ifd = __av_localopen(DUMMYV, "/dev/null", AVO_RDONLY, 0);
+    pri->ifd = av_localopen(DUMMYV, "/dev/null", AVO_RDONLY, 0);
     pri->ofd = pipeout[1];
     pri->efd = pipeout[1]; /* FIXME: Maybe this should be logged instead */
   
-    res = __av_start_prog(v, pri);
+    res = av_start_prog(v, pri);
   
-    __av_localclose(DUMMYV, pri->ifd);
-    __av_localclose(DUMMYV, pipeout[1]);
-    __av_free(dirname);
+    av_localclose(DUMMYV, pri->ifd);
+    av_localclose(DUMMYV, pipeout[1]);
+    av_free(dirname);
   
     if(res == -1) {
-        __av_localclose(DUMMYV, pipeout[0]);
+        av_localclose(DUMMYV, pipeout[0]);
         return AVNULL;
     }
 
-    of = __av_filebuf_new(v, pipeout[0]);
+    of = av_filebuf_new(v, pipeout[0]);
     if(of == AVNULL) {
-        __av_localclose(DUMMYV, pipeout[0]);
+        av_localclose(DUMMYV, pipeout[0]);
         return AVNULL;
     }
 
@@ -332,9 +332,9 @@ static filebuf *start_mdir(ave *v, char drive, const char *path,
 static void stop_mdir(struct proginfo *pri, filebuf *of)
 {
     if(of->fd != -1)
-        __av_localclose(DUMMYV, of->fd);
-    __av_wait_prog(DUMMYV, pri, 1, 0);
-    __av_filebuf_free(of);
+        av_localclose(DUMMYV, of->fd);
+    av_wait_prog(DUMMYV, pri, 1, 0);
+    av_filebuf_free(of);
 }
 
 static int fill_floppy_entry(ave *v, arch_entry *ent, struct avstat *st)
@@ -354,7 +354,7 @@ static int fill_floppy_entry(ave *v, arch_entry *ent, struct avstat *st)
     st->atime = st->mtime;
     st->ctime = st->mtime;
   
-    res = __av_new_inode(v, ent, st);
+    res = av_new_inode(v, ent, st);
     if(res == -1)
         return -1;
   
@@ -369,12 +369,12 @@ static int insert_floppy_entry(ave *v, const char *name, struct avstat *st,
     int res;
     arch_entry *ent;
  
-    ent = __av_find_entry(v, parentdir, name, FIND_CREATE, 0);
+    ent = av_find_entry(v, parentdir, name, FIND_CREATE, 0);
     if(ent == AVNULL)
         return -1;
 
     res = fill_floppy_entry(v, ent, st);
-    __av_unref_entry(ent);
+    av_unref_entry(ent);
     
     return res;
 }
@@ -401,16 +401,16 @@ static int read_floppydir(ave *v, char drive, const char *path,
         vollabel = 0;
   
     while(1) {
-        line = __av_filebuf_readline(v, of);
+        line = av_filebuf_readline(v, of);
         if(line == AVNULL)
             break;
 
-        __av_log(AVLOG_DEBUG, "line: %s", line);
+        av_log(AVLOG_DEBUG, "line: %s", line);
 
         res = process_dir_line(line, vollabel, name, &st);
-        __av_free(line);
-        if(res != -1 && __av_strcmp(name, ".") != 0 &&
-                                    __av_strcmp(name, "..") != 0) {
+        av_free(line);
+        if(res != -1 && av_strcmp(name, ".") != 0 &&
+                                    av_strcmp(name, "..") != 0) {
             if(insert_floppy_entry(v, name, &st, parentdir) == -1) {
                 stop_mdir(&pri, of);
                 return -1;
@@ -424,18 +424,18 @@ static int read_floppydir(ave *v, char drive, const char *path,
         if(AV_ISDIR(ent->ino->st.mode)) {
             char *newpath;
       
-            newpath = __av_strconcat(v, path, ent->name, "/", AVNULL);
+            newpath = av_strconcat(v, path, ent->name, "/", AVNULL);
             if(newpath == AVNULL)
                 return -1;
 
-            if(__av_strlen(newpath) < 1024) 
+            if(av_strlen(newpath) < 1024) 
                 res = read_floppydir(v, drive, newpath, ent);
             else {
                 res = 0;
-                __av_log(AVLOG_WARNING, "floppy: Too long path found");
+                av_log(AVLOG_WARNING, "floppy: Too long path found");
             }
 
-            __av_free(newpath);
+            av_free(newpath);
             if(res == -1)
                 return -1;
         }
@@ -475,19 +475,19 @@ static int start_mcopy(ave *v, const char *from, const char *to,
     prog[2] = to;
     prog[3] = AVNULL;
 
-    __av_init_proginfo(pri);
+    av_init_proginfo(pri);
     pri->prog = prog;
-    pri->ifd  = __av_localopen(DUMMYV, "/dev/null", AVO_RDONLY, 0);
-    pri->ofd  = __av_get_logfile(v);
+    pri->ifd  = av_localopen(DUMMYV, "/dev/null", AVO_RDONLY, 0);
+    pri->ofd  = av_get_logfile(v);
     pri->efd  = pri->ofd;
 
-    res = __av_start_prog(v, pri);
+    res = av_start_prog(v, pri);
   
-    __av_localclose(DUMMYV, pri->ifd);
-    __av_localclose(DUMMYV, pri->ofd);
+    av_localclose(DUMMYV, pri->ifd);
+    av_localclose(DUMMYV, pri->ofd);
 
     if(res == -1) {
-        __av_log(AVLOG_ERROR, "Could not start %s", prog[0]);
+        av_log(AVLOG_ERROR, "Could not start %s", prog[0]);
         return -1;
     }
   
@@ -503,25 +503,25 @@ static int wait_until(ave *v, arch_fdi *di, avoff_t needsize)
   
     end = 0;
     do {    
-        res = __av_wait_prog(DUMMYV, &ffd->pri, 0, 1);
+        res = av_wait_prog(DUMMYV, &ffd->pri, 0, 1);
         if(res != 0) end = 1; /* Program has stopped, we wait no longer */
     
         if(di->file.fh == -1) {
             /* FIXME: could be read only if umask is stupid */
-            di->file.fh = __av_localopen(v, ffd->tmpname, 
+            di->file.fh = av_localopen(v, ffd->tmpname, 
                                          ffd->rdonly ? AVO_RDONLY : AVO_RDWR, 0);
             di->file.ptr = 0;
 
             if(ffd->rdonly && di->file.fh != -1) {
-                __av_del_tmpfile(ffd->tmpname);
+                av_del_tmpfile(ffd->tmpname);
                 ffd->tmpname = AVNULL;
             }
         }
     
         if(di->file.fh != -1) {
-            res = __av_fstat(v, di->file.fh, &stbuf, 0);
+            res = av_fstat(v, di->file.fh, &stbuf, 0);
             if(res == -1) {
-                __av_wait_prog(v, &ffd->pri, 1, 0);
+                av_wait_prog(v, &ffd->pri, 1, 0);
                 return -1;
             }
     
@@ -529,7 +529,7 @@ static int wait_until(ave *v, arch_fdi *di, avoff_t needsize)
             if(stbuf.size >= needsize) return 0;
         }
 
-        if(!end) __av_sleep(1);    
+        if(!end) av_sleep(1);    
     } while(!end);
 
     return -1;
@@ -540,20 +540,20 @@ static int do_prog(ave *v, const char **prog)
     struct proginfo pri;
     int res;
     
-    __av_init_proginfo(&pri);
+    av_init_proginfo(&pri);
     pri.prog = prog;
-    pri.ifd = __av_localopen(DUMMYV, "/dev/null", AVO_RDONLY, 0);
-    pri.ofd = __av_get_logfile(v);
+    pri.ifd = av_localopen(DUMMYV, "/dev/null", AVO_RDONLY, 0);
+    pri.ofd = av_get_logfile(v);
     pri.efd = pri.ofd;
 
-    res = __av_start_prog(v, &pri);
+    res = av_start_prog(v, &pri);
   
-    __av_localclose(DUMMYV, pri.ifd);
-    __av_localclose(DUMMYV, pri.ofd);
+    av_localclose(DUMMYV, pri.ifd);
+    av_localclose(DUMMYV, pri.ofd);
 
     if(res == -1) return -1;
 
-    res = __av_wait_prog(DUMMYV, &pri, 0, 0);
+    res = av_wait_prog(DUMMYV, &pri, 0, 0);
 
     return 0;
 }
@@ -598,7 +598,7 @@ static int do_mrd(ave *v, char *dosname)
 
 static int floppy_unlink(ave *v, vpath *path)
 {
-    arch_devd *dd = (arch_devd *) __av_get_vdev(path)->devdata;
+    arch_devd *dd = (arch_devd *) av_get_vdev(path)->devdata;
     char *dosname;
     int res;
   
@@ -611,14 +611,14 @@ static int floppy_unlink(ave *v, vpath *path)
         return -1;
 
     res = do_mdel(v, dosname);
-    __av_free(dosname);
+    av_free(dosname);
 
     return res;
 }
 
 static int floppy_mkdir(ave *v, vpath *path, avmode_t mode)
 {
-    arch_devd *dd = (arch_devd *) __av_get_vdev(path)->devdata;
+    arch_devd *dd = (arch_devd *) av_get_vdev(path)->devdata;
     char *dosname;
     int res;
   
@@ -629,14 +629,14 @@ static int floppy_mkdir(ave *v, vpath *path, avmode_t mode)
     if(dosname == AVNULL) return -1;
 
     res = do_prog2(v, "mmd", dosname);
-    __av_free(dosname);
+    av_free(dosname);
 
     return res;
 }
 
 static int floppy_rmdir(ave *v, vpath *path)
 {
-    arch_devd *dd = (arch_devd *) __av_get_vdev(path)->devdata;
+    arch_devd *dd = (arch_devd *) av_get_vdev(path)->devdata;
     char *dosname;
     int res;
 
@@ -648,14 +648,14 @@ static int floppy_rmdir(ave *v, vpath *path)
     if(dosname == AVNULL) return -1;
 
     res = do_mrd(v, dosname);
-    __av_free(dosname);
+    av_free(dosname);
 
     return res;
 }
 
 static int floppy_rename(ave *v, vpath *path, vpath *newpath)
 {
-    arch_devd *dd = (arch_devd *) __av_get_vdev(path)->devdata;
+    arch_devd *dd = (arch_devd *) av_get_vdev(path)->devdata;
     char *olddosname, *newdosname;
     struct avstat avstbuf;
     int statres, res;
@@ -670,8 +670,8 @@ static int floppy_rename(ave *v, vpath *path, vpath *newpath)
     newdosname = get_dosname(v, newpath);
 
     if(newdosname == AVNULL || olddosname == AVNULL) {
-        __av_free(newdosname);
-        __av_free(olddosname);
+        av_free(newdosname);
+        av_free(olddosname);
         return -1;
     }
 
@@ -684,8 +684,8 @@ static int floppy_rename(ave *v, vpath *path, vpath *newpath)
 
     res = do_prog3(v, "mmove", olddosname, newdosname);
 
-    __av_free(newdosname);
-    __av_free(olddosname);
+    av_free(newdosname);
+    av_free(olddosname);
 
     return res;
 }
@@ -699,11 +699,11 @@ static int floppy_close(ave *v, void *devinfo)
     if(di->udata != AVNULL) {
         struct floppy_fdidat *ffd = (struct floppy_fdidat *) di->udata;
         if(ffd != AVNULL) {
-            __av_wait_prog(DUMMYV, &ffd->pri, 1, 0);
+            av_wait_prog(DUMMYV, &ffd->pri, 1, 0);
 
             if(di->file.fh != -1 && (di->ino->flags & INOF_DIRTY)) {
                 if(ffd->error) {
-                    __av_log(AVLOG_WARNING, 
+                    av_log(AVLOG_WARNING, 
                              "Floppy: not writing back file because of error(s)");
                     v->errn = EIO;
                     res = -1;
@@ -711,16 +711,16 @@ static int floppy_close(ave *v, void *devinfo)
                 else {
                     if(!(di->ino->flags & INOF_CREATED)) do_mdel(v, ffd->dosname);
                     res = start_mcopy(v, ffd->tmpname, ffd->dosname, &ffd->pri);
-                    __av_wait_prog(DUMMYV, &ffd->pri, 0, 0);
+                    av_wait_prog(DUMMYV, &ffd->pri, 0, 0);
                 }
                 di->ino->flags &= ~(INOF_DIRTY | INOF_CREATED);
                 /* Archive is not valid anymore */
-                __av_cache_op(di->arch->cobj, COBJ_DELETE);
+                av_cache_op(di->arch->cobj, COBJ_DELETE);
             }
       
-            __av_del_tmpfile(ffd->tmpname);
+            av_del_tmpfile(ffd->tmpname);
 
-            __av_free(ffd->dosname);
+            av_free(ffd->dosname);
         }
     }
   
@@ -734,7 +734,7 @@ static void *floppy_open(ave *v, vpath *path, int flags, int mode)
 {
     int res;
     arch_fdi *di;
-    arch_devd *dd = (arch_devd *) __av_get_vdev(path)->devdata;
+    arch_devd *dd = (arch_devd *) av_get_vdev(path)->devdata;
     struct floppy_fdidat *ffd;
 
     di = (arch_fdi *) (*dd->vdev->open)(v, path, flags, mode);
@@ -749,14 +749,14 @@ static void *floppy_open(ave *v, vpath *path, int flags, int mode)
     di->udata = (void *) ffd;
     di->file.fh = -1;
   
-    __av_init_proginfo(&(ffd->pri));
+    av_init_proginfo(&(ffd->pri));
     ffd->cursize = 0;
     ffd->error = 0;
     ffd->tmpname = AVNULL;
     ffd->dosname = AVNULL;
     ffd->rdonly = ((flags & AVO_ACCMODE) == AVO_RDONLY);
 
-    ffd->tmpname = __av_get_tmpfile(v);
+    ffd->tmpname = av_get_tmpfile(v);
     if(ffd->tmpname == AVNULL) goto error;
   
     ffd->dosname =  get_dosname(v, path);
@@ -769,7 +769,7 @@ static void *floppy_open(ave *v, vpath *path, int flags, int mode)
     else {
         /* dirty means that we just created a new inode, or truncated a file */
     
-        res = __av_localopen(v, ffd->tmpname, AVO_RDWR | AVO_CREAT | AVO_EXCL,
+        res = av_localopen(v, ffd->tmpname, AVO_RDWR | AVO_CREAT | AVO_EXCL,
                              0600);
         if(res == -1) goto error;
         di->file.fh = res;
@@ -846,22 +846,22 @@ static avssize_t floppy_write(ave *v, void *devinfo, const char *buf,
     }
 
     if(di->ptr != di->file.ptr) {
-        di->file.ptr = __av_locallseek(v, di->file.fh, di->ptr, AVSEEK_SET);
+        di->file.ptr = av_locallseek(v, di->file.fh, di->ptr, AVSEEK_SET);
         if(di->file.ptr == -1) {
             ffd->error = 1;
             return -1;
         }
     }
   
-    res = __av_localwrite(v, di->file.fh, buf, nbyte);
+    res = av_localwrite(v, di->file.fh, buf, nbyte);
     if(res == -1) {
-        __av_log(AVLOG_ERROR, "floppy: Error writing to tmp file");
+        av_log(AVLOG_ERROR, "floppy: Error writing to tmp file");
         ffd->error = 1;
     }
     else {
         di->file.ptr += res;
         if(res != (avssize_t) nbyte) {
-            __av_log(AVLOG_ERROR, "floppy: Writing to tmp file was short");
+            av_log(AVLOG_ERROR, "floppy: Writing to tmp file was short");
             v->errn = EIO;
             ffd->error = 1;
             return -1;
@@ -879,7 +879,7 @@ static struct vdev_info *init_floppy(ave *v, const char *name)
     struct vdev_info *floppy_vdev;
     arch_devd *dd;
 
-    floppy_vdev = __av_init_arch(v, name, AVNULL, AV_VER);
+    floppy_vdev = av_init_arch(v, name, AVNULL, AV_VER);
     if(floppy_vdev == AVNULL) return AVNULL;
   
     dd = (arch_devd *) floppy_vdev->devdata;
@@ -903,9 +903,9 @@ static struct vdev_info *init_floppy(ave *v, const char *name)
     return floppy_vdev;
 }
 
-extern int __av_init_module_floppy(ave *v);
+extern int av_init_module_floppy(ave *v);
 
-int __av_init_module_floppy(ave *v)
+int av_init_module_floppy(ave *v)
 {
     struct vdev_info *vdev;
     arch_devd *dd;
@@ -916,15 +916,15 @@ int __av_init_module_floppy(ave *v)
 
     dd = (arch_devd *) vdev->devdata;
 
-    if(__av_add_vdev(v, vdev) == -1) return -1;
+    if(av_add_vdev(v, vdev) == -1) return -1;
     major = vdev->major;
   
     vdev = init_floppy(DUMMYV, "a");
     if(vdev != AVNULL) {
         dd = (arch_devd *) vdev->devdata;    
-        dd->udata = (void *) __av_strdup(DUMMYV, "a");
-        if(dd->udata == AVNULL) __av_destroy_vdev(vdev);
-        else if(__av_add_vdev(v, vdev) != -1) vdev->major = major;
+        dd->udata = (void *) av_strdup(DUMMYV, "a");
+        if(dd->udata == AVNULL) av_destroy_vdev(vdev);
+        else if(av_add_vdev(v, vdev) != -1) vdev->major = major;
     }
 
     return major;

@@ -135,7 +135,7 @@ static void exit_handler(int sig)
 
 static void bad_handler(int sig)
 {
-    __av_log(AVLOG_ERROR, "%s, Exiting",
+    av_log(AVLOG_ERROR, "%s, Exiting",
              strsignal(sig));
     _exit(1);
 }

@@ -9,6 +9,7 @@
 #include "filtprog.h"
 #include "filebuf.h"
 #include "prog.h"
+#include "oper.h"
 
 #include <unistd.h>
 #include <sys/time.h>
@@ -33,12 +34,12 @@ static int filtprog_fill_cbuf(struct filtconn *fc)
 {
     avssize_t res;
 
-    res = __av_read(fc->fp->vf, fc->cbuf, cbufsize);
+    res = av_read(fc->fp->vf, fc->cbuf, cbufsize);
     if(res < 0)
         return res;
 
     if(res == 0) {
-        __av_unref_obj(fc->fbs[0]);
+        av_unref_obj(fc->fbs[0]);
         fc->fbs[0] = NULL;
     }
     else {
@@ -56,14 +57,14 @@ static int filtprog_check_error(struct filtconn *fc)
     int gotsome = 0;
 
     do {
-        res = __av_filebuf_readline(fc->fbs[2], &line);
+        res = av_filebuf_readline(fc->fbs[2], &line);
         if(res < 0)
             return res;
 
         if(res == 1) {
-            __av_log(AVLOG_ERROR, "%s stderr: %s", fc->fp->filtdat->prog[0],
+            av_log(AVLOG_ERROR, "%s stderr: %s", fc->fp->filtdat->prog[0],
                      line);
-            __av_free(line);
+            av_free(line);
             gotsome = 1;
         }
     } while(res == 1);
@@ -84,7 +85,7 @@ static int filtprog_write_input(struct filtconn *fc)
             return 0;
     }
     
-    res = __av_filebuf_write(fc->fbs[0], fc->cbuf + fc->cbufat,
+    res = av_filebuf_write(fc->fbs[0], fc->cbuf + fc->cbufat,
                              fc->cbuflen);
     if(res < 0)
         return res;
@@ -106,12 +107,12 @@ static avssize_t filtprog_read(void *data, char *buf, avsize_t nbyte)
             return res;
 
         if(res == 0) {
-            res = __av_filebuf_read(fc->fbs[1], buf, nbyte);
+            res = av_filebuf_read(fc->fbs[1], buf, nbyte);
             if(res != 0)
                 return res;
             
-            if(__av_filebuf_eof(fc->fbs[1])) {
-                res = __av_wait_prog(&fc->pri, 0, 0);
+            if(av_filebuf_eof(fc->fbs[1])) {
+                res = av_wait_prog(&fc->pri, 0, 0);
                 if(res < 0)
                     return res;
 
@@ -125,7 +126,7 @@ static avssize_t filtprog_read(void *data, char *buf, avsize_t nbyte)
             }
         }
 
-        res = __av_filebuf_check(fc->fbs, 3, -1);
+        res = av_filebuf_check(fc->fbs, 3, -1);
         if(res < 0)
             return res;
     }
@@ -135,13 +136,13 @@ static int filtprog_read_input(struct filtconn *fc)
 {
     avssize_t res;
 
-    res  = __av_filebuf_read(fc->fbs[1], fc->cbuf + fc->cbufat,
+    res  = av_filebuf_read(fc->fbs[1], fc->cbuf + fc->cbufat,
                              cbufsize - fc->cbufat);
     
     if(res > 0) {
         fc->cbufat += res;
         if(fc->cbufat == cbufsize) {
-            res = __av_write(fc->fp->vf, fc->cbuf, fc->cbufat);
+            res = av_write(fc->fp->vf, fc->cbuf, fc->cbufat);
             fc->cbufat = 0;
         }
     }
@@ -160,7 +161,7 @@ static avssize_t filtprog_write(void *data, const char *buf, avsize_t nbyte)
             return res;
 
         if(res == 0) {
-            res = __av_filebuf_write(fc->fbs[0], buf, nbyte);
+            res = av_filebuf_write(fc->fbs[0], buf, nbyte);
             if(res != 0)
                 return res;
             
@@ -169,7 +170,7 @@ static avssize_t filtprog_write(void *data, const char *buf, avsize_t nbyte)
                 return res;
         }
 
-        res = __av_filebuf_check(fc->fbs, 3, -1);
+        res = av_filebuf_check(fc->fbs, 3, -1);
         if(res < 0)
             return res;
     }
@@ -180,7 +181,7 @@ static int filtprog_endput(void *data)
     int res;
     struct filtconn *fc = (struct filtconn *) data;
     
-    __av_unref_obj(fc->fbs[0]);
+    av_unref_obj(fc->fbs[0]);
     fc->fbs[0] = NULL;
 
     while(1) {
@@ -193,20 +194,20 @@ static int filtprog_endput(void *data)
             if(res < 0)
                 return res;
 
-            if(__av_filebuf_eof(fc->fbs[1]))
+            if(av_filebuf_eof(fc->fbs[1]))
                 break;
         }
 
-        res = __av_filebuf_check(fc->fbs, 3, -1);
+        res = av_filebuf_check(fc->fbs, 3, -1);
         if(res < 0)
             return res;        
     }
 
-    res = __av_write(fc->fp->vf, fc->cbuf, fc->cbufat);
+    res = av_write(fc->fp->vf, fc->cbuf, fc->cbufat);
     if(res < 0)
         return res;
 
-    res = __av_wait_prog(&fc->pri, 0, 0);
+    res = av_wait_prog(&fc->pri, 0, 0);
     if(res < 0)
         return res;
 
@@ -215,11 +216,11 @@ static int filtprog_endput(void *data)
 
 static void filtprog_stop(struct filtconn *fc)
 {
-    __av_unref_obj(fc->fbs[0]);
-    __av_unref_obj(fc->fbs[1]);   
-    __av_unref_obj(fc->fbs[2]);
-    __av_wait_prog(&fc->pri, 1, 0);
-    __av_lseek(fc->fp->vf, 0, AVSEEK_SET);
+    av_unref_obj(fc->fbs[0]);
+    av_unref_obj(fc->fbs[1]);   
+    av_unref_obj(fc->fbs[2]);
+    av_wait_prog(&fc->pri, 1, 0);
+    av_lseek(fc->fp->vf, 0, AVSEEK_SET);
 }
 
 static int filtprog_init_pipes(int pipein[2], int pipeout[2], int pipeerr[2])
@@ -237,9 +238,9 @@ static int filtprog_init_pipes(int pipein[2], int pipeout[2], int pipeerr[2])
         return res;
     }
 
-    __av_registerfd(pipein[1]);
-    __av_registerfd(pipeout[0]);
-    __av_registerfd(pipeerr[0]);
+    av_registerfd(pipein[1]);
+    av_registerfd(pipeout[0]);
+    av_registerfd(pipeerr[0]);
 
     return 0;
 }
@@ -258,14 +259,14 @@ static int filtprog_start(struct filtprog *fp, char **prog,
     if(res < 0)
         return res;
 
-    __av_init_proginfo(&pri);
+    av_init_proginfo(&pri);
     
     pri.prog = (const char **) prog;
     pri.ifd = pipein[0];
     pri.ofd = pipeout[1];
     pri.efd = pipeerr[1];
 
-    res = __av_start_prog(&pri);
+    res = av_start_prog(&pri);
     close(pri.ifd);
     close(pri.ofd);
     close(pri.efd);
@@ -280,9 +281,9 @@ static int filtprog_start(struct filtprog *fp, char **prog,
     AV_NEW_OBJ(fc, filtprog_stop);
     
     fc->fp = fp;
-    fc->fbs[0] = __av_filebuf_new(pipein[1], FILEBUF_NONBLOCK | FILEBUF_WRITE);
-    fc->fbs[1] = __av_filebuf_new(pipeout[0], FILEBUF_NONBLOCK);
-    fc->fbs[2] = __av_filebuf_new(pipeerr[0], FILEBUF_NONBLOCK);
+    fc->fbs[0] = av_filebuf_new(pipein[1], FILEBUF_NONBLOCK | FILEBUF_WRITE);
+    fc->fbs[1] = av_filebuf_new(pipeout[0], FILEBUF_NONBLOCK);
+    fc->fbs[2] = av_filebuf_new(pipeerr[0], FILEBUF_NONBLOCK);
     fc->pri = pri;
     fc->cbufat = 0;
     fc->cbuflen = 0;
@@ -312,7 +313,7 @@ static int filtprog_startput(void *data, void **resp)
     struct filtprog *fp = (struct filtprog *) data;
     struct filtconn *fc;
 
-    res = __av_truncate(fp->vf, 0);
+    res = av_truncate(fp->vf, 0);
     if(res < 0)
         return res;
 
@@ -325,7 +326,7 @@ static int filtprog_startput(void *data, void **resp)
     return 0;
 }
 
-struct sfile *__av_filtprog_new(vfile *vf, struct filtdata *filtdat)
+struct sfile *av_filtprog_new(vfile *vf, struct filtdata *filtdat)
 {
     struct filtprog *fp;
     struct sfile *sf;
@@ -341,14 +342,14 @@ struct sfile *__av_filtprog_new(vfile *vf, struct filtdata *filtdat)
     fp->vf = vf;
     fp->filtdat = filtdat;
 
-    sf = __av_sfile_new(&func, fp, 0);
+    sf = av_sfile_new(&func, fp, 0);
 
     return sf;
 }
 
-void __av_filtprog_change(struct sfile *sf, vfile *newvf)
+void av_filtprog_change(struct sfile *sf, vfile *newvf)
 {
-    struct filtprog *fp = (struct filtprog *) __av_sfile_getdata(sf);
+    struct filtprog *fp = (struct filtprog *) av_sfile_getdata(sf);
     
     fp->vf = newvf;
 }

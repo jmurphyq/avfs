@@ -6,9 +6,6 @@
     the GNU GPL. See the file COPYING.LIB and COPYING. 
 */
 
-/* For pread */
-#define _XOPEN_SOURCE 500
-
 #include "serialfile.h"
 #include "cache.h"
 
@@ -40,8 +37,8 @@ static void sfile_init(struct sfile *fil)
 static void sfile_end(struct sfile *fil)
 {
     close(fil->fd);
-    __av_del_tmpfile(fil->localfile);
-    __av_unref_obj(fil->conndata);
+    av_del_tmpfile(fil->localfile);
+    av_unref_obj(fil->conndata);
 }
 
 static void sfile_reset(struct sfile *fil)
@@ -59,10 +56,10 @@ static void sfile_reset_usecache(struct sfile *fil)
 static void sfile_delete(struct sfile *fil)
 {
     sfile_end(fil);
-    __av_unref_obj(fil->data);
+    av_unref_obj(fil->data);
 }
 
-struct sfile *__av_sfile_new(struct sfilefuncs *func, void *data, int flags)
+struct sfile *av_sfile_new(struct sfilefuncs *func, void *data, int flags)
 {
     struct sfile *fil;
 
@@ -81,14 +78,14 @@ static int sfile_open_localfile(struct sfile *fil)
     int res;
     int openfl;
 
-    res = __av_get_tmpfile(&fil->localfile);
+    res = av_get_tmpfile(&fil->localfile);
     if(res < 0)
         return res;
     
     openfl = O_RDWR | O_CREAT | O_TRUNC;
     fil->fd = open(fil->localfile, openfl, 0600);
     if(fil->fd == -1) {
-        __av_log(AVLOG_ERROR, "Error opening file %s: %s", fil->localfile,
+        av_log(AVLOG_ERROR, "Error opening file %s: %s", fil->localfile,
                  strerror(errno));
         return -EIO;
     }
@@ -129,7 +126,7 @@ static avssize_t sfile_do_read(struct sfile *fil, char *buf, avssize_t nbyte)
             return res;
         
         if(res == 0) {
-            __av_unref_obj(fil->conndata);
+            av_unref_obj(fil->conndata);
             fil->conndata = NULL;
             fil->state = SF_FINI;
             break;
@@ -150,22 +147,22 @@ static avssize_t sfile_cached_pwrite(struct sfile *fil, const char *buf,
 
     res = pwrite(fil->fd, buf, nbyte, offset);
     if(res == -1 && (errno == ENOSPC || errno == EDQUOT)) {
-        __av_cache_diskfull();
+        av_cache_diskfull();
         res = pwrite(fil->fd, buf, nbyte, offset);
     }
     if(res == -1) {
-        __av_log(AVLOG_ERROR, "Error writing file %s: %s", fil->localfile,
+        av_log(AVLOG_ERROR, "Error writing file %s: %s", fil->localfile,
                  strerror(errno));
         return -EIO;
     }
     if(res != nbyte) {
-        __av_log(AVLOG_ERROR, "Error writing file %s: short write",
+        av_log(AVLOG_ERROR, "Error writing file %s: short write",
                  fil->localfile);
         return -EIO;
     }
 
     if(offset + nbyte > fil->numbytes)
-        __av_cache_checkspace();
+        av_cache_checkspace();
 
     return res;
 }
@@ -217,12 +214,12 @@ static avssize_t sfile_cached_pread(struct sfile *fil, char *buf,
 
     res = pread(fil->fd, buf, nbyte, offset);
     if(res < 0) {
-        __av_log(AVLOG_ERROR, "Error reading file %s: %s", fil->localfile,
+        av_log(AVLOG_ERROR, "Error reading file %s: %s", fil->localfile,
                  strerror(errno));
         return -EIO;
     }
     if(res != nbyte) {
-        __av_log(AVLOG_ERROR, "Error reading file %s: short read",
+        av_log(AVLOG_ERROR, "Error reading file %s: short read",
                  fil->localfile);
         return -EIO;
     }
@@ -302,7 +299,7 @@ static avssize_t sfile_pread_force(struct sfile *fil, char *buf,
     return res;
 }
 
-avssize_t __av_sfile_pread(struct sfile *fil, char *buf, avsize_t nbyte,
+avssize_t av_sfile_pread(struct sfile *fil, char *buf, avsize_t nbyte,
                            avoff_t offset)
 {
     if(nbyte == 0)
@@ -326,7 +323,7 @@ static int sfile_read_until(struct sfile *fil, avoff_t offset, int finish)
         return res;
 
     if(finish && fil->state != SF_FINI) {
-        __av_unref_obj(fil->conndata);
+        av_unref_obj(fil->conndata);
         fil->conndata = NULL;
         fil->state = SF_FINI;
     }
@@ -334,7 +331,7 @@ static int sfile_read_until(struct sfile *fil, avoff_t offset, int finish)
     return 0;
 }
 
-avoff_t __av_sfile_size(struct sfile *fil)
+avoff_t av_sfile_size(struct sfile *fil)
 {
     avssize_t res;
 
@@ -345,12 +342,12 @@ avoff_t __av_sfile_size(struct sfile *fil)
     return fil->numbytes;
 }
 
-int __av_sfile_startget(struct sfile *fil)
+int av_sfile_startget(struct sfile *fil)
 {
     return sfile_read_until(fil, 0, 0);
 }
 
-int __av_sfile_truncate(struct sfile *fil, avoff_t length)
+int av_sfile_truncate(struct sfile *fil, avoff_t length)
 {
     int res;
 
@@ -381,7 +378,7 @@ int __av_sfile_truncate(struct sfile *fil, avoff_t length)
     return 0;
 }
 
-avssize_t __av_sfile_pwrite(struct sfile *fil, const char *buf, avsize_t nbyte,
+avssize_t av_sfile_pwrite(struct sfile *fil, const char *buf, avsize_t nbyte,
                             avoff_t offset)
 {
     avssize_t res;
@@ -432,7 +429,7 @@ static int sfile_writeout(struct sfile *fil, void *conndata)
     return 0;
 }
 
-int __av_sfile_flush(struct sfile *fil)
+int av_sfile_flush(struct sfile *fil)
 {
     int res;
     void *conndata;
@@ -446,7 +443,7 @@ int __av_sfile_flush(struct sfile *fil)
         if(res == 0)
             res = fil->func->endput(conndata);
     }
-    __av_unref_obj(conndata);
+    av_unref_obj(conndata);
     if(res < 0)
         sfile_reset(fil);
 
@@ -455,7 +452,7 @@ int __av_sfile_flush(struct sfile *fil)
     return res;
 }
 
-void *__av_sfile_getdata(struct sfile *fil)
+void *av_sfile_getdata(struct sfile *fil)
 {
     return fil->data;
 }

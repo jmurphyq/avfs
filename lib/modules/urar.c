@@ -137,14 +137,14 @@ static avqbyte CRC_string(avqbyte crc, avbyte *buf, long size)
 static avssize_t read_file(ave *v, arch_file *file, char *buf, avsize_t nbyte)
 {
     /* FIXME: error checking */
-    avssize_t res = __av_read(v, file->fh, buf, nbyte);
+    avssize_t res = av_read(v, file->fh, buf, nbyte);
     file->ptr += res;
 
     return res;
 }
 static avoff_t seek_file(ave *v, arch_file *file, avoff_t offset, int whence)
 {
-    avoff_t res = __av_lseek(v, file->fh, offset, whence);
+    avoff_t res = av_lseek(v, file->fh, offset, whence);
     file->ptr = res;
 
     return res;
@@ -180,13 +180,13 @@ static int read_marker_block(ave *v, arch_file *file)
         if (read_file(v, file, buf + MARKER_HEAD_SIZE - readsize,
                       readsize) != readsize) return -1;
 
-        if (__av_memcmp(buf, good_marker_head, MARKER_HEAD_SIZE) == 0) return 0;
+        if (av_memcmp(buf, good_marker_head, MARKER_HEAD_SIZE) == 0) return 0;
 
-        pos = __av_memchr(buf + 1, good_marker_head[0], MARKER_HEAD_SIZE-1);
+        pos = av_memchr(buf + 1, good_marker_head[0], MARKER_HEAD_SIZE-1);
         if (pos == AVNULL) readsize = MARKER_HEAD_SIZE;
         else {
             readsize = pos - buf;
-            __av_memmove(buf, pos, MARKER_HEAD_SIZE - readsize);
+            av_memmove(buf, pos, MARKER_HEAD_SIZE - readsize);
         }
     }
     return 0; /* Just to avoid warnings. Never reaches this line. */
@@ -234,7 +234,7 @@ static int read_archive_header(ave *v, arch_file *file, archive *arch)
 
 static void conv_tolower(char *s)
 {
-    for(; *s; s++) *s = __av_tolower(*s);
+    for(; *s; s++) *s = av_tolower(*s);
 }
 
 
@@ -242,7 +242,7 @@ static void dos2unix_path(char *path)
 {
     char *pos = path;
 
-    while((pos = __av_strchr(pos, DOS_DIR_SEP_CHAR)) != AVNULL)
+    while((pos = av_strchr(pos, DOS_DIR_SEP_CHAR)) != AVNULL)
         *pos = DIR_SEP_CHAR;
 }
 
@@ -257,7 +257,7 @@ static avtime_t dos2unix_time(avqbyte dt)
     ut.mon = dos_ftmonth(dt);
     ut.year = dos_ftyear(dt);
 
-    return __av_mktime(&ut);
+    return av_mktime(&ut);
 }
 
 static avmode_t dos2unix_attr(avqbyte da, avmode_t archmode)
@@ -282,11 +282,11 @@ static int fill_rarentry(ave *v, arch_entry *ent, char *path, avdbyte flags,
     if(ent->ino != AVNULL)
         return 0; /* FIXME: what should we do in case of duplicate files? */
 
-    info = __av_malloc(v, sizeof(*info) + __av_strlen(path) + 1);
+    info = av_malloc(v, sizeof(*info) + av_strlen(path) + 1);
     if(info == AVNULL)
         return -1;
 
-    __av_default_stat(&filestat);
+    av_default_stat(&filestat);
 
     filestat.uid = arch->uid;
     filestat.gid = arch->gid;
@@ -313,10 +313,10 @@ static int fill_rarentry(ave *v, arch_entry *ent, char *path, avdbyte flags,
     info->packer_version = fh_version(fh);
     info->method = fh_method(fh);
     info->orig_path = ((char *) info) + sizeof(*info);
-    __av_strcpy(info->orig_path, path);
+    av_strcpy(info->orig_path, path);
 
     if (AV_ISLNK(filestat.mode)) {
-        lnkname = (char *)__av_malloc(v, filestat.size+1);
+        lnkname = (char *)av_malloc(v, filestat.size+1);
         if (lnkname == AVNULL || 
             read_file(v, file, lnkname, filestat.size) != filestat.size)
             goto error;
@@ -326,7 +326,7 @@ static int fill_rarentry(ave *v, arch_entry *ent, char *path, avdbyte flags,
     else
         lnkname = AVNULL;
 
-    res = __av_new_inode(v, ent, &filestat);
+    res = av_new_inode(v, ent, &filestat);
     if(res == -1)
         goto error;
 
@@ -338,8 +338,8 @@ static int fill_rarentry(ave *v, arch_entry *ent, char *path, avdbyte flags,
     return 0;
 
   error:
-    __av_free(info);
-    __av_free(lnkname);
+    av_free(info);
+    av_free(lnkname);
 
     return -1;
 
@@ -364,7 +364,7 @@ static int insert_rarentry(ave *v, archive *arch, char *path, avdbyte flags,
         entflags |= ENTF_NOCASE;
     }
 
-    ent = __av_find_entry(v, arch->root, path, FIND_CREATE, entflags);
+    ent = av_find_entry(v, arch->root, path, FIND_CREATE, entflags);
     if(ent == AVNULL)
         return -1;
 
@@ -372,7 +372,7 @@ static int insert_rarentry(ave *v, archive *arch, char *path, avdbyte flags,
         ent->flags = entflags;
     
     res = fill_rarentry(v, ent, path, flags, fh, file);
-    __av_unref_entry(ent);
+    av_unref_entry(ent);
 
     return res;
 }
@@ -401,11 +401,11 @@ static int read_rarfile(ave *v, arch_file *file, archive *arch)
                 read_file(v, file, fh, FILE_HEAD_SIZE) != FILE_HEAD_SIZE)
                 CLEANUP_EXIT();
 
-            name = __av_malloc(v, fh_namelen(fh)+1);
+            name = av_malloc(v, fh_namelen(fh)+1);
             if (!name) CLEANUP_EXIT();
 
 #undef CLEANUP_EXIT
-#define CLEANUP_EXIT() ({ __av_free(name);                  \
+#define CLEANUP_EXIT() ({ av_free(name);                  \
 			        return -1;                        \
 			     })
 
@@ -430,7 +430,7 @@ static int read_rarfile(ave *v, arch_file *file, archive *arch)
 
             res = insert_rarentry(v, arch, name, bh_flags(bh), fh, file);
             if (res == -1) CLEANUP_EXIT();
-            __av_free(name);
+            av_free(name);
 
             headlen = file->ptr - headlen;
 
@@ -453,13 +453,13 @@ static int parse_rarfile(ave *v, vpath *path, archive *arch)
         return -1;
     }
   
-    file.fh = __av_open(v, BASE(path), AVO_RDONLY, 0);
+    file.fh = av_open(v, BASE(path), AVO_RDONLY, 0);
     if(file.fh == -1) return -1;
     file.ptr = 0;
 
     res = read_rarfile(v, &file, arch);
   
-    __av_close(DUMMYV, file.fh);
+    av_close(DUMMYV, file.fh);
     
     return res;  
 }
@@ -475,14 +475,14 @@ static int do_unrar(ave *v, vpath *path, arch_fdi *di)
     real_file *basefile;
     int res;
 
-    if(di->file.fh != -1) __av_close(DUMMYV, di->file.fh);
+    if(di->file.fh != -1) av_close(DUMMYV, di->file.fh);
     di->offset = 0;
     di->size = di->ino->st.size;
 
-    di->file.fh = __av_get_tmpfd(v);
+    di->file.fh = av_get_tmpfd(v);
     if(di->file.fh == -1) return -1;
 
-    basefile = __av_get_realfile(v, BASE(path));
+    basefile = av_get_realfile(v, BASE(path));
     if(basefile == AVNULL) return -1;
   
     prog[0] = "rar";
@@ -493,27 +493,27 @@ static int do_unrar(ave *v, vpath *path, arch_fdi *di)
     prog[5] = info->orig_path;
     prog[6] = AVNULL;
   
-    __av_init_proginfo(&pri);
+    av_init_proginfo(&pri);
     pri.prog = prog;
-    pri.ifd = __av_localopen(DUMMYV, "/dev/null", AVO_RDONLY, 0);
+    pri.ifd = av_localopen(DUMMYV, "/dev/null", AVO_RDONLY, 0);
     pri.ofd = di->file.fh;
-    pri.efd = __av_get_logfile(v);
+    pri.efd = av_get_logfile(v);
 
-    res = __av_start_prog(v, &pri);
+    res = av_start_prog(v, &pri);
  
-    __av_localclose(DUMMYV, pri.ifd);
-    __av_localclose(DUMMYV, pri.efd);
+    av_localclose(DUMMYV, pri.ifd);
+    av_localclose(DUMMYV, pri.efd);
 
     if(res == -1) 
-        __av_log(AVLOG_WARNING, "URAR: Could not start %s", prog[0]);
+        av_log(AVLOG_WARNING, "URAR: Could not start %s", prog[0]);
     else {
-        res = __av_wait_prog(v, &pri, 0, 0);
+        res = av_wait_prog(v, &pri, 0, 0);
         if(res == -1) 
-            __av_log(AVLOG_WARNING, "URAR: Prog %s returned with an error", prog[0]);
+            av_log(AVLOG_WARNING, "URAR: Prog %s returned with an error", prog[0]);
     }
 
-    __av_free_realfile(basefile);
-    __av_lseek(v, di->file.fh, 0, AVSEEK_SET);
+    av_free_realfile(basefile);
+    av_lseek(v, di->file.fh, 0, AVSEEK_SET);
     di->file.ptr = 0;
 
     return res;
@@ -522,7 +522,7 @@ static int do_unrar(ave *v, vpath *path, arch_fdi *di)
 static void *rar_open(ave *v,  vpath *path, int flags, int mode)
 {
     arch_fdi *di;
-    arch_devd *dd = (arch_devd *) __av_get_vdev(path)->devdata;
+    arch_devd *dd = (arch_devd *) av_get_vdev(path)->devdata;
     rar_inodat *info;
 
     di = (arch_fdi *) (*dd->vdev->open)(v, path, flags, mode);
@@ -533,7 +533,7 @@ static void *rar_open(ave *v,  vpath *path, int flags, int mode)
 
     info = (rar_inodat *) di->ino->udata;
     if(info->flags & FF_WITH_PASSWORD) {
-        __av_log(AVLOG_WARNING, "Sorry, can't open password protected RAR-file");
+        av_log(AVLOG_WARNING, "Sorry, can't open password protected RAR-file");
         v->errn = EACCES;
         goto error;
     }
@@ -554,9 +554,9 @@ static void *rar_open(ave *v,  vpath *path, int flags, int mode)
 
 /* FIXME: no CRC checking is done while reading files. How to do it? */
 
-extern int __av_init_module_urar(ave *v);
+extern int av_init_module_urar(ave *v);
 
-int __av_init_module_urar(ave *v)
+int av_init_module_urar(ave *v)
 {
     struct ext_info rarexts[3];
     struct vdev_info *vdev;
@@ -566,7 +566,7 @@ int __av_init_module_urar(ave *v)
     INIT_EXT(rarexts[1], ".sfx", AVNULL);
     INIT_EXT(rarexts[2], AVNULL, AVNULL);
 
-    vdev = __av_init_arch(v, "urar", rarexts, AV_VER);
+    vdev = av_init_arch(v, "urar", rarexts, AV_VER);
     if(vdev == AVNULL) return -1;
   
     dd = (arch_devd *) vdev->devdata;
@@ -577,6 +577,6 @@ int __av_init_module_urar(ave *v)
 
     initCRC();
 
-    return __av_add_vdev(v, vdev);
+    return av_add_vdev(v, vdev);
 }
 #endif

@@ -45,7 +45,7 @@ struct remote {
     void (*destroy) (struct remote *rem);
 };
 
-int __av_remote_init(struct vmodule *module, struct remote *rem,
+int av_remote_init(struct vmodule *module, struct remote *rem,
                      struct avfs **resp);
-void __av_remote_add(struct dirlist *dl, const char *name,
+void av_remote_add(struct dirlist *dl, const char *name,
                      const char *linkname, struct avstat *attr);

@@ -25,12 +25,12 @@ static int sock_connect_host(const char *hostname, int port)
 
     host = gethostbyname(hostname);
     if(host == NULL) {
-        __av_log(AVLOG_ERROR, "Could not resolve host %s", hostname);
+        av_log(AVLOG_ERROR, "Could not resolve host %s", hostname);
         return -ENOENT;
     }
     
     if(host->h_addrtype != AF_INET) {
-        __av_log(AVLOG_ERROR, "Cannot handle non-inet address %s", hostname);
+        av_log(AVLOG_ERROR, "Cannot handle non-inet address %s", hostname);
         return -ENOENT;
     }
 
@@ -40,13 +40,13 @@ static int sock_connect_host(const char *hostname, int port)
 
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if(sock == -1) {
-        __av_log(AVLOG_ERROR, "socket(): %s", strerror(errno));
+        av_log(AVLOG_ERROR, "socket(): %s", strerror(errno));
         return -errno;
     }
 
     res = connect(sock, (struct sockaddr *) &sn, sizeof(sn));
     if(res == -1) {
-        __av_log(AVLOG_ERROR, "connect(): %s", strerror(errno));
+        av_log(AVLOG_ERROR, "connect(): %s", strerror(errno));
         close(sock);
         return -errno;
     }
@@ -54,14 +54,14 @@ static int sock_connect_host(const char *hostname, int port)
     return sock;
 }
 
-int __av_sock_connect(const char *name, int defaultport)
+int av_sock_connect(const char *name, int defaultport)
 {
     char *hostname;
     char *s;
     int port = defaultport;
     int sock;
 
-    hostname = __av_strdup(name);
+    hostname = av_strdup(name);
     s = strrchr(hostname, ':');
     if(s != NULL) {
         char *end;
@@ -70,19 +70,19 @@ int __av_sock_connect(const char *name, int defaultport)
         s++;
         port = strtol(s, &end, 10);
         if(end == s || *end != '\0') {
-            __av_free(hostname);
-            __av_log(AVLOG_ERROR, "Bad port: %s", name);
+            av_free(hostname);
+            av_log(AVLOG_ERROR, "Bad port: %s", name);
             return -ENOENT;
         }
     }
     else if(defaultport == -1) {
-        __av_free(hostname);
-        __av_log(AVLOG_ERROR, "Missing port: %s", name);
+        av_free(hostname);
+        av_log(AVLOG_ERROR, "Missing port: %s", name);
         return -ENOENT;
     }
     
     sock = sock_connect_host(hostname, port);
-    __av_free(hostname);
+    av_free(hostname);
     
     return sock;
 }

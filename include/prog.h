@@ -18,7 +18,7 @@ struct proginfo {
     const char *wd;
 };
 
-void       __av_init_proginfo(struct proginfo *pi);
-int        __av_start_prog(struct proginfo *pi);
-int        __av_wait_prog(struct proginfo *pi, int tokill, int check);
+void       av_init_proginfo(struct proginfo *pi);
+int        av_start_prog(struct proginfo *pi);
+int        av_wait_prog(struct proginfo *pi, int tokill, int check);
                     

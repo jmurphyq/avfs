@@ -27,9 +27,11 @@ struct test {
     testfunc func;
 };
 
+
+#define TESTFILESIZE 102400
 struct filetest {
     const char *filename;
-    int fd;
+    unsigned char data[TESTFILESIZE];
 };
 
 static struct test *test_new(struct test *tg, const char *name)
@@ -61,6 +63,12 @@ static void test_add(struct test *tg, const char *name, void *data,
     tc->func = func;
 }
 
+static void tab(int i)
+{
+    for(; i > 0; i--)
+        putchar(' ');
+}
+
 static int test_run_path(struct test *tg, const char *path)
 {
     int ok;
@@ -75,7 +83,9 @@ static int test_run_path(struct test *tg, const char *path)
     sprintf(newpath, "%s.%s", path, tg->name);
     ok = test_run_path(tg->sub, newpath);
     if(tg->func != NULL) {
-        printf("%s:\t", newpath);
+        int len = printf("%s:", newpath);
+        tab(60 - len);
+        
         res = tg->func(tg->data);
         printf("%s\n", res ? "OK" : "FAILED");
         if(!res)
@@ -150,52 +160,93 @@ static char *test_file(const char *name)
 static int file_create(struct filetest *ft)
 {
     int res;
+    int fd;
+    off_t off;
+    size_t size;
 
     res = virt_open(ft->filename, O_WRONLY | O_CREAT | O_EXCL, 0777);
     if(res == -1)
         return 0;
 
-    ft->fd = res;
+    fd = res;
+    for(off = 0; off < TESTFILESIZE; off += size) {
+        size = rand() % TESTFILESIZE / 2;
 
-    return 1;
-}
+        if(off + size > TESTFILESIZE)
+            size = TESTFILESIZE - off;
+        
+        res = virt_write(fd, ft->data + off, size);
+        if(res != size)
+            return 0;
+    }
 
-static int file_write(struct filetest *ft)
-{
-    int res;
-
-    res = virt_write(ft->fd, "testtext\n", 9);
-    if(res != 9)
-        return 0;
-    
-    return 1;
-}
-
-static int file_close(struct filetest *ft)
-{
-    int res;
-
-    res = virt_close(ft->fd);
+    res = virt_close(fd);
     if(res == -1)
         return 0;
 
-    ft->fd = -1;
-    
     return 1;
 }
 
-static void add_filetest(struct test *tg, const char *filename)
+static int file_contents(struct filetest *ft)
 {
-    struct filetest ft;
+    int res;
+    int fd;
+    off_t off;
+    size_t size;
+    char buf[TESTFILESIZE / 2];
+
+    /* FIXME: flush cache */
+
+    res = virt_open(ft->filename, O_RDONLY, 0);
+    if(res == -1)
+        return 0;
+
+    fd = res;
+    for(off = 0; off < TESTFILESIZE; off += size) {
+        size = rand() % TESTFILESIZE / 2;
+
+        res = virt_read(fd, buf, size);
+
+        if(off + size > TESTFILESIZE)
+            size = TESTFILESIZE - off;
+
+        if(res != size)
+            return 0;
+
+        if(memcmp(ft->data + off, buf, size) != 0)
+            return 0;
+    }
+    
+    res = virt_read(fd, buf, 100);
+    if(res != 0)
+        return 0;
+
+    res = virt_close(fd);
+    if(res == -1)
+        return 0;
+
+    return 1;
+}
+
+
+
+static void add_filetest(struct test *tg, const char *testname,
+                         const char *filename)
+{
+    struct filetest *ft;
     struct test *ftg;
+    int i;
 
-    ftg = test_new(tg, filename);
+    ft = (struct filetest *) malloc(sizeof(*ft));
 
-    ft.filename = test_file(filename);
+    ftg = test_new(tg, testname);
 
-    test_add(ftg, "create", &ft, (testfunc) file_create);
-    test_add(ftg, "write", &ft, (testfunc) file_write);
-    test_add(ftg, "close", &ft, (testfunc) file_close);
+    ft->filename = filename;
+    for(i = 0; i < TESTFILESIZE; i++)
+        ft->data[i] = (i + (!(rand() % 30) ? rand() : 0)) % 0x100;
+
+    test_add(ftg, "create", ft, (testfunc) file_create);
+    test_add(ftg, "contents", ft, (testfunc) file_contents);
 }
 
 
@@ -209,7 +260,7 @@ int main(int argc, char *argv[])
 
     root.sub = NULL;
     tg = test_new(&root, "filetest");
-    add_filetest(tg, "t.gz#");
+    add_filetest(tg, "ugz", test_file("t.gz#"));
     
     res = test_run(tg);
 

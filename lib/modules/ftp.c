@@ -97,7 +97,7 @@ static struct ftpsession *ftp_get_session(struct ftpdata *ftd,
         struct ftpsession *prev;
 
         AV_NEW(fts);
-        fts->account = __av_strdup(account);
+        fts->account = av_strdup(account);
         fts->password = NULL;
 
         fts->next = next = ftd->sessions.next;
@@ -117,9 +117,9 @@ static void ftp_remove_session(struct ftpsession *fts)
     next->prev = prev;
     prev->next = next;
 
-    __av_free(fts->account);
-    __av_free(fts->password);
-    __av_free(fts);
+    av_free(fts->account);
+    av_free(fts->password);
+    av_free(fts);
 }
 
 static void strip_crlf(char *line)
@@ -143,7 +143,7 @@ static void ftp_release_conn(struct ftpconn *conn)
 
 static void ftp_close_conn(struct ftpconn *conn)
 {
-    __av_unref_obj(conn->sockfb);
+    av_unref_obj(conn->sockfb);
     close(conn->sock);
     conn->sockfb = NULL;
     conn->sock = -1;
@@ -156,16 +156,16 @@ static int ftp_get_line(struct ftpconn *conn, char **linep)
     int res;
     char *line;
     
-    res = __av_filebuf_getline(conn->sockfb, &line, FTP_REPLY_TIMEOUT);
+    res = av_filebuf_getline(conn->sockfb, &line, FTP_REPLY_TIMEOUT);
     if(res <= 0 || line == NULL) {
         ftp_close_conn(conn);
         if(res < 0)
             return res;
 
         if(res == 0)
-            __av_log(AVLOG_ERROR, "FTP: timeout waiting for reply");
+            av_log(AVLOG_ERROR, "FTP: timeout waiting for reply");
         else
-            __av_log(AVLOG_ERROR, "FTP: server closed ftpconn");
+            av_log(AVLOG_ERROR, "FTP: server closed ftpconn");
 
         return -EIO;
     }
@@ -185,7 +185,7 @@ static int ftp_check_reply(struct ftpconn *conn, const char *line)
        !isdigit((int) line[1]) || !isdigit((int) line[2]) ||
        (line[3] != ' ' && line[3] != '-')) {
         ftp_close_conn(conn);
-        __av_log(AVLOG_ERROR, "FTP: malformed reply: %s", line);
+        av_log(AVLOG_ERROR, "FTP: malformed reply: %s", line);
         return -EIO;
     }
 
@@ -215,7 +215,7 @@ static int ftp_wait_reply_code(struct ftpconn *conn)
         if(firstline) {
             res = ftp_check_reply(conn, line);
             if(res < 0) {
-                __av_free(line);
+                av_free(line);
                 return res;
             }
 
@@ -232,11 +232,11 @@ static int ftp_wait_reply_code(struct ftpconn *conn)
             cont = 1;
 
         if(replycode >= 400)
-            __av_log(AVLOG_ERROR, "FTP: %s", line);
+            av_log(AVLOG_ERROR, "FTP: %s", line);
         else
-            __av_log(AVLOG_DEBUG, "FTP: %s", line);
+            av_log(AVLOG_DEBUG, "FTP: %s", line);
 
-        __av_free(line);
+        av_free(line);
     } while(cont);
  
     return replycode;
@@ -265,13 +265,13 @@ static int ftp_write_command(struct ftpconn *conn, const char *cmd)
     int res;
 
     if(strncmp(cmd, "PASS ", 5) == 0)
-        __av_log(AVLOG_DEBUG, "FTP: PASS *");
+        av_log(AVLOG_DEBUG, "FTP: PASS *");
     else
-        __av_log(AVLOG_DEBUG, "FTP: %s", cmd);
+        av_log(AVLOG_DEBUG, "FTP: %s", cmd);
 
-    line = __av_stradd(NULL, cmd, "\r\n", NULL);
+    line = av_stradd(NULL, cmd, "\r\n", NULL);
     res = write_socket(conn->sock, line, strlen(line));
-    __av_free(line);
+    av_free(line);
 
     return res;
 }
@@ -341,22 +341,22 @@ static int ftp_check_passv_reply(struct ftpconn *conn, const char *line,
     replycode = res;
     
     if(replycode != 227) {
-        __av_log(AVLOG_ERROR, "FTP: %s", line);
+        av_log(AVLOG_ERROR, "FTP: %s", line);
         ftp_close_conn(conn);
         return -EIO;
     }
     
-    __av_log(AVLOG_DEBUG, "FTP: %s", line);
+    av_log(AVLOG_DEBUG, "FTP: %s", line);
         
     if(line[3] != ' ') {
-        __av_log(AVLOG_ERROR, "FTP: Multiline reply to PASV: %s", line);
+        av_log(AVLOG_ERROR, "FTP: Multiline reply to PASV: %s", line);
         ftp_close_conn(conn);
         return -EIO;
     }
 
     res = ftp_get_addrbytes(line, addrbytes);
     if(res < 0) {
-        __av_log(AVLOG_ERROR, "FTP: Bad reply to PASV: %s", line);
+        av_log(AVLOG_ERROR, "FTP: Bad reply to PASV: %s", line);
         ftp_close_conn(conn);
         return -EIO;
     }
@@ -365,7 +365,7 @@ static int ftp_check_passv_reply(struct ftpconn *conn, const char *line,
     sprintf(addrbuf, "%i.%i.%i.%i:%i", 
             addrbytes[0], addrbytes[1], addrbytes[2], addrbytes[3], port);
 
-    *resp = __av_strdup(addrbuf);
+    *resp = av_strdup(addrbuf);
 
     return 0;
 }
@@ -385,17 +385,17 @@ static int ftp_open_dataconn(struct ftpconn *conn)
         return res;
 
     res = ftp_check_passv_reply(conn, line, &host);
-    __av_free(line);
+    av_free(line);
     if(res < 0)
         return res;
 
-    __av_log(AVLOG_DEBUG,"FTP: remote data address: %s", host);
+    av_log(AVLOG_DEBUG,"FTP: remote data address: %s", host);
     
-    res = __av_sock_connect(host, -1);
+    res = av_sock_connect(host, -1);
     if(res >= 0)
-       __av_registerfd(res);
+       av_registerfd(res);
 
-    __av_free(host);
+    av_free(host);
     
     return res;
 }
@@ -405,14 +405,14 @@ static int ftp_login(struct ftpconn *conn)
     int res;
     char *cmd;
 
-    cmd = __av_stradd(NULL, "USER ", conn->user, NULL);
+    cmd = av_stradd(NULL, "USER ", conn->user, NULL);
     res = ftp_command(conn, cmd);
-    __av_free(cmd);
+    av_free(cmd);
 
     if(res == 331) {
-        cmd = __av_stradd(NULL, "PASS ", conn->password, NULL);
+        cmd = av_stradd(NULL, "PASS ", conn->password, NULL);
         res = ftp_command(conn, cmd);
-        __av_free(cmd);
+        av_free(cmd);
         if(res < 0)
             return res;
     }
@@ -460,12 +460,12 @@ static int ftp_open_conn(struct ftpconn *conn)
             return 0;
     }
 
-    res = __av_sock_connect(conn->host, 21);
+    res = av_sock_connect(conn->host, 21);
     if(res < 0)
         return res;
 
     conn->sock = res;
-    conn->sockfb = __av_filebuf_new(conn->sock, 0);
+    conn->sockfb = av_filebuf_new(conn->sock, 0);
 
     res = ftp_init_conn(conn);
     if(res < 0) {
@@ -481,11 +481,11 @@ static void ftp_free_dirlist(struct dirlist *dl)
     int i;
 
     for(i = 0; i < dl->num; i++) {
-        __av_free(dl->ents[i].name);
-        __av_free(dl->ents[i].linkname);
+        av_free(dl->ents[i].name);
+        av_free(dl->ents[i].linkname);
     }
 
-    __av_free(dl->ents);
+    av_free(dl->ents);
     dl->ents = NULL;
     dl->num = 0;
 }
@@ -498,12 +498,12 @@ static int ftp_read_list(struct filebuf *fb, struct dirlist *dl,
     int eof = 0;
 
     do {
-        res = __av_filebuf_getline(fb, &line, FTP_READ_TIMEOUT);
+        res = av_filebuf_getline(fb, &line, FTP_READ_TIMEOUT);
         if(res < 0)
             return res;
         
         if(res == 0) {
-            __av_log(AVLOG_ERROR, "FTP: read timeout");
+            av_log(AVLOG_ERROR, "FTP: read timeout");
             return -EIO;
         }
         if(line == NULL)
@@ -514,13 +514,13 @@ static int ftp_read_list(struct filebuf *fb, struct dirlist *dl,
             char *linkname;
             strip_crlf(line);
             
-            __av_log(AVLOG_DEBUG, "FTP: %s", line);
-            res = __av_parse_ls(lc, line, &stbuf, &filename, &linkname);
-            __av_free(line);
+            av_log(AVLOG_DEBUG, "FTP: %s", line);
+            res = av_parse_ls(lc, line, &stbuf, &filename, &linkname);
+            av_free(line);
             if(res == 1) {
-                __av_remote_add(dl, filename, linkname, &stbuf);
-                __av_free(filename);
-                __av_free(linkname);
+                av_remote_add(dl, filename, linkname, &stbuf);
+                av_free(filename);
+                av_free(linkname);
             }
         }
     } while(!eof);
@@ -564,9 +564,9 @@ static int ftp_set_cwd(struct ftpconn *conn, const char *dir)
     char *cmd;
 
     if(strcmp(conn->cwd, dir) != 0) {
-        cmd = __av_stradd(NULL, "CWD ", dir, NULL);
+        cmd = av_stradd(NULL, "CWD ", dir, NULL);
         res = ftp_command(conn, cmd);
-        __av_free(cmd);
+        av_free(cmd);
         if(res < 0)
             return res;
         
@@ -575,8 +575,8 @@ static int ftp_set_cwd(struct ftpconn *conn, const char *dir)
         if(res / 100 != 2)
             return -EIO;
 
-        __av_free(conn->cwd);
-        conn->cwd = __av_strdup(dir);
+        av_free(conn->cwd);
+        conn->cwd = av_strdup(dir);
     }
 
     return 0;
@@ -608,9 +608,9 @@ static int ftp_do_list(struct ftpconn *conn, const char *dir,
         return res;
         
     listsock = res;
-    cmd = __av_strdup("LIST -an");
+    cmd = av_strdup("LIST -an");
     res = ftp_command(conn, cmd);
-    __av_free(cmd);
+    av_free(cmd);
     if(res >= 0 && res / 100 != 1)
         res = -EIO;
     
@@ -619,11 +619,11 @@ static int ftp_do_list(struct ftpconn *conn, const char *dir,
         return res;
     }
     
-    fb = __av_filebuf_new(listsock, 0);
-    lc = __av_new_lscache();
+    fb = av_filebuf_new(listsock, 0);
+    lc = av_new_lscache();
     res = ftp_read_list(fb, dl, lc);
-    __av_unref_obj(lc);
-    __av_unref_obj(fb);
+    av_unref_obj(lc);
+    av_unref_obj(fb);
     close(listsock);
 
     res = ftp_wait_reply_code(conn);
@@ -644,13 +644,13 @@ static const char *ftp_get_password(struct ftpdata *ftd, const char *host,
     struct ftpsession *fts;
     char *account;
 
-    account = __av_stradd(NULL, user, USER_SEP_STR, host, NULL);
+    account = av_stradd(NULL, user, USER_SEP_STR, host, NULL);
     fts = ftp_find_session(ftd, account);
-    __av_free(account);
+    av_free(account);
     if(fts == NULL) {
-        account = __av_stradd(NULL, user, USER_SEP_STR, NULL);
+        account = av_stradd(NULL, user, USER_SEP_STR, NULL);
         fts = ftp_find_session(ftd, account);
-        __av_free(account);
+        av_free(account);
     }
     
     if(fts != NULL)
@@ -712,15 +712,15 @@ static struct ftpconn *ftp_find_conn(struct ftpdata *ftd, const char *host,
 
     AV_NEW(conn);
     
-    conn->host = __av_strdup(host);
-    conn->user = __av_strdup(user);
-    conn->password = __av_strdup(password);
+    conn->host = av_strdup(host);
+    conn->user = av_strdup(user);
+    conn->password = av_strdup(password);
     conn->busy = 1;
     conn->sock = -1;
     conn->sockfb = NULL;
     conn->next = NULL;
     conn->binary = -1;
-    conn->cwd = __av_strdup("");
+    conn->cwd = av_strdup("");
     
     *cp = conn;
     
@@ -738,12 +738,12 @@ static int ftp_get_conn(struct ftpdata *ftd, const char *userhost,
     struct ftpconn *conn = NULL;
 
     AV_LOCK(ftp_lock);
-    tmps = __av_strdup(userhost);
+    tmps = av_strdup(userhost);
     res = ftp_split_path(ftd, tmps, &host, &user, &password);
     if(res == 0)
         conn = ftp_find_conn(ftd, host, user, password);
 
-    __av_free(tmps);
+    av_free(tmps);
     AV_UNLOCK(ftp_lock);
 
     if(res < 0)
@@ -765,7 +765,7 @@ static int ftp_list(struct remote *rem, struct dirlist *dl)
     if(res < 0)
         return res;
 
-    dir = __av_strdup(dl->hostpath.path);
+    dir = av_strdup(dl->hostpath.path);
     if((dl->flags & REM_LIST_SINGLE) != 0) {
         if(strcmp(dir, "/") == 0)
             dl->flags = 0;
@@ -779,7 +779,7 @@ static int ftp_list(struct remote *rem, struct dirlist *dl)
         }
     }
     res = ftp_do_list(conn, dir, dl);
-    __av_free(dir);
+    av_free(dir);
 
     ftp_release_conn(conn);
 
@@ -792,7 +792,7 @@ static void ftp_free_localfile(struct ftplocalfile *lf)
         ftp_close_conn(lf->conn);
         ftp_release_conn(lf->conn);
     }
-    __av_unref_obj(lf->sockfb);
+    av_unref_obj(lf->sockfb);
     close(lf->sock);
     close(lf->fd);
 }
@@ -808,7 +808,7 @@ static int ftp_init_localfile(struct ftplocalfile *lf, int sock)
     lf->numbytes = 0;
     lf->conn = NULL;
 
-    res = __av_get_tmpfile(&lf->tmpfile);
+    res = av_get_tmpfile(&lf->tmpfile);
     if(res < 0)
         return res;
 
@@ -816,7 +816,7 @@ static int ftp_init_localfile(struct ftplocalfile *lf, int sock)
     if(lf->fd == -1)
         return -errno;
 
-    lf->sockfb = __av_filebuf_new(lf->sock, 0);
+    lf->sockfb = av_filebuf_new(lf->sock, 0);
 
     return 0;
 }
@@ -847,9 +847,9 @@ static int ftp_do_get(struct getparam *gp, const char *dir, const char *file,
         return res;
 
     getsock = res;
-    cmd = __av_stradd(NULL, "RETR ", file, NULL);
+    cmd = av_stradd(NULL, "RETR ", file, NULL);
     res = ftp_command(conn, cmd);
-    __av_free(cmd);
+    av_free(cmd);
     if(res >= 0 && res / 100 != 1)
         res = -EIO;
     
@@ -861,8 +861,8 @@ static int ftp_do_get(struct getparam *gp, const char *dir, const char *file,
     AV_NEW_OBJ(lf, ftp_free_localfile);
     res = ftp_init_localfile(lf, getsock);
     if(res < 0) {
-        __av_unref_obj(lf);
-        __av_del_tmpfile(lf->tmpfile);
+        av_unref_obj(lf);
+        av_del_tmpfile(lf->tmpfile);
         return res;
     }
 
@@ -887,13 +887,13 @@ static int ftp_get(struct remote *rem, struct getparam *gp)
     if(res < 0)
         return res;
 
-    dir = __av_strdup(gp->hostpath.path);
+    dir = av_strdup(gp->hostpath.path);
     s = strrchr(dir, '/');
     *s = '\0';
     file = s + 1;
 
     res = ftp_do_get(gp, dir, file, conn);
-    __av_free(dir);
+    av_free(dir);
 
     if(res < 0)
         ftp_release_conn(conn);
@@ -907,13 +907,13 @@ static int ftp_write_localfile(int fd, char *buf, avsize_t nbytes)
 
     res = write(fd, buf, nbytes);
     if(res == -1) {
-        __av_log(AVLOG_ERROR, "FTP: error writing to tmpfile: %s",
+        av_log(AVLOG_ERROR, "FTP: error writing to tmpfile: %s",
                  strerror(errno));
                 
         return -EIO;
     }
     if(res != nbytes) {
-        __av_log(AVLOG_ERROR, "FTP: short write to tmpfile (%i/%i)",
+        av_log(AVLOG_ERROR, "FTP: short write to tmpfile (%i/%i)",
                  res, nbytes);
         return -EIO;
     }
@@ -931,7 +931,7 @@ static int ftp_wait(struct remote *rem, void *data, avoff_t end)
     avsize_t nbytes;
     
     do {
-        nbytes = __av_filebuf_read(lf->sockfb, buf, READBUF);
+        nbytes = av_filebuf_read(lf->sockfb, buf, READBUF);
         if(nbytes != 0) {
             res = ftp_write_localfile(lf->fd, buf, nbytes);
             if(res < 0)
@@ -940,8 +940,8 @@ static int ftp_wait(struct remote *rem, void *data, avoff_t end)
             lf->numbytes += nbytes;
         }
         else {
-            if(__av_filebuf_eof(lf->sockfb)) {
-                __av_unref_obj(lf->sockfb);
+            if(av_filebuf_eof(lf->sockfb)) {
+                av_unref_obj(lf->sockfb);
                 lf->sockfb = NULL;
                 close(lf->sock);
                 lf->sock = -1;
@@ -959,12 +959,12 @@ static int ftp_wait(struct remote *rem, void *data, avoff_t end)
                 return 0;
             }
             else {
-                res = __av_filebuf_check(&lf->sockfb, 1, FTP_READ_TIMEOUT);
+                res = av_filebuf_check(&lf->sockfb, 1, FTP_READ_TIMEOUT);
                 if(res < 0)
                     return res;
 
                 if(res == 0) {
-                    __av_log(AVLOG_ERROR, "FTP: read timeout");
+                    av_log(AVLOG_ERROR, "FTP: read timeout");
                     return -EIO;
                 }
             }
@@ -978,14 +978,14 @@ static int ftp_password_set(struct entry *ent, const char *param,
                             const char *val)
 {
     struct ftpsession *fts;
-    struct statefile *sf = (struct statefile *) __av_namespace_get(ent);
+    struct statefile *sf = (struct statefile *) av_namespace_get(ent);
     struct ftpdata *ftd = (struct ftpdata *) sf->data;
     unsigned int len;
 
     AV_LOCK(ftp_lock);
     fts = ftp_get_session(ftd, param);
-    __av_free(fts->password);
-    fts->password = __av_strdup(val);
+    av_free(fts->password);
+    fts->password = av_strdup(val);
     len = strlen(fts->password);
     if(fts->password[len - 1] == '\n')
         fts->password[len - 1] = '\0';
@@ -997,15 +997,15 @@ static int ftp_password_set(struct entry *ent, const char *param,
 static int ftp_loggedin_get(struct entry *ent, const char *param, char **resp)
 {
     struct ftpsession *fts;
-    struct statefile *sf = (struct statefile *) __av_namespace_get(ent);
+    struct statefile *sf = (struct statefile *) av_namespace_get(ent);
     struct ftpdata *ftd = (struct ftpdata *) sf->data;
 
     AV_LOCK(ftp_lock);
     fts = ftp_find_session(ftd, param);
     if(fts == NULL)
-        *resp = __av_strdup("0\n");
+        *resp = av_strdup("0\n");
     else
-        *resp = __av_strdup("1\n");
+        *resp = av_strdup("1\n");
     AV_UNLOCK(ftp_lock);
 
     return 0;
@@ -1038,7 +1038,7 @@ static int ftp_loggedin_set(struct entry *ent, const char *param,
 {
     int res;
     struct ftpsession *fts;
-    struct statefile *sf = (struct statefile *) __av_namespace_get(ent);
+    struct statefile *sf = (struct statefile *) av_namespace_get(ent);
     struct ftpdata *ftd = (struct ftpdata *) sf->data;
 
     AV_LOCK(ftp_lock);
@@ -1067,25 +1067,25 @@ static int ftp_init_ctl(struct vmodule *module, struct ftpdata *ftd)
     struct entry *ent;
     struct avfs *avfs;
     
-    res = __av_state_new(module, "ftp_ctl", &ns, &avfs);
+    res = av_state_new(module, "ftp_ctl", &ns, &avfs);
     if(res < 0)
         return res;
     
-    ent = __av_namespace_lookup(ns, NULL, "password");
+    ent = av_namespace_lookup(ns, NULL, "password");
     AV_NEW(stf);
     stf->data = ftd;
     stf->get = NULL;
     stf->set = ftp_password_set;
-    __av_namespace_set(ent, stf);
+    av_namespace_set(ent, stf);
 
-    ent = __av_namespace_lookup(ns, NULL, "loggedin");
+    ent = av_namespace_lookup(ns, NULL, "loggedin");
     AV_NEW(stf);
     stf->data = ftd;
     stf->get = ftp_loggedin_get;
     stf->set = ftp_loggedin_set;
-    __av_namespace_set(ent, stf);
+    av_namespace_set(ent, stf);
     
-    __av_unref_obj(ns);
+    av_unref_obj(ns);
 
     return 0;
 }    
@@ -1099,12 +1099,12 @@ static void ftp_destroy(struct remote *rem)
     for(conn = ftd->conns; conn != NULL; conn = nextconn) {
         nextconn = conn->next;
 
-        __av_free(conn->host);
-        __av_free(conn->user);
-        __av_free(conn->password);
-        __av_free(conn->cwd);
+        av_free(conn->host);
+        av_free(conn->user);
+        av_free(conn->password);
+        av_free(conn->cwd);
         ftp_close_conn(conn);
-        __av_free(conn);
+        av_free(conn);
         
         conn = nextconn;
     }
@@ -1114,15 +1114,15 @@ static void ftp_destroy(struct remote *rem)
         ftp_remove_session(ftd->sessions.next);
     AV_UNLOCK(ftp_lock);
 
-    __av_free(ftd);
+    av_free(ftd);
 
-    __av_free(rem->name);
-    __av_free(rem);
+    av_free(rem->name);
+    av_free(rem);
 }
     
-extern int __av_init_module_ftp(struct vmodule *module);
+extern int av_init_module_ftp(struct vmodule *module);
 
-int __av_init_module_ftp(struct vmodule *module)
+int av_init_module_ftp(struct vmodule *module)
 {
     int res;
     struct remote *rem;
@@ -1137,17 +1137,17 @@ int __av_init_module_ftp(struct vmodule *module)
     AV_NEW(rem);
 
     rem->data    = ftd;
-    rem->name    = __av_strdup("ftp");
+    rem->name    = av_strdup("ftp");
     rem->list    = ftp_list;
     rem->get     = ftp_get;
     rem->wait    = ftp_wait;
     rem->destroy = ftp_destroy;
     
-    res = __av_remote_init(module, rem, &avfs);
+    res = av_remote_init(module, rem, &avfs);
     if(res == 0) {
         res = ftp_init_ctl(module, ftd);
         if(res < 0)
-            __av_unref_obj(avfs);
+            av_unref_obj(avfs);
     }
 
     return res;

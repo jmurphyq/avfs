@@ -25,11 +25,11 @@ struct filebuf {
 
 static void free_filebuf(struct filebuf *fb)
 {
-    __av_free(fb->buf);
+    av_free(fb->buf);
     close(fb->fd);
 }
 
-struct filebuf *__av_filebuf_new(int fd, int flags)
+struct filebuf *av_filebuf_new(int fd, int flags)
 {
     struct filebuf *fb;
     int oflags;
@@ -54,7 +54,7 @@ struct filebuf *__av_filebuf_new(int fd, int flags)
     return fb;
 }
 
-int __av_filebuf_eof(struct filebuf *fb)
+int av_filebuf_eof(struct filebuf *fb)
 {
     return fb->eof;
 }
@@ -91,24 +91,24 @@ static void filebuf_check_poll(struct filebuf *fbs[], struct pollfd *pf,
     }
 }
                                
-int __av_filebuf_check(struct filebuf *fbs[], unsigned int numfbs,
+int av_filebuf_check(struct filebuf *fbs[], unsigned int numfbs,
                        long timeoutms)
 {
     int res;
     struct pollfd *pf;
 
-    pf = (struct pollfd *) __av_malloc(sizeof(*pf) * numfbs);
+    pf = (struct pollfd *) av_malloc(sizeof(*pf) * numfbs);
     filebuf_fill_poll(fbs, pf, numfbs);
     res = poll(pf, numfbs, timeoutms);
     if(res == -1) {
-        __av_log(AVLOG_ERROR, "filebuf: poll error: %s", strerror(errno));
+        av_log(AVLOG_ERROR, "filebuf: poll error: %s", strerror(errno));
         res = -EIO;
     }
     else if(res > 0) {
         filebuf_check_poll(fbs, pf, numfbs);
         res = 1;
     }
-    __av_free(pf);
+    av_free(pf);
 
     return res;
 }
@@ -124,7 +124,7 @@ static avssize_t filebuf_real_read(struct filebuf *fb, char *buf,
     fb->avail = 0;
     res = read(fb->fd, buf, nbytes);
     if(res < 0) {
-        __av_log(AVLOG_ERROR, "filebuf: read error: %s", strerror(errno));
+        av_log(AVLOG_ERROR, "filebuf: read error: %s", strerror(errno));
         return -EIO;
     }
     if(res == 0)
@@ -133,7 +133,7 @@ static avssize_t filebuf_real_read(struct filebuf *fb, char *buf,
     return res;
 }
 
-avssize_t __av_filebuf_read(struct filebuf *fb, char *buf, avsize_t nbytes)
+avssize_t av_filebuf_read(struct filebuf *fb, char *buf, avsize_t nbytes)
 {
     if(fb->nbytes > 0) {
         avsize_t nact = AV_MIN(fb->nbytes, nbytes);
@@ -148,7 +148,7 @@ avssize_t __av_filebuf_read(struct filebuf *fb, char *buf, avsize_t nbytes)
     return  filebuf_real_read(fb, buf, nbytes);
 }
 
-avssize_t __av_filebuf_write(struct filebuf *fb, const char *buf,
+avssize_t av_filebuf_write(struct filebuf *fb, const char *buf,
                              avsize_t nbytes)
 {
     avssize_t res;
@@ -156,9 +156,10 @@ avssize_t __av_filebuf_write(struct filebuf *fb, const char *buf,
     if(!fb->avail)
         return 0;
 
+    fb->avail = 0;
     res = write(fb->fd, buf, nbytes);
     if(res < 0) {
-        __av_log(AVLOG_ERROR, "filebuf: write error: %s", strerror(errno));
+        av_log(AVLOG_ERROR, "filebuf: write error: %s", strerror(errno));
         return -EIO;
     }
 
@@ -178,7 +179,7 @@ static avssize_t read_data(struct filebuf *fb)
     
     newsize = fb->nbytes + readsize;
     if(newsize > fb->size) {
-        fb->buf = __av_realloc(fb->buf, newsize);
+        fb->buf = av_realloc(fb->buf, newsize);
         fb->size = newsize;
     }
     
@@ -212,7 +213,7 @@ static avssize_t filebuf_lineend(struct filebuf *fb)
     return res;
 }
 
-int __av_filebuf_readline(struct filebuf *fb, char **resp)
+int av_filebuf_readline(struct filebuf *fb, char **resp)
 {
     avssize_t nbytes;
 
@@ -222,7 +223,7 @@ int __av_filebuf_readline(struct filebuf *fb, char **resp)
     if(nbytes <= 0)
         return nbytes;
     
-    *resp = __av_strndup(fb->buf + fb->ptr, nbytes);
+    *resp = av_strndup(fb->buf + fb->ptr, nbytes);
 
     fb->ptr += nbytes;
     fb->nbytes -= nbytes;
@@ -230,23 +231,23 @@ int __av_filebuf_readline(struct filebuf *fb, char **resp)
     return 1;
 }
 
-int __av_filebuf_getline(struct filebuf *fb, char **linep, long timeoutms)
+int av_filebuf_getline(struct filebuf *fb, char **linep, long timeoutms)
 {
     int res;
     char *line;
 
     *linep = NULL;
     while(1) {
-        res = __av_filebuf_readline(fb, &line);
+        res = av_filebuf_readline(fb, &line);
         if(res < 0)
             return res;
         if(res == 1)
             break;
 
-        if(__av_filebuf_eof(fb))
+        if(av_filebuf_eof(fb))
             return 1;
 
-        res = __av_filebuf_check(&fb, 1, timeoutms);
+        res = av_filebuf_check(&fb, 1, timeoutms);
         if(res < 0)
             return res;
 

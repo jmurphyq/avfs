@@ -17,19 +17,19 @@ static int default_lookup(ventry *ve, const char *name, void **newp)
     char *path = (char *) ve->data;
     
     if(path == NULL)
-	path = __av_strdup(name);
+	path = av_strdup(name);
     else if(name == NULL || strcmp(name, "..") == 0) {
 	char *s;
 	s = strrchr(path, AV_DIR_SEP_CHAR);
 	if(s == NULL) {
-	    __av_free(path);
+	    av_free(path);
 	    path = NULL;
 	}
 	else 
 	    *s = '\0';
     }
     else if(strcmp(name, ".") != 0)
-	path = __av_stradd(path, AV_DIR_SEP_STR, name, NULL);
+	path = av_stradd(path, AV_DIR_SEP_STR, name, NULL);
     
     *newp = path;
 
@@ -40,14 +40,14 @@ static void default_putent(ventry *ve)
 {
     char *path = (char *) ve->data;
 
-    __av_free(path);
+    av_free(path);
 }
 
 static int default_copyent(ventry *ve, void **resp)
 {
     char *path = (char *) ve->data;
     
-    *resp =  (void *) __av_strdup(path);
+    *resp =  (void *) av_strdup(path);
     
     return 0;
 }
@@ -56,7 +56,7 @@ static int default_getpath(ventry *ve, char **resp)
 {
     char *path = (char *) ve->data;
     
-    *resp =  __av_strdup(path);
+    *resp =  av_strdup(path);
 
     return 0;
 }
@@ -193,7 +193,7 @@ static avoff_t default_lseek(vfile *vf, avoff_t offset, int whence)
     return res;
 }
 
-void __av_default_avfs(struct avfs *avfs)
+void av_default_avfs(struct avfs *avfs)
 {
     avfs->destroy    = default_destroy;
 

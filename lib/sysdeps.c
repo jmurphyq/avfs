@@ -46,7 +46,7 @@ static int logstat_get(struct entry *ent, const char *param, char **retp)
     sprintf(buf, "%02o\n", logmask);
     AV_UNLOCK(loglock);
 
-    *retp = __av_strdup(buf);
+    *retp = av_strdup(buf);
     return 0;
 }
 
@@ -105,7 +105,7 @@ static void filelog(const char *filename, const char *msg)
     if(fd != -1) {
         struct avtm tmbuf;
 
-        __av_localtime(time(NULL), &tmbuf);
+        av_localtime(time(NULL), &tmbuf);
         sprintf(buf, "%02i/%02i %02i:%02i:%02i avfs[%lu]: %s\n", 
                 tmbuf.mon + 1, tmbuf.day, tmbuf.hour, tmbuf.min, tmbuf.sec,
                 (unsigned long) getpid(), msg);
@@ -115,7 +115,7 @@ static void filelog(const char *filename, const char *msg)
     }
 }
 
-void __av_init_logstat()
+void av_init_logstat()
 {
     struct statefile logstat;
     
@@ -123,10 +123,10 @@ void __av_init_logstat()
     logstat.get = logstat_get;
     logstat.set = logstat_set;
     
-    __av_avfsstat_register("debug", &logstat);
+    av_avfsstat_register("debug", &logstat);
 }
 
-void __av_log(int type, const char *format, ...)
+void av_log(int type, const char *format, ...)
 {
     va_list ap;
     char buf[LOGMSG_SIZE+1];
@@ -160,19 +160,19 @@ void __av_log(int type, const char *format, ...)
         filelog(logfile, buf);
 }
 
-avdev_t __av_mkdev(int major, int minor)
+avdev_t av_mkdev(int major, int minor)
 {
     return makedev(major, minor);
 }
 
-void __av_splitdev(avdev_t dev, int *majorp, int *minorp)
+void av_splitdev(avdev_t dev, int *majorp, int *minorp)
 {
     *majorp = major(dev);
     *minorp = minor(dev);
 }
 
 
-char *__av_get_config(const char *param)
+char *av_get_config(const char *param)
 {
     const char *val;
 
@@ -188,10 +188,10 @@ char *__av_get_config(const char *param)
     if(val == NULL)
         return NULL;
 
-    return __av_strdup(val);
+    return av_strdup(val);
 }
 
-void __av_default_stat(struct avstat *stbuf)
+void av_default_stat(struct avstat *stbuf)
 {
     stbuf->dev = 0;
     stbuf->ino = 0;
@@ -203,12 +203,12 @@ void __av_default_stat(struct avstat *stbuf)
     stbuf->size = 0;
     stbuf->blksize = 512;
     stbuf->blocks = 0;
-    __av_curr_time(&stbuf->atime);
+    av_curr_time(&stbuf->atime);
     stbuf->mtime = stbuf->atime;
     stbuf->ctime = stbuf->atime;
 }
 
-void __av_curr_time(avtimestruc_t *tim)
+void av_curr_time(avtimestruc_t *tim)
 {
     struct timeval tv;
 
@@ -218,12 +218,12 @@ void __av_curr_time(avtimestruc_t *tim)
     tim->nsec = tv.tv_usec * 1000;
 }
 
-avtime_t __av_time()
+avtime_t av_time()
 {
     return time(NULL);
 }
 
-void __av_sleep(unsigned long msec)
+void av_sleep(unsigned long msec)
 {
     struct timespec rem;
     int res;
@@ -240,7 +240,7 @@ void __av_sleep(unsigned long msec)
 }
 
 
-avtime_t __av_mktime(struct avtm *tp)
+avtime_t av_mktime(struct avtm *tp)
 {
     struct tm tms;
   
@@ -255,7 +255,7 @@ avtime_t __av_mktime(struct avtm *tp)
     return mktime(&tms);
 }
 
-void __av_localtime(avtime_t t, struct avtm *tp)
+void av_localtime(avtime_t t, struct avtm *tp)
 {
     struct tm tms;
   
@@ -270,40 +270,40 @@ void __av_localtime(avtime_t t, struct avtm *tp)
 }
 
 
-void __av_registerfd(int fd)
+void av_registerfd(int fd)
 {
     fcntl(fd, F_SETFD, FD_CLOEXEC);
 }
 
 #if 0
-rep_file  *__av_get_replacement(ave *v, ventry *vent, int needold)
+rep_file  *av_get_replacement(ave *v, ventry *vent, int needold)
 {
     rep_file *rf;
   
     AV_NEW(rf);
 
     if(needold) {
-        rf->outfd = __av_get_tmpfd(v);
+        rf->outfd = av_get_tmpfd(v);
         rf->ve = vent;
     }
     else {
-        rf->outfd = __av_open(v, vent, AVO_WRONLY | AVO_TRUNC, 0);
+        rf->outfd = av_open(v, vent, AVO_WRONLY | AVO_TRUNC, 0);
         rf->ve = NULL;
     }
   
     if(rf->outfd == -1) {
-        __av_free(rf);
+        av_free(rf);
         return NULL;
     }
   
     return rf;
 }
 
-void __av_del_replacement(rep_file *rf)
+void av_del_replacement(rep_file *rf)
 {
     if(rf != NULL) {
-        __av_close(AV_DUMMYV, rf->outfd);
-        __av_free(rf);
+        av_close(AV_DUMMYV, rf->outfd);
+        av_free(rf);
     }
 }
 
@@ -316,9 +316,9 @@ static int copy_file(ave *v, int srcfd, int destfd)
   
     offset = 0;
     do {
-        res = __av_read(v, srcfd, buf, BS, offset);
+        res = av_read(v, srcfd, buf, BS, offset);
         if(res > 0) {
-            wres = __av_write(v, destfd, buf, res, offset);
+            wres = av_write(v, destfd, buf, res, offset);
             if(wres == -1) return -1;
             if(wres != res) { /* Impossible */
                 v->errn = EIO;
@@ -333,27 +333,27 @@ static int copy_file(ave *v, int srcfd, int destfd)
 
 
 /* FIXME: Replace with rename() for local files (quicker, and more reliable) */
-int __av_replace_file(ave *v, rep_file *rf)
+int av_replace_file(ave *v, rep_file *rf)
 {
     int res;
 
     if(rf->ve != NULL) {
         int destfd;
 
-        destfd = __av_open(v, rf->ve, AVO_WRONLY | AVO_TRUNC, 0);
+        destfd = av_open(v, rf->ve, AVO_WRONLY | AVO_TRUNC, 0);
         if(destfd == -1) {
-            __av_del_replacement(rf);
+            av_del_replacement(rf);
             return -1;
         }
     
         res = copy_file(v, rf->outfd, destfd);
     
-        __av_close(AV_DUMMYV, destfd);
+        av_close(AV_DUMMYV, destfd);
     }
     else
         res = 0;
 
-    __av_del_replacement(rf);
+    av_del_replacement(rf);
 
     return res;
 }

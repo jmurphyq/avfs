@@ -51,14 +51,14 @@ static int copyrightstat_get(struct entry *ent, const char *param, char **retp)
             (AV_VER / 10) % 10,
             AV_VER % 10);
     
-    *retp = __av_strdup(buf);
+    *retp = av_strdup(buf);
     
     return 0;
 }
 
 static int modstat_get(struct entry *ent, const char *param, char **retp)
 {
-    char *ret = __av_strdup("");
+    char *ret = av_strdup("");
     char buf[128];
 
     struct avfs_list *li;
@@ -73,19 +73,19 @@ static int modstat_get(struct entry *ent, const char *param, char **retp)
 	sprintf(buf, "%2d.%d.%d\t", (ver / 100) % 100, (ver / 10) % 10,
                 ver % 10);
 
-        ret = __av_stradd(ret, buf, avfs->name, ":\t", NULL);
+        ret = av_stradd(ret, buf, avfs->name, ":\t", NULL);
 
 	exts = avfs->exts;
 	if(exts != NULL) 
 	    for(ei = 0; exts[ei].from != NULL; ei++) {
-                ret = __av_stradd(ret, exts[ei].from, NULL);
+                ret = av_stradd(ret, exts[ei].from, NULL);
 		if(exts[ei].to != NULL)
-                    ret = __av_stradd(ret, "(", exts[ei].to, ")", NULL);
+                    ret = av_stradd(ret, "(", exts[ei].to, ")", NULL);
                 
-                ret = __av_stradd(ret, " ", NULL);
+                ret = av_stradd(ret, " ", NULL);
 	    }
 
-        ret = __av_stradd(ret, "\n", NULL);
+        ret = av_stradd(ret, "\n", NULL);
     }
     AV_UNLOCK(avfs_lock);
 
@@ -103,18 +103,18 @@ static int versionstat_get(struct entry *ent, const char *param, char **retp)
 
     sprintf(buf, "%i.%i.%i", AV_VER / 100, (AV_VER / 10) % 10, AV_VER % 10);
 
-    compiledate = __av_get_config("compiledate");
-    compilesys = __av_get_config("compilesystem");
-    moduledir = __av_get_config("moduledir");
+    compiledate = av_get_config("compiledate");
+    compilesys = av_get_config("compilesystem");
+    moduledir = av_get_config("moduledir");
 
-    *retp = __av_stradd(NULL, "Interface version: ", buf, 
+    *retp = av_stradd(NULL, "Interface version: ", buf, 
                         "\nCompile date: ", compiledate,
                         "\nCompile system: ", compilesys,
                         "\nModule directory: ", moduledir, "\n", NULL);
 
-    __av_free(compiledate);
-    __av_free(compilesys);
-    __av_free(moduledir);
+    av_free(compiledate);
+    av_free(compilesys);
+    av_free(moduledir);
 
     return 0;
 }
@@ -127,22 +127,22 @@ static void init_stats()
     statf.set = NULL;
 
     statf.get = copyrightstat_get;
-    __av_avfsstat_register("copyright", &statf);
+    av_avfsstat_register("copyright", &statf);
     
     statf.get = modstat_get;
-    __av_avfsstat_register("modules", &statf);
+    av_avfsstat_register("modules", &statf);
 
     statf.get = versionstat_get;
-    __av_avfsstat_register("version", &statf);
+    av_avfsstat_register("version", &statf);
 }
 
 static void destroy()
 {
-    __av_log(AVLOG_DEBUG, "DESTROY");
+    av_log(AVLOG_DEBUG, "DESTROY");
 
     AV_LOCK(initlock);
     if(inited) {
-        __av_close_all_files();
+        av_close_all_files();
 
         AV_LOCK(avfs_lock);
         while(avfs_list.next != &avfs_list) {
@@ -150,20 +150,20 @@ static void destroy()
 
             li->next->prev = li->prev;
             li->prev->next = li->next;
-            __av_unref_obj(li->avfs);
-            __av_free(li);
+            av_unref_obj(li->avfs);
+            av_free(li);
         }
         AV_UNLOCK(avfs_lock);
 
-        __av_destroy_filecache();
-	__av_delete_tmpdir();
+        av_destroy_filecache();
+	av_delete_tmpdir();
 
         inited = 0;
     }
     AV_UNLOCK(initlock);
 
-    __av_check_malloc();
-    __av_log(AVLOG_DEBUG, "DESTROY successful");
+    av_check_malloc();
+    av_log(AVLOG_DEBUG, "DESTROY successful");
 }
 
 static int init()
@@ -172,33 +172,33 @@ static int init()
 
     AV_LOCK(initlock);    
     if(!inited) {
-        __av_log(AVLOG_DEBUG, "INIT");
+        av_log(AVLOG_DEBUG, "INIT");
 
         avfs_list.next = &avfs_list;
         avfs_list.prev = &avfs_list;
 
-        res = __av_init_module_local();
+        res = av_init_module_local();
         if(res == 0) {
-            __av_init_avfsstat();
-            __av_init_static_modules();
-            __av_init_dynamic_modules();
-            __av_init_logstat();
+            av_init_avfsstat();
+            av_init_static_modules();
+            av_init_dynamic_modules();
+            av_init_logstat();
             init_stats();
-            __av_init_cache();
-            __av_init_filecache();
+            av_init_cache();
+            av_init_filecache();
             atexit(destroy);
             inited = 1;
-            __av_log(AVLOG_DEBUG, "INIT successful");
+            av_log(AVLOG_DEBUG, "INIT successful");
         }
         else
-            __av_log(AVLOG_DEBUG, "INIT failed");
+            av_log(AVLOG_DEBUG, "INIT failed");
     }
     AV_UNLOCK(initlock);
 
     return res;
 }
 
-void __av_add_avfs(struct avfs *newavfs)
+void av_add_avfs(struct avfs *newavfs)
 {
     struct avfs_list *li;
 
@@ -215,8 +215,8 @@ void __av_add_avfs(struct avfs *newavfs)
 
 static void set_prevseg(struct parse_state *ps, const char *name)
 {
-    __av_free(ps->prevseg);
-    ps->prevseg = __av_strdup(name);
+    av_free(ps->prevseg);
+    ps->prevseg = av_strdup(name);
 }
 
 static int lookup_virtual(struct parse_state *ps, const char *name)
@@ -242,7 +242,7 @@ static int lookup_virtual(struct parse_state *ps, const char *name)
     else {
         ps->ve = ve->mnt->base;
         ve->mnt->base = NULL;
-        __av_free_ventry(ve);
+        av_free_ventry(ve);
 
         res = lookup_virtual(ps, NULL);
     }
@@ -259,7 +259,7 @@ static struct vmount *new_mount(ventry *base, struct avfs *avfs,
 
     mnt->base = base;
     mnt->avfs = avfs;
-    mnt->opts = __av_strdup(opts);
+    mnt->opts = av_strdup(opts);
     mnt->flags = 0;
 
     return mnt;
@@ -358,7 +358,7 @@ static void get_new_name(struct parse_state *ps, struct ext_info *ext)
         
     ps->prevseg[prevseglen - extlen] = '\0';
     if(ext->to != NULL) 
-        ps->prevseg = __av_stradd(ps->prevseg, ext->to, NULL);
+        ps->prevseg = av_stradd(ps->prevseg, ext->to, NULL);
 }
 
 
@@ -374,7 +374,7 @@ static int lookup_auto_avfs(struct parse_state *ps, const char *opts,
     if(avfs == NULL)
         res = -ENOENT;
     else {
-        __av_ref_obj(avfs);
+        av_ref_obj(avfs);
 
         get_new_name(ps, ext);
         if(find_auto_avfs(ps->prevseg, &ext) == NULL)
@@ -412,7 +412,7 @@ static struct avfs *find_avfs_name(char *name)
     for(li = avfs_list.next; li != &avfs_list; li = li->next)
 	if(li->avfs->name != NULL && 
 	   strcmp(li->avfs->name, name) == 0) {
-            __av_ref_obj(li->avfs);
+            av_ref_obj(li->avfs);
             break;
         }
     AV_UNLOCK(avfs_lock);
@@ -554,7 +554,7 @@ static struct avfs *get_local_avfs()
 
     AV_LOCK(avfs_lock);
     localavfs = avfs_list.next->avfs;
-    __av_ref_obj(localavfs);
+    av_ref_obj(localavfs);
     AV_UNLOCK(avfs_lock);
 
     return localavfs;
@@ -590,16 +590,16 @@ static int follow_link(struct parse_state *ps)
             res = parse_path(&linkps);
     }
     else {
-        __av_free_ventry(ps->ve);
+        av_free_ventry(ps->ve);
 
         AV_NEW(linkps.ve);
         linkps.ve->mnt = new_mount(NULL, get_local_avfs(), NULL);
-        linkps.ve->data = __av_strdup("");
+        linkps.ve->data = av_strdup("");
 
         res = parse_path(&linkps);
     }
     
-    __av_free(buf);
+    av_free(buf);
     ps->ve = linkps.ve;
     
     return res;
@@ -610,7 +610,7 @@ static int parse_path(struct parse_state *ps)
     int res = 0;
     int numseg = 0;
 
-    ps->prevseg = __av_strdup("");
+    ps->prevseg = av_strdup("");
 
     while(ps->path[0]) {
         unsigned int seglen;
@@ -638,19 +638,19 @@ static int parse_path(struct parse_state *ps)
         numseg ++;
         
         if(numseg > 1000) {
-            __av_log(AVLOG_ERROR, "Infinate loop in parse_path");
+            av_log(AVLOG_ERROR, "Infinate loop in parse_path");
             res = -EFAULT;
             break;
         }
     }
 
-    __av_free(ps->prevseg);
+    av_free(ps->prevseg);
 
     return res;
 }
 
 
-int __av_get_ventry(const char *path, int resolvelast, ventry **resp)
+int av_get_ventry(const char *path, int resolvelast, ventry **resp)
 {
     int res;
     struct parse_state ps;
@@ -663,49 +663,49 @@ int __av_get_ventry(const char *path, int resolvelast, ventry **resp)
     if(path == NULL)
         return -ENOENT;
 
-    copypath = __av_strdup(path);
+    copypath = av_strdup(path);
     ps.path = copypath;
     ps.resolvelast = resolvelast;
     ps.linkctr = 10;
 
     AV_NEW(ps.ve);
     ps.ve->mnt = new_mount(NULL, get_local_avfs(), NULL);
-    ps.ve->data = __av_strdup("");
+    ps.ve->data = av_strdup("");
 
     res = parse_path(&ps);
     if(res < 0) {
-        __av_free_ventry(ps.ve);
+        av_free_ventry(ps.ve);
         *resp = NULL;
     }
     else
         *resp = ps.ve;
 
-    __av_free(copypath);
+    av_free(copypath);
 
     return res;
 }
 
-int __av_copy_vmount(struct vmount *mnt, struct vmount **resp)
+int av_copy_vmount(struct vmount *mnt, struct vmount **resp)
 {
     int res;
     ventry *newbase;
     
     if(mnt->base != NULL) {
-        res = __av_copy_ventry(mnt->base, &newbase);
+        res = av_copy_ventry(mnt->base, &newbase);
         if(res < 0)
             return res;
     }
     else
         newbase = NULL;
 
-    __av_ref_obj(mnt->avfs);
+    av_ref_obj(mnt->avfs);
 
     *resp = new_mount(newbase, mnt->avfs, mnt->opts);
     
     return 0;
 }
 
-int __av_copy_ventry(ventry *ve, ventry **resp)
+int av_copy_ventry(ventry *ve, ventry **resp)
 {
     int res;
     ventry *newve;
@@ -713,7 +713,7 @@ int __av_copy_ventry(ventry *ve, ventry **resp)
     void *newdata;
     struct avfs *avfs = ve->mnt->avfs;
 
-    res = __av_copy_vmount(ve->mnt, &newmnt);
+    res = av_copy_vmount(ve->mnt, &newmnt);
     if(res < 0)
 	return res;
 
@@ -737,16 +737,16 @@ int __av_copy_ventry(ventry *ve, ventry **resp)
     return 0;
 }
 
-void __av_free_vmount(struct vmount *mnt)
+void av_free_vmount(struct vmount *mnt)
 {
-    __av_unref_obj(mnt->avfs);
+    av_unref_obj(mnt->avfs);
 
-    __av_free(mnt->opts);
-    __av_free_ventry(mnt->base);
-    __av_free(mnt);
+    av_free(mnt->opts);
+    av_free_ventry(mnt->base);
+    av_free(mnt);
 }
 
-void __av_free_ventry(ventry *ve)
+void av_free_ventry(ventry *ve)
 {
     if(ve != NULL) {
 	struct avfs *avfs = ve->mnt->avfs;
@@ -757,8 +757,8 @@ void __av_free_ventry(ventry *ve)
             AVFS_UNLOCK(avfs);
         }
 
-        __av_free_vmount(ve->mnt);
-        __av_free(ve);
+        av_free_vmount(ve->mnt);
+        av_free(ve);
     }
 }
 
@@ -787,9 +787,9 @@ static char *expand_segment(char *segment)
 {
     char *tmp;
 
-    tmp = (char *) __av_malloc(ipath_len(segment) + 1);
+    tmp = (char *) av_malloc(ipath_len(segment) + 1);
     ipath_copy(tmp, segment);
-    __av_free(segment);
+    av_free(segment);
 
     return tmp;
 }
@@ -808,10 +808,10 @@ static int add_segment(ventry *ve, char **pathp)
             return res;
     }
     else 
-        segment = __av_strdup("");
+        segment = av_strdup("");
 
     if(ve->mnt->base == NULL)
-	*pathp = __av_stradd(*pathp, segment, NULL);
+	*pathp = av_stradd(*pathp, segment, NULL);
     else {
 	char *avfsname = avfs->name;
 	char *opts = ve->mnt->opts;
@@ -825,28 +825,28 @@ static int add_segment(ventry *ve, char **pathp)
 	
         segment = expand_segment(segment);
 	
-	*pathp = __av_stradd(*pathp, avfssep, avfsname, opts, paramsep,
+	*pathp = av_stradd(*pathp, avfssep, avfsname, opts, paramsep,
                              segment, NULL);
     }
-    __av_free(segment);
+    av_free(segment);
 
     return 0;
 }
 
-int __av_generate_path(ventry *ve, char **pathp)
+int av_generate_path(ventry *ve, char **pathp)
 {
     int res;
 
     if(ve == NULL) 
         *pathp = NULL;
     else {
-        res = __av_generate_path(ve->mnt->base, pathp);
+        res = av_generate_path(ve->mnt->base, pathp);
         if(res < 0)
             return res;
 
         res = add_segment(ve, pathp);
         if(res < 0) {
-            __av_free(*pathp);
+            av_free(*pathp);
             return res;
         }
     }

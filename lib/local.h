@@ -8,4 +8,4 @@
 
 #include "avfs.h"
 
-int __av_init_module_local();
+int av_init_module_local();

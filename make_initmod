@@ -13,15 +13,15 @@ echo '#include "mod_static.h"'
 echo
 
 for name in $modnames; do
-  echo "int __av_init_module_${name}(struct vmodule *module);"
+  echo "int av_init_module_${name}(struct vmodule *module);"
 done
 
 echo
-echo "void __av_init_static_modules()"
+echo "void av_init_static_modules()"
 echo "{"
 
 for name in $modnames; do
-  echo "    __av_init_module_${name}(NULL);"
+  echo "    av_init_module_${name}(NULL);"
 done
 
 echo "}"

@@ -2,6 +2,8 @@
 #include "cmd.h"
 #include "send.h"
 #include "internal.h"
+#include "operutil.h"
+#include "oper.h"
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -30,74 +32,11 @@ static struct file_holder *file_holders;
 static unsigned int file_holder_num;
 static AV_LOCK_DECL(file_holder_lock);
 
-static vfile **file_table;
-static unsigned int file_table_size;
-static AV_LOCK_DECL(files_lock);
-
-static AV_LOCK_DECL(readcount_lock);
-static unsigned int readcount;
-static unsigned int readlen;
-static int readfh;
-
 struct cmdinfo {
     int fd;
     struct avfs_in_message inmsg;
     struct avfs_cmd cmd;
 };
-
-static int find_unused()
-{
-    int i;
-    int newsize;
-
-    for(i = 0; i < file_table_size; i++)
-	if(file_table[i] == NULL)
-	    return i;
-
-    newsize = file_table_size + 16;
-    file_table = __av_realloc(file_table, sizeof(*file_table) * newsize);
-    for(i = file_table_size; i < newsize; i++)
-	file_table[i] = NULL;
-    
-    i = file_table_size;
-    file_table_size = newsize;
-    
-    return i;
-}
-
-static void put_file(vfile *vf)
-{
-    AV_UNLOCK(vf->lock);
-
-    __av_unref_obj(vf);
-
-}
-
-static int get_file(int fd, vfile **resp)
-{
-    vfile *vf = NULL;
-
-    AV_LOCK(files_lock);
-    if(fd >= 0 && fd < file_table_size) {
-        vf = file_table[fd];
-        if(vf != NULL)
-            __av_ref_obj(vf);
-    }
-    AV_UNLOCK(files_lock);
-
-    if(vf == NULL)
-        return -EBADF;
-
-    AV_LOCK(vf->lock);
-    if(vf->mnt == NULL) {
-        put_file(vf);
-        return -EBADF;
-    }
-    
-    *resp = vf;
-    
-    return 0;
-}
 
 static void init_inmsg(struct avfs_in_message *inmsg)
 {
@@ -125,65 +64,17 @@ static int entry_local(ventry *ve)
         return 0;
 }
 
-static int file_open(vfile *vf, ventry *ve, int flags, avmode_t mode)
-{
-    int res;
-    struct avfs *avfs = ve->mnt->avfs;
-
-    res = __av_copy_vmount(ve->mnt, &vf->mnt);
-    if(res < 0)
-	return res;
-
-    AVFS_LOCK(avfs);
-    res = avfs->open(ve, flags, mode, &vf->data);
-    AVFS_UNLOCK(avfs);
-    if(res < 0) {
-	__av_free_vmount(vf->mnt);
-        return res;
-    }
-
-    vf->ptr = 0;
-    vf->flags = flags;
-
-    return 0;
-}
-
-static int file_close(vfile *vf)
-{
-    int res;
-    struct avfs *avfs = vf->mnt->avfs;
-
-    AVFS_LOCK(avfs);
-    res = avfs->close(vf);
-    AVFS_UNLOCK(avfs);
-
-    __av_free_vmount(vf->mnt);
-
-    return res;
-}
-
-static int file_getattr(vfile *vf, struct avstat *buf, int attrmask)
-{
-    int res;
-    struct avfs *avfs = vf->mnt->avfs;
-    
-    AVFS_LOCK(avfs);
-    res = avfs->getattr(vf, buf, attrmask);
-    AVFS_UNLOCK(avfs);
-
-    return res;
-}
 
 static int getattr_entry(ventry *ve, struct avstat *stbuf, int attrmask,
                          int flags)
 {
     int res;
     vfile vf;
-
-    res = file_open(&vf, ve, AVO_NOPERM | flags, 0);
+    
+    res = av_file_open(&vf, ve, AVO_NOPERM | flags, 0);
     if(res == 0) {
-        res = file_getattr(&vf, stbuf, attrmask);
-        file_close(&vf);
+        res = av_file_getattr(&vf, stbuf, attrmask);
+        av_file_close(&vf);
     }
 
     return res;
@@ -202,70 +93,7 @@ static void send_error(int fd, int error)
     result.result = error;
     res = __av_write_message(fd, &outmsg);
     if(res == -1)
-        __av_log(AVLOG_ERROR, "Error sending message\n");
-}
-
-static void free_vfile(vfile *vf)
-{
-    AV_FREELOCK(vf->lock);
-}
-
-static int open_entry(ventry *ve, int flags, avmode_t mode)
-{
-    int res;
-    int fd;
-    vfile *vf;
-
-    AV_NEW_OBJ(vf, free_vfile);
-    AV_INITLOCK(vf->lock);
-    res = file_open(vf, ve, flags, mode);
-    if(res < 0) {
-        __av_unref_obj(vf);
-        return res;
-    }
-    else {
-	AV_LOCK(files_lock);
-        fd = find_unused();
-	file_table[fd] = vf;
-	AV_UNLOCK(files_lock);
-    }
-
-    return fd;
-}
-
-static int do_close(int fd)
-{
-    int res;
-    vfile *vf;
-
-    res = get_file(fd, &vf);
-    if(res == 0) {
-        res = file_close(vf);
-        vf->mnt = NULL;
-        put_file(vf);
-
-        AV_LOCK(files_lock);
-        file_table[fd] = NULL;
-        AV_UNLOCK(files_lock);
-
-        __av_unref_obj(vf);
-    }
-
-    return res;
-}
-
-static int do_fstat(int fd, struct avstat *buf)
-{
-    int res;
-    vfile *vf;
-
-    res = get_file(fd, &vf);
-    if(res == 0) {
-        res = file_getattr(vf, buf, AVA_ALL);
-	put_file(vf);
-    }
-
-    return res;
+        av_log(AVLOG_ERROR, "Error sending message\n");
 }
 
 static int do_readdir(int fd, struct avfs_direntry *de, char *name)
@@ -273,121 +101,15 @@ static int do_readdir(int fd, struct avfs_direntry *de, char *name)
     int res;
     struct avdirent buf;
     avoff_t n;
-    vfile *vf;
-
-    res = get_file(fd, &vf);
-    if(res == 0) {
-        struct avfs *avfs = vf->mnt->avfs;
-	n = vf->ptr;
-        AVFS_LOCK(avfs);
-	res = avfs->readdir(vf, &buf);
-        AVFS_UNLOCK(avfs);
-	if(res > 0) {
-            de->ino = buf.ino;
-            de->type = buf.type;
-            de->n = n;
-            strncpy(name, buf.name, NAME_MAX);
-            name[NAME_MAX] = '\0';
-	    __av_free(buf.name);
-	}
-	put_file(vf);
-    }
-
-    return res;
-}
-
-static avoff_t do_lseek(int fd, avoff_t offset, int whence)
-{
-    avoff_t res;
-    vfile *vf;
-
-    res = get_file(fd, &vf);
-    if(res == 0) {
-        if(vf->flags & AVO_DIRECTORY) {
-            switch(whence) {
-            case SEEK_SET:
-                if(offset < 0 || (offset % AVFS_DIR_RECLEN) != 0)
-                    res = -EINVAL;
-                else {
-                    vf->ptr = offset / AVFS_DIR_RECLEN;
-                    res = offset;
-                }
-                break;
-                
-            case SEEK_CUR:
-                if(offset != 0)
-                    res = -EINVAL;
-                else
-                    res = vf->ptr * AVFS_DIR_RECLEN;
-                break;
-                
-            default:
-                res = -EINVAL;
-            }
-        }
-        else {
-            struct avfs *avfs = vf->mnt->avfs;
-
-            AVFS_LOCK(avfs);
-            res = avfs->lseek(vf, offset, whence);
-            AVFS_UNLOCK(avfs);
-        }
-
-	put_file(vf);
-    }
-
-    return res;
-}
-
-static int check_file_access(vfile *vf, int access)
-{
-    if((vf->flags & AVO_DIRECTORY) != 0)
-        return -EBADF;
-
-    access = (access + 1) & AVO_ACCMODE;
-    if(((vf->flags + 1) & access) == 0)
-        return -EBADF;
     
-    return 0;
-}
-
-static ssize_t do_read(int fd, void *buf, size_t nbyte)
-{
-    ssize_t res;
-    vfile *vf;
-
-    res = get_file(fd, &vf);
-    if(res == 0) {
-        res = check_file_access(vf, AVO_RDONLY);
-        if(res == 0) {
-            struct avfs *avfs = vf->mnt->avfs;
-            
-            AVFS_LOCK(avfs);
-            res = avfs->read(vf, buf, nbyte);
-            AVFS_UNLOCK(avfs);
-        }
-        put_file(vf);
-    }
-
-    return res;
-}
-
-static ssize_t do_write(int fd, const void *buf, size_t nbyte)
-{
-    ssize_t res;
-    vfile *vf;
-
-    res = get_file(fd, &vf);
-    if(res == 0) {
-        res = check_file_access(vf, AVO_WRONLY);
-        if(res == 0) {
-            struct avfs *avfs = vf->mnt->avfs;
-            
-            AVFS_LOCK(avfs);
-            res = avfs->write(vf, buf, nbyte);
-            AVFS_UNLOCK(avfs);
-        }
-        put_file(vf);
+    res = av_fd_readdir(fd, &buf, &n);
+    if(res > 0) {
+        de->ino = buf.ino;
+        de->type = buf.type;
+        de->n = n;
+        strncpy(name, buf.name, NAME_MAX);
+        name[NAME_MAX] = '\0';
+        av_free(buf.name);
     }
 
     return res;
@@ -404,7 +126,7 @@ static void process_getattr(struct cmdinfo *ci)
     struct avfs_out_message outmsg;
     struct avfs_result result;
 
-    __av_log(AVLOG_SYSCALL, "getattr(\"%s\", 0%o, 0%o)",
+    av_log(AVLOG_SYSCALL, "getattr(\"%s\", 0%o, 0%o)",
              path, flags, attrmask);
     
     outmsg.num = 3;
@@ -413,7 +135,7 @@ static void process_getattr(struct cmdinfo *ci)
     outmsg.seg[1].len = 0;
     outmsg.seg[2].len = 0;
 
-    res = __av_get_ventry(path, !(flags & AVO_NOFOLLOW), &ve);
+    res = av_get_ventry(path, !(flags & AVO_NOFOLLOW), &ve);
     if(res < 0)
         result.result = res;
     else {
@@ -436,15 +158,15 @@ static void process_getattr(struct cmdinfo *ci)
         }
     }
 
-    __av_log(AVLOG_SYSCALL, "   getattr(\"%s\", 0%o, 0%o) = %i (%s)",
+    av_log(AVLOG_SYSCALL, "   getattr(\"%s\", 0%o, 0%o) = %i (%s)",
              path, flags, attrmask, result.result,
              outmsg.seg[1].len ? (char *) ve->data : "");
 
     res = __av_write_message(ci->fd, &outmsg);
     if(res == -1)
-        __av_log(AVLOG_ERROR, "Error sending message\n");
+        av_log(AVLOG_ERROR, "Error sending message\n");
 
-    __av_free_ventry(ve);    
+    av_free_ventry(ve);    
 }
 
 static void register_holder(int holderfd, int serverfh)
@@ -455,7 +177,7 @@ static void register_holder(int holderfd, int serverfh)
     AV_LOCK(file_holder_lock);
     state = file_holders[holderfd].state;
 
-    __av_log(AVLOG_DEBUG, "register_holder: %i, state: %i/%i, serverfh: %i",
+    av_log(AVLOG_DEBUG, "register_holder: %i, state: %i/%i, serverfh: %i",
              holderfd, state,  file_holders[holderfd].serverfh, serverfh);
     
     if(state == FIH_USED) {
@@ -474,7 +196,7 @@ static void register_holder(int holderfd, int serverfh)
     AV_UNLOCK(file_holder_lock);
 
     if(needclose)
-        do_close(serverfh);
+        av_fd_close(serverfh);
 }
 
 static void process_open(struct cmdinfo *ci)
@@ -487,14 +209,14 @@ static void process_open(struct cmdinfo *ci)
     struct avfs_out_message outmsg;
     struct avfs_result result;
 
-    __av_log(AVLOG_SYSCALL, "open(\"%s\", 0%o, 0%lo)", path, flags, mode);
+    av_log(AVLOG_SYSCALL, "open(\"%s\", 0%o, 0%lo)", path, flags, mode);
     
     outmsg.num = 2;
     outmsg.seg[0].len = sizeof(result);
     outmsg.seg[0].buf = &result;
     outmsg.seg[1].len = 0;
 
-    res = __av_get_ventry(path, 1, &ve);
+    res = av_get_ventry(path, 1, &ve);
     if(res < 0)
         result.result = res;
     else {
@@ -513,17 +235,17 @@ static void process_open(struct cmdinfo *ci)
             res = getattr_entry(ve, &stbuf, AVA_MODE, 0);
             if(res == 0) {
                 if(AV_ISDIR(stbuf.mode))
-                    res = open_entry(ve, flags | AVO_DIRECTORY, mode);
+                    res = av_fd_open_entry(ve, flags | AVO_DIRECTORY, mode);
                 else
-                    res = open_entry(ve, flags, mode);
+                    res = av_fd_open_entry(ve, flags, mode);
             }
             else if(res == -ENOENT && (flags & AVO_CREAT) != 0)
-                res = open_entry(ve, flags, mode);
+                res = av_fd_open_entry(ve, flags, mode);
 
             result.result = res;
         }
     }
-    __av_log(AVLOG_SYSCALL, "   open(\"%s\", 0%o, 0%lo) = %i (%s)",
+    av_log(AVLOG_SYSCALL, "   open(\"%s\", 0%o, 0%lo) = %i (%s)",
              path, flags, mode, result.result,
              outmsg.seg[1].len ? (char *) ve->data : "");
 
@@ -531,9 +253,9 @@ static void process_open(struct cmdinfo *ci)
 
     res = __av_write_message(ci->fd, &outmsg);
     if(res == -1)
-        __av_log(AVLOG_ERROR, "Error sending message\n");
+        av_log(AVLOG_ERROR, "Error sending message\n");
 
-    __av_free_ventry(ve);    
+    av_free_ventry(ve);    
 }
 
 
@@ -544,18 +266,18 @@ static void process_close(struct cmdinfo *ci)
     struct avfs_out_message outmsg;
     struct avfs_result result;
 
-    __av_log(AVLOG_SYSCALL, "close(%i)", fh);
+    av_log(AVLOG_SYSCALL, "close(%i)", fh);
     
     outmsg.num = 1;
     outmsg.seg[0].len = sizeof(result);
     outmsg.seg[0].buf = &result;
 
-    result.result = do_close(fh);
-    __av_log(AVLOG_SYSCALL, "   close(%i) = %i", fh, result.result);
+    result.result = av_fd_close(fh);
+    av_log(AVLOG_SYSCALL, "   close(%i) = %i", fh, result.result);
 
     res = __av_write_message(ci->fd, &outmsg);
     if(res == -1)
-        __av_log(AVLOG_ERROR, "Error sending message\n");
+        av_log(AVLOG_ERROR, "Error sending message\n");
 }
 
 static void process_fstat(struct cmdinfo *ci)
@@ -566,24 +288,24 @@ static void process_fstat(struct cmdinfo *ci)
     struct avfs_result result;
     struct avstat stbuf;
 
-    __av_log(AVLOG_SYSCALL, "fstat(%i)", fh);
+    av_log(AVLOG_SYSCALL, "fstat(%i)", fh);
     
     outmsg.num = 2;
     outmsg.seg[0].len = sizeof(result);
     outmsg.seg[0].buf = &result;
     outmsg.seg[1].len = 0;
 
-    result.result = do_fstat(fh, &stbuf);
+    result.result = av_fd_getattr(fh, &stbuf, AVA_ALL);
     if(result.result == 0) {
         outmsg.seg[1].len = sizeof(stbuf);
         outmsg.seg[1].buf = &stbuf;
     }
 
-    __av_log(AVLOG_SYSCALL, "   fstat(%i) = %i", fh, result.result);
+    av_log(AVLOG_SYSCALL, "   fstat(%i) = %i", fh, result.result);
 
     res = __av_write_message(ci->fd, &outmsg);
     if(res == -1)
-        __av_log(AVLOG_ERROR, "Error sending message\n");
+        av_log(AVLOG_ERROR, "Error sending message\n");
 }
 
 static void process_readdir(struct cmdinfo *ci)
@@ -595,7 +317,7 @@ static void process_readdir(struct cmdinfo *ci)
     char name[NAME_MAX + 1];
     struct avfs_direntry de;
 
-    __av_log(AVLOG_SYSCALL, "readdir(%i, ...)", fh);
+    av_log(AVLOG_SYSCALL, "readdir(%i, ...)", fh);
     
     outmsg.num = 3;
     outmsg.seg[0].len = sizeof(result);
@@ -611,12 +333,12 @@ static void process_readdir(struct cmdinfo *ci)
         outmsg.seg[2].buf = name;
     }
 
-    __av_log(AVLOG_SYSCALL, "   readdir(%i, {%s, %lli, %i}) = %i",
+    av_log(AVLOG_SYSCALL, "   readdir(%i, {%s, %lli, %i}) = %i",
              fh, result.result > 0 ? name : "", de.ino, de.n, result.result);
 
     res = __av_write_message(ci->fd, &outmsg);
     if(res == -1)
-        __av_log(AVLOG_ERROR, "Error sending message\n");
+        av_log(AVLOG_ERROR, "Error sending message\n");
 }
 
 static void process_lseek(struct cmdinfo *ci)
@@ -628,20 +350,20 @@ static void process_lseek(struct cmdinfo *ci)
     struct avfs_out_message outmsg;
     struct avfs_result result;
 
-    __av_log(AVLOG_SYSCALL, "lseek(%i, %lli, %i)", fh, offset, whence);
+    av_log(AVLOG_SYSCALL, "lseek(%i, %lli, %i)", fh, offset, whence);
     
     outmsg.num = 1;
     outmsg.seg[0].len = sizeof(result);
     outmsg.seg[0].buf = &result;
 
-    result.u.lseek.offset = do_lseek(fh, offset, whence);
+    result.u.lseek.offset = av_fd_lseek(fh, offset, whence);
 
-    __av_log(AVLOG_SYSCALL, "   lseek(%i, %lli, %i) == %lli",
+    av_log(AVLOG_SYSCALL, "   lseek(%i, %lli, %i) == %lli",
              fh, offset, whence, result.u.lseek.offset);
 
     res = __av_write_message(ci->fd, &outmsg);
     if(res == -1)
-        __av_log(AVLOG_ERROR, "Error sending message\n");
+        av_log(AVLOG_ERROR, "Error sending message\n");
 }
 
 static void process_read(struct cmdinfo *ci)
@@ -652,48 +374,25 @@ static void process_read(struct cmdinfo *ci)
     struct avfs_out_message outmsg;
     struct avfs_result result;
     void *buf;
-    int fulllog = 0;;
-    
-    AV_LOCK(readcount_lock);
-    if(readcount == 0 || readlen != nbyte || fh != readfh) {
-        if(readcount > 1)
-            __av_log(AVLOG_SYSCALL, "* Repeated %i times", readcount);
-
-        fulllog = 1;
-        readcount = 0;
-        readlen = nbyte;
-        readfh = fh;
-        __av_log(AVLOG_SYSCALL, "read(%i, ..., %i)", fh, nbyte);
-    }
-    else if(readcount == 1) 
-        __av_log(AVLOG_SYSCALL, "* [...]");
-
-    readcount ++;
-    AV_UNLOCK(readcount_lock);
-    
+        
     outmsg.num = 2;
     outmsg.seg[0].len = sizeof(result);
     outmsg.seg[0].buf = &result;
     outmsg.seg[1].len = 0;
     
-    buf = __av_malloc(nbyte);
+    buf = av_malloc(nbyte);
 
-    result.result = do_read(fh, buf, nbyte);
+    result.result = av_fd_read(fh, buf, nbyte);
     if(result.result > 0) {
         outmsg.seg[1].len = result.result;
         outmsg.seg[1].buf = buf;
     }
    
-    if(fulllog) {
-        __av_log(AVLOG_SYSCALL, "   read(%i, ..., %u) = %i",
-                 fh, nbyte, result.result);
-    }
-
     res = __av_write_message(ci->fd, &outmsg);
     if(res == -1)
-        __av_log(AVLOG_ERROR, "Error sending message\n");
+        av_log(AVLOG_ERROR, "Error sending message\n");
 
-    __av_free(buf);
+    av_free(buf);
 }
 
 static void process_write(struct cmdinfo *ci)
@@ -705,21 +404,21 @@ static void process_write(struct cmdinfo *ci)
     struct avfs_result result;
     const void *buf = ci->inmsg.seg[1].buf;
 
-    __av_log(AVLOG_SYSCALL, "write(%i, ..., %u)", fh, nbyte);
+    av_log(AVLOG_SYSCALL, "write(%i, ..., %u)", fh, nbyte);
     
     outmsg.num = 1;
     outmsg.seg[0].len = sizeof(result);
     outmsg.seg[0].buf = &result;
     
-    result.result = do_write(fh, buf, nbyte);
+    result.result = av_fd_write(fh, buf, nbyte);
    
-    __av_log(AVLOG_SYSCALL, "   write(%i, ..., %u) = %i",
+    av_log(AVLOG_SYSCALL, "   write(%i, ..., %u) = %i",
              fh, nbyte, result.result);
 
 
     res = __av_write_message(ci->fd, &outmsg);
     if(res == -1)
-        __av_log(AVLOG_ERROR, "Error sending message\n");
+        av_log(AVLOG_ERROR, "Error sending message\n");
 }
 
 
@@ -732,15 +431,14 @@ static void process_resolve(struct cmdinfo *ci)
     struct avfs_result result;
     char *newpath = NULL;
     
-
-    __av_log(AVLOG_SYSCALL, "resolve(\"%s\")", path);
+    av_log(AVLOG_SYSCALL, "resolve(\"%s\")", path);
     
     outmsg.num = 2;
     outmsg.seg[0].len = sizeof(result);
     outmsg.seg[0].buf = &result;
     outmsg.seg[1].len = 0;
 
-    res = __av_get_ventry(path, 1, &ve);
+    res = av_get_ventry(path, 1, &ve);
     if(res < 0)
         result.result = res;
     else {
@@ -749,7 +447,7 @@ static void process_resolve(struct cmdinfo *ci)
         else
             result.u.resolve.isvirtual = 1;
 
-        res = __av_generate_path(ve, &newpath);
+        res = av_generate_path(ve, &newpath);
         result.result = res;
         if(res == 0) {
             outmsg.seg[1].buf = newpath;
@@ -759,18 +457,18 @@ static void process_resolve(struct cmdinfo *ci)
                 result.result = -ENAMETOOLONG;
             }
         }
-        __av_free_ventry(ve);    
+        av_free_ventry(ve);    
     }
 
-    __av_log(AVLOG_SYSCALL, "   resolve(\"%s\", \"%s\", %i) = %i",
+    av_log(AVLOG_SYSCALL, "   resolve(\"%s\", \"%s\", %i) = %i",
              path, outmsg.seg[1].len ? newpath : "", 
              result.u.resolve.isvirtual, result.result);
 
     res = __av_write_message(ci->fd, &outmsg);
     if(res == -1)
-        __av_log(AVLOG_ERROR, "Error sending message\n");
+        av_log(AVLOG_ERROR, "Error sending message\n");
     
-    __av_free(newpath);
+    av_free(newpath);
 }
 
 static void process_readlink(struct cmdinfo *ci)
@@ -783,7 +481,7 @@ static void process_readlink(struct cmdinfo *ci)
     struct avfs_out_message outmsg;
     struct avfs_result result;
 
-    __av_log(AVLOG_SYSCALL, "readlink(\"%s\", ..., %u)", path, bufsize);
+    av_log(AVLOG_SYSCALL, "readlink(\"%s\", ..., %u)", path, bufsize);
     
     outmsg.num = 3;
     outmsg.seg[0].len = sizeof(result);
@@ -791,7 +489,7 @@ static void process_readlink(struct cmdinfo *ci)
     outmsg.seg[1].len = 0;
     outmsg.seg[2].len = 0;
 
-    res = __av_get_ventry(path, 0, &ve);
+    res = av_get_ventry(path, 0, &ve);
     if(res < 0)
         result.result = res;
     else {
@@ -805,12 +503,7 @@ static void process_readlink(struct cmdinfo *ci)
             }
         }
         else {
-            struct avfs *avfs = ve->mnt->avfs;
-            
-            AVFS_LOCK(avfs);
-            res = avfs->readlink(ve, &buf);
-            AVFS_UNLOCK(avfs);
-            
+            res = av_readlink(ve, &buf);
             if(res == 0) {
                 avsize_t linklen = strlen(buf);
 
@@ -823,7 +516,7 @@ static void process_readlink(struct cmdinfo *ci)
         }
     }
 
-    __av_log(AVLOG_SYSCALL, "   readlink(\"%s\", \"%.*s\", %i) = %i (%s)",
+    av_log(AVLOG_SYSCALL, "   readlink(\"%s\", \"%.*s\", %i) = %i (%s)",
              path, 
              result.result < 0 ? 0 : result.result, buf,
              bufsize, result.result, 
@@ -831,25 +524,16 @@ static void process_readlink(struct cmdinfo *ci)
 
     res = __av_write_message(ci->fd, &outmsg);
     if(res == -1)
-        __av_log(AVLOG_ERROR, "Error sending message\n");
+        av_log(AVLOG_ERROR, "Error sending message\n");
 
-    __av_free_ventry(ve);    
-    __av_free(buf);
+    av_free_ventry(ve);    
+    av_free(buf);
 }
 
 
 static void *process_message(void *arg)
 {
     struct cmdinfo *ci = (struct cmdinfo *) arg;
-
-    AV_LOCK(readcount_lock);
-    if(ci->cmd.type != CMD_READ && readcount != 0) {
-        if(readcount > 1)
-            __av_log(AVLOG_SYSCALL, "* Repeated %i times", readcount);
-        
-        readcount = 0;
-    }
-    AV_UNLOCK(readcount_lock);
     
     switch(ci->cmd.type) {
     case CMD_GETATTR:
@@ -893,14 +577,14 @@ static void *process_message(void *arg)
         break;
         
     default:
-        __av_log(AVLOG_ERROR, "Unknown command: %i", ci->cmd.type);
+        av_log(AVLOG_ERROR, "Unknown command: %i", ci->cmd.type);
         send_error(ci->fd, -ENOSYS);
     }
 
     if(ci->cmd.type != CMD_OPEN)
         close(ci->fd);
     free_inmsg(&ci->inmsg);
-    __av_free(ci);
+    av_free(ci);
 
     return NULL;
 }
@@ -913,7 +597,7 @@ static void mark_file_holder(int holderfd)
         unsigned int newnum = holderfd + 1;
         unsigned int newsize = newnum  * sizeof(struct file_holder);
 
-        file_holders = __av_realloc(file_holders, newsize);
+        file_holders = av_realloc(file_holders, newsize);
         for(i = file_holder_num; i <= holderfd; i++)
             file_holders[i].state = FIH_UNUSED;
 
@@ -921,7 +605,7 @@ static void mark_file_holder(int holderfd)
     }
     
     if(file_holders[holderfd].state != FIH_UNUSED)
-        __av_log(AVLOG_ERROR, "Internal Error: file holder %i already used",
+        av_log(AVLOG_ERROR, "Internal Error: file holder %i already used",
                  holderfd);
 
     file_holders[holderfd].state = FIH_USED;
@@ -944,7 +628,7 @@ static void unmark_file_holder(int serverfh)
         }
     }
     if(i == file_holder_num)
-        __av_log(AVLOG_DEBUG, "File holder not found for %i", serverfh);
+        av_log(AVLOG_DEBUG, "File holder not found for %i", serverfh);
 
     AV_UNLOCK(file_holder_lock);    
 }
@@ -964,7 +648,7 @@ static int wait_message(int sock)
             if(file_holders[i].state == FIH_USED)
                 nfds++;
         }
-        /* This is not __av_malloc(), because exit will usually happen
+        /* This is not av_malloc(), because exit will usually happen
            during poll(), and then there would be one unfreed memory. */
         fds = malloc(sizeof(struct pollfd) * nfds);
         nfds = 1;
@@ -983,7 +667,7 @@ static int wait_message(int sock)
         while(res == -1 && (errno == EAGAIN || errno == EINTR));
 
         if(res == -1) {
-            __av_log(AVLOG_ERROR, "poll(): %s", strerror(errno));
+            av_log(AVLOG_ERROR, "poll(): %s", strerror(errno));
             exit(1);
         }
 
@@ -997,13 +681,13 @@ static int wait_message(int sock)
 
                 {
                     char c;
-                    __av_log(AVLOG_DEBUG, "File holder closed: %i", holderfd);
-                    __av_log(AVLOG_DEBUG, "serverfh: %i", serverfh);
-                    __av_log(AVLOG_DEBUG, "state: %i",
+                    av_log(AVLOG_DEBUG, "File holder closed: %i", holderfd);
+                    av_log(AVLOG_DEBUG, "serverfh: %i", serverfh);
+                    av_log(AVLOG_DEBUG, "state: %i",
                              file_holders[holderfd].state);
-                    __av_log(AVLOG_DEBUG, "revents: 0%o", fds[i].revents);
+                    av_log(AVLOG_DEBUG, "revents: 0%o", fds[i].revents);
                     res = read(holderfd, &c, 1);
-                    __av_log(AVLOG_DEBUG, "read: %i, (%i)", res, c);
+                    av_log(AVLOG_DEBUG, "read: %i, (%i)", res, c);
                 }
                 
                 if(file_holders[holderfd].state == FIH_USED) {
@@ -1019,10 +703,10 @@ static int wait_message(int sock)
 
                 AV_UNLOCK(file_holder_lock);
 
-                __av_log(AVLOG_DEBUG, "File holder for %i closed", serverfh);
+                av_log(AVLOG_DEBUG, "File holder for %i closed", serverfh);
                                 
                 if(serverfh != -1)
-                    do_close(serverfh);
+                    av_fd_close(serverfh);
             }
         }
 
@@ -1035,7 +719,7 @@ static int wait_message(int sock)
 
             fd = accept(sock, NULL, NULL);
             if(fd == -1) {
-                __av_log(AVLOG_ERROR, "accept(): %s", strerror(errno));
+                av_log(AVLOG_ERROR, "accept(): %s", strerror(errno));
                 exit(1);
             }
 
@@ -1071,7 +755,7 @@ int main()
 
         res = __av_read_message(fd, &ci->inmsg);
         if(res == -1)
-            __av_log(AVLOG_ERROR, "Error reading message");
+            av_log(AVLOG_ERROR, "Error reading message");
         else {
             ci->fd = fd;
 
@@ -1083,7 +767,7 @@ int main()
 #if MULTITHREADED
             res = pthread_create(&thrid, &attr, process_message, ci);
             if(res != 0) 
-                __av_log(AVLOG_ERROR, "Error creating thread: %i",
+                av_log(AVLOG_ERROR, "Error creating thread: %i",
                          res);
 #else
             process_message(ci);
@@ -1094,29 +778,3 @@ int main()
     return 0;
 }
 
-void __av_close_all_files()
-{
-    int fd;
-    vfile *vf;
-
-    __av_log(AVLOG_DEBUG, "Server exiting");
-    
-    AV_LOCK(files_lock);
-    for(fd = 0; fd < file_table_size; fd++) {
-        vf = file_table[fd];
-        if(vf != NULL) {
-            __av_log(AVLOG_WARNING, "File handle still in use: %i", fd);
-            file_close(vf);
-            vf->mnt = NULL;
-            __av_unref_obj(vf);
-        }
-    }
-    __av_free(file_table);
-    file_table = NULL;
-    AV_UNLOCK(files_lock);
-    
-    AV_LOCK(file_holder_lock);
-    __av_free(file_holders);
-    file_holders = NULL;
-    AV_UNLOCK(file_holder_lock);
-}

@@ -24,7 +24,7 @@ struct namespace {
     struct entry *root;
 };
 
-struct namespace *__av_namespace_new()
+struct namespace *av_namespace_new()
 {
     struct namespace *ns;
 
@@ -43,8 +43,8 @@ static void free_entry(struct entry *ent)
         ent->next->prevp = ent->prevp;
     AV_UNLOCK(namespace_lock);
 
-    __av_free(ent->name);
-    __av_unref_obj(ent->parent);
+    av_free(ent->name);
+    av_unref_obj(ent->parent);
 }
 
 static struct entry *lookup_name(struct entry **basep, struct entry *prev,
@@ -56,27 +56,27 @@ static struct entry *lookup_name(struct entry **basep, struct entry *prev,
     for(entp = basep; *entp != NULL; entp = &(*entp)->next)
 	if(strncmp(name, (*entp)->name, namelen) == 0) {
 	    ent = *entp;
-	    __av_ref_obj(ent);
+	    av_ref_obj(ent);
             break;
         }
     
     if(ent == NULL) {
         AV_NEW_OBJ(ent, free_entry);
         
-        ent->name = __av_strndup(name, namelen);
+        ent->name = av_strndup(name, namelen);
         ent->subdir = NULL;
         ent->next = NULL;
         ent->prevp = entp;
         ent->parent = prev;
         
         *entp = ent;
-        __av_ref_obj(ent->parent);
+        av_ref_obj(ent->parent);
     }
 
     return ent;
 }
 
-struct entry *__av_namespace_lookup(struct namespace *ns, struct entry *prev,
+struct entry *av_namespace_lookup(struct namespace *ns, struct entry *prev,
                                     const char *name)
 {
     struct entry **basep;
@@ -85,7 +85,7 @@ struct entry *__av_namespace_lookup(struct namespace *ns, struct entry *prev,
     AV_LOCK(namespace_lock);
     if(name == NULL) {
         ent = prev->parent;
-        __av_ref_obj(ent);
+        av_ref_obj(ent);
     }
     else {
         if(prev == NULL)
@@ -100,7 +100,22 @@ struct entry *__av_namespace_lookup(struct namespace *ns, struct entry *prev,
     return ent;
 }
 
-struct entry *__av_namespace_resolve(struct namespace *ns, const char *path)
+struct entry *av_namespace_lookup_all(struct namespace *ns, struct entry *prev,
+                                      const char *name)
+{
+    if(name != NULL) {
+        if(strcmp(name, ".") == 0) {
+            av_ref_obj(prev);
+            return prev;
+        }
+        if(strcmp(name, "..") == 0)
+            name = NULL;
+    }
+    
+    return av_namespace_lookup(ns, prev, name);
+}
+
+struct entry *av_namespace_resolve(struct namespace *ns, const char *path)
 {
     struct entry **basep;
     struct entry *ent;
@@ -114,7 +129,7 @@ struct entry *__av_namespace_resolve(struct namespace *ns, const char *path)
 
         for(s = path; *s && *s != '/'; s++);
         next = lookup_name(basep, ent, path, s - path);
-        __av_unref_obj(ent);
+        av_unref_obj(ent);
         ent = next;
         basep = &ent->subdir;
         for(path = s; *path == '/'; path++);
@@ -129,14 +144,14 @@ static char *getpath(struct entry *ent)
     char *path;
     
     if(ent->parent == NULL)
-        return __av_strdup(ent->name);
+        return av_strdup(ent->name);
     
     path = getpath(ent->parent);
 
-    return __av_stradd(path, "/", ent->name, NULL);
+    return av_stradd(path, "/", ent->name, NULL);
 }
 
-char *__av_namespace_getpath(struct entry *ent)
+char *av_namespace_getpath(struct entry *ent)
 {
     char *path;
 
@@ -147,14 +162,14 @@ char *__av_namespace_getpath(struct entry *ent)
     return path;
 }
 
-void __av_namespace_set(struct entry *ent, void *data)
+void av_namespace_set(struct entry *ent, void *data)
 {
     AV_LOCK(namespace_lock);
     ent->data = data;
     AV_UNLOCK(namespace_lock);
 }
 
-void *__av_namespace_get(struct entry *ent)
+void *av_namespace_get(struct entry *ent)
 {
     void *data;
     
@@ -165,24 +180,24 @@ void *__av_namespace_get(struct entry *ent)
     return data;
 }
 
-char *__av_namespace_name(struct entry *ent)
+char *av_namespace_name(struct entry *ent)
 {
-    return __av_strdup(ent->name);
+    return av_strdup(ent->name);
 }
 
-struct entry *__av_namespace_next(struct entry *ent)
+struct entry *av_namespace_next(struct entry *ent)
 {
     struct entry *rent;
 
     AV_LOCK(namespace_lock);
     rent = ent->next;
-    __av_ref_obj(rent);
+    av_ref_obj(rent);
     AV_UNLOCK(namespace_lock);
 
     return rent;
 }
 
-struct entry *__av_namespace_subdir(struct namespace *ns, struct entry *ent)
+struct entry *av_namespace_subdir(struct namespace *ns, struct entry *ent)
 {
     struct entry *rent;
 
@@ -191,7 +206,7 @@ struct entry *__av_namespace_subdir(struct namespace *ns, struct entry *ent)
         rent = ns->root;
     else
         rent = ent->subdir;
-    __av_ref_obj(rent);
+    av_ref_obj(rent);
     AV_UNLOCK(namespace_lock);
 
     return rent;

@@ -41,17 +41,17 @@ struct lscache {
 
 static void free_lscache(struct lscache *cache)
 {
-    __av_unref_obj(cache->ugid);
+    av_unref_obj(cache->ugid);
 }
 
-struct lscache *__av_new_lscache()
+struct lscache *av_new_lscache()
 {
     struct lscache *cache;
 
     AV_NEW_OBJ(cache, free_lscache);
 
-    cache->ugid = __av_new_ugidcache();
-    __av_localtime(time(NULL), &cache->currtim);
+    cache->ugid = av_new_ugidcache();
+    av_localtime(time(NULL), &cache->currtim);
 
     return cache;
 }
@@ -343,13 +343,13 @@ static avtime_t parse_filedate(struct columns *col, struct avtm *currtim)
         currtim->mon < 6 && currtim->mon < tim.mon && 
         tim.mon - currtim->mon >= 6) tim.year--;
   
-    t = __av_mktime(&tim);
+    t = av_mktime(&tim);
     if(t < 0) t = 0;
 
     return t;
 }
 
-int __av_parse_ls(struct lscache *cache, const char *line,
+int av_parse_ls(struct lscache *cache, const char *line,
                   struct avstat *stbuf, char **filename, char **linkname)
 {
     struct columns colstruct;
@@ -391,7 +391,7 @@ int __av_parse_ls(struct lscache *cache, const char *line,
             line++;
     }
 
-    p_copy = __av_strdup(line);
+    p_copy = av_strdup(line);
 
     split_text (p_copy, col);
 
@@ -401,7 +401,7 @@ int __av_parse_ls(struct lscache *cache, const char *line,
         goto error;
   
     if (!is_num (col))
-        stbuf->uid = __av_finduid (cache->ugid, CURR_COL(col), -1);
+        stbuf->uid = av_finduid (cache->ugid, CURR_COL(col), -1);
     else
         stbuf->uid = (uid_t) atol (CURR_COL(col));
   
@@ -427,7 +427,7 @@ int __av_parse_ls(struct lscache *cache, const char *line,
         if (is_num (col))
             stbuf->gid = (gid_t) atol (INC_COL(col));
         else
-            stbuf->gid = __av_findgid (cache->ugid, INC_COL(col), -1);
+            stbuf->gid = av_findgid (cache->ugid, INC_COL(col), -1);
     }
   
     /* This is device */
@@ -440,7 +440,7 @@ int __av_parse_ls(struct lscache *cache, const char *line,
         if (!is_num (col) || sscanf(INC_COL(col), " %d", &min) != 1)
             goto error;
 	
-        stbuf->rdev = __av_mkdev(maj, min);
+        stbuf->rdev = av_mkdev(maj, min);
         stbuf->size = 0;
     
     } else {
@@ -486,12 +486,12 @@ int __av_parse_ls(struct lscache *cache, const char *line,
         char *s;
   
         len = col->cptr[lnkidx] - col->cptr[col->idx] - 1;
-        s = __av_malloc(len + 1);
+        s = av_malloc(len + 1);
         strncpy(s, line + col->cptr[col->idx], len);
         s[len] = '\0';
         *filename = s;
     
-        s = __av_strdup (line + col->cptr[lnkidx + 1]);
+        s = av_strdup (line + col->cptr[lnkidx + 1]);
         p = strlen (s);
         if (s [p-1] == '\r' || s [p-1] == '\n')
             s [p-1] = 0;
@@ -504,7 +504,7 @@ int __av_parse_ls(struct lscache *cache, const char *line,
         int p;
         char *s;
     
-        s = __av_strdup (line + col->cptr[col->idx]);
+        s = av_strdup (line + col->cptr[col->idx]);
         p = strlen (s);
     
         if (s [p-1] == '\r' || s [p-1] == '\n')
@@ -514,12 +514,12 @@ int __av_parse_ls(struct lscache *cache, const char *line,
     
         *filename = s;
     }
-    __av_free (p_copy);
+    av_free (p_copy);
     return 1;
   
   error:
-    __av_free(p_copy);
-    __av_log(AVLOG_WARNING, "Could not parse %s", lineorig);
+    av_free(p_copy);
+    av_log(AVLOG_WARNING, "Could not parse %s", lineorig);
 
     return 0;
 }

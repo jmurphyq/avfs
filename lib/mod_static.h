@@ -8,4 +8,4 @@
 
 #include "avfs.h"
 
-void __av_init_static_modules();
+void av_init_static_modules();

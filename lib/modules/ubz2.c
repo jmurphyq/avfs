@@ -5,30 +5,33 @@
     This file can be distributed either under the GNU LGPL, or under
     the GNU GPL. See the file COPYING.LIB and COPYING. 
 
-    BUNZIP2 module
+    UBZ2 module
 */
-#if 0
-#include "vdev.h"
+
 #include "filter.h"
 
-extern int __av_init_module_ubz2(ave *v);
+extern int av_init_module_ubz2(struct vmodule *module);
 
-int __av_init_module_ubz2(ave *v)
+int av_init_module_ubz2(struct vmodule *module)
 {
-    struct ext_info bunzip2_exts[5];
-    const char *bunzip2_args[3];
+    struct avfs *avfs;
+    struct ext_info ubz2_exts[5];
+    const char *ubz2_args[3];
+    const char *bz2_args[2];
 
-    INIT_EXT(bunzip2_exts[0], ".bz2", AVNULL);
-    INIT_EXT(bunzip2_exts[1], ".bz", AVNULL);
-    INIT_EXT(bunzip2_exts[2], ".tbz2", ".tar");
-    INIT_EXT(bunzip2_exts[3], ".tbz", ".tar");
-    INIT_EXT(bunzip2_exts[4], AVNULL, AVNULL);
+    ubz2_exts[0].from = ".bz2",  ubz2_exts[0].to = NULL;
+    ubz2_exts[1].from = ".bz",   ubz2_exts[1].to = NULL;
+    ubz2_exts[2].from = ".tbz2", ubz2_exts[2].to = ".tar";
+    ubz2_exts[3].from = ".tbz",  ubz2_exts[3].to = ".tar";
+    ubz2_exts[4].from = NULL;
+  
+    ubz2_args[0] = "bzip2";
+    ubz2_args[1] = "-d";
+    ubz2_args[2] = NULL;
 
-    bunzip2_args[0] = "bzip2";
-    bunzip2_args[1] = "-d";
-    bunzip2_args[2] = AVNULL;
+    bz2_args[0] = "bzip2";
+    bz2_args[1] = NULL;
 
-    return __av_init_filt(v, "ubz2", bunzip2_args, bunzip2_exts, AV_VER);
+    return av_init_filt(module, "ubz2", ubz2_args, bz2_args, ubz2_exts,
+                          &avfs);
 }
-
-#endif

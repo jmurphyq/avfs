@@ -6,4 +6,4 @@
     the GNU GPL. See the file COPYING.LIB and COPYING. 
 */
 
-int __av_sock_connect(const char *name, int defaultport);
+int av_sock_connect(const char *name, int defaultport);

@@ -174,7 +174,8 @@ BZ_EXTERN int BZ_API(BZ2_bzDecompressEnd) (
 BZ_EXTERN void BZ_API(BZ2_bzSetBlockEndHandler) (
       bz_stream *strm,
       void (*func) (void *data, bz_stream *strm, unsigned int bitsrem,
-                    unsigned int crc, unsigned int blocksize),
+                    unsigned int bits, unsigned int crc,
+                    unsigned int blocksize),
       void *data
    );
 

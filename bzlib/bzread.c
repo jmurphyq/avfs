@@ -34,7 +34,8 @@ struct bzindex {
     avoff_t offset;          /* The number of output bytes */
     avoff_t inbits;          /* The number of input bits */
     avuint crc;              /* The cumulative CRC up to this point */
-    avuint blocksize;        /* the blocksize in 100k (1 .. 9) */
+    avbyte blocksize;        /* the blocksize in 100k (1 .. 9) */
+    avbyte startbits;        /* the bits at the start of the block */
 };
 
 struct bzcache {
@@ -151,16 +152,13 @@ static int bzfile_seek_index(struct bzfile *fil, struct bzindex *zi)
     if(res < 0)
         return res;
 
-    total_in = zi->inbits >> 8;
-    bitsrem = 8 - (zi->inbits & 0x7);
-    res = av_pread(fil->infile, fil->inbuf + 3, INBUFSIZE - 3, total_in);
-    if(res < 0)
-        return res;
+    total_in = (zi->inbits + 7) >> 3;
+    bitsrem = (total_in << 3) - zi->inbits;
+    total_in -= 4;
     
     fil->s->next_in = fil->inbuf;
-    fil->s->avail_in = res + 3;
+    fil->s->avail_in = 4;
 
-    total_in -= 3;
     fil->s->total_in_lo32 = total_in & 0xFFFFFFFF;
     fil->s->total_in_hi32 = (total_in >> 32) & 0xFFFFFFFF;
     fil->s->total_out_lo32 = zi->offset & 0xFFFFFFFF;
@@ -168,7 +166,7 @@ static int bzfile_seek_index(struct bzfile *fil, struct bzindex *zi)
     
     val = ('B' << 24) + ('Z' << 16) + ('h' << 8) + (zi->blocksize + '0');
     val <<= bitsrem;
-    val |= fil->inbuf[3] & ((1 << bitsrem) - 1);
+    val += zi->startbits;
 
     fil->inbuf[0] = (val >> 24) & 0xFF;
     fil->inbuf[1] = (val >> 16) & 0xFF;
@@ -176,7 +174,7 @@ static int bzfile_seek_index(struct bzfile *fil, struct bzindex *zi)
     fil->inbuf[3] = val & 0xFF;
 
     av_log(AVLOG_DEBUG, "BZREAD: restore: %lli %lli/%i %08x %i",
-           bz_total_out(fil->s), bz_total_in(fil->s), bitsrem ,
+           bz_total_out(fil->s), bz_total_in(fil->s), bitsrem,
            zi->crc, zi->blocksize);
         
     BZ2_bzRestoreBlockEnd(fil->s, bitsrem, zi->crc);
@@ -213,14 +211,14 @@ static int bzfile_fill_inbuf(struct bzfile *fil)
     return 0;
 }
 
-static void bz_block_end(void *data, bz_stream *s, unsigned int bitsrem,
-                         unsigned int crc, unsigned int blocksize)
+static void bzfile_save_state(struct bzcache *zc, bz_stream *s,
+                              unsigned int bitsrem, unsigned int bits,
+                              unsigned int crc, unsigned int blocksize)
 {
-    struct bzcache *zc = (struct bzcache *) data;
     struct bzindex *zi;
     avoff_t offset = bz_total_out(s);
     int i;
-
+    
     for(i = 0; i < zc->numindex; i++) {
         if(zc->indexes[i].offset >= offset)
             return;
@@ -232,12 +230,25 @@ static void bz_block_end(void *data, bz_stream *s, unsigned int bitsrem,
     
     zi = &zc->indexes[i];
     zi->offset = offset;
-    zi->inbits = (bz_total_in(s) << 8) - bitsrem;
+    zi->inbits = (bz_total_in(s) << 3) - bitsrem;
+    zi->startbits = bits & ((1 << bitsrem) - 1);
     zi->crc = crc;
     zi->blocksize = blocksize;
 
     av_log(AVLOG_DEBUG, "BZREAD: new block end: %lli %lli/%i %08x %i",
-           zi->offset, bz_total_in(s), bitsrem , zi->crc, zi->blocksize);
+           zi->offset, bz_total_in(s), bitsrem, zi->crc, zi->blocksize);
+
+}
+
+static void bz_block_end(void *data, bz_stream *s, unsigned int bitsrem,
+                         unsigned int bits, unsigned int crc,
+                         unsigned int blocksize)
+{
+    struct bzcache *zc = (struct bzcache *) data;
+
+    AV_LOCK(bzread_lock);
+    bzfile_save_state(zc, s, bitsrem, bits, crc, blocksize);
+    AV_UNLOCK(bzread_lock);
 }
 
 static int bzfile_decompress(struct bzfile *fil, struct bzcache *zc)

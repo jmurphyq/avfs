@@ -445,7 +445,7 @@ typedef
 
       /* block end handler */
       void (*blockEndHandler) (void *, bz_stream *, unsigned int, unsigned int,
-                               unsigned int);
+                               unsigned int, unsigned int);
       void *   blockEndHandlerData;
 
       /* save area for scalars in the main decompress code */

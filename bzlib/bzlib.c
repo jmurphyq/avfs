@@ -557,7 +557,8 @@ void BZ_API(BZ2_bzSetBlockEndHandler)
     (
         bz_stream *strm,
         void (*func) (void *data, bz_stream *strm, unsigned int bitsrem,
-                      unsigned int crc, unsigned int blocksize),
+                      unsigned int bits, unsigned int crc,
+                      unsigned int blocksize),
         void *data
         )
 {
@@ -576,7 +577,7 @@ void BZ_API(BZ2_bzRestoreBlockEnd)
 {
     DState* s;
 
-    AssertH((bitsrem > 0 && bitsrem <= 8), 2828);
+    AssertH((bitsrem >= 0 && bitsrem < 8), 2828);
     s = strm->state;
     s->bsBuff = 'B' >> (8 - bitsrem);
     s->bsLive = bitsrem;
@@ -869,7 +870,8 @@ int BZ_API(BZ2_bzDecompress) ( bz_stream *strm )
             s->calculatedCombinedCRC ^= s->calculatedBlockCRC;
             if(s->blockEndHandler != NULL)
                 s->blockEndHandler(s->blockEndHandlerData, strm, s->bsLive,
-                                   s->calculatedCombinedCRC, s->blockSize100k);
+                                   s->bsBuff, s->calculatedCombinedCRC,
+                                   s->blockSize100k);
             s->state = BZ_X_BLKHDR_1;
          } else {
             return BZ_OK;

@@ -39,7 +39,8 @@ avfs_preload_objs = \
 	send.o    \
 	file.o    \
 	open.o    \
-	stat.o
+	stat.o    \
+	misc.o
 
 avfs_preload.so: $(avfs_preload_objs)
 	$(CC) -shared -o avfs_preload.so $(avfs_preload_objs) -lsocket

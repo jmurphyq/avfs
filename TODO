@@ -10,7 +10,6 @@ Flush file caches
 
 uzip - symlinks
 ucpio - builtin
-convert # to ## in directory listings
 option for uzip, not to convert filenames to lowercase
 
 automatic handler detection based on extension AND content

@@ -1,3 +1,7 @@
+2004-03-07  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Don't lowercase zipfiles with MSDOS filetype
+	
 2004-01-09  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Configure target selection fix

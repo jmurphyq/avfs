@@ -276,7 +276,6 @@ static void insert_zipentry(struct archive *arch, char *path,
 
     /* FIXME: option for uzip, not to convert filenames to lowercase */
     switch((cent->version & 0xFF00) >> 8) {
-    case OS_MSDOS:
     case OS_CPM:
     case OS_VM_CMS:
     case OS_MVS:
@@ -286,6 +285,8 @@ static void insert_zipentry(struct archive *arch, char *path,
 	conv_tolower(path);
 
 	/* fall through */
+    case OS_MSDOS: /* some shitty windows zipper produces zipfiles in this
+                      type */
     case OS_NT:
     case OS_WIN95:
  

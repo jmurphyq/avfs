@@ -28,6 +28,7 @@ core_objs = \
 	virtual.o    \
 	modload.o    \
 	remote.o     \
+	archive.o    \
 	namespace.o  \
 	state.o      \
 	serialfile.o \

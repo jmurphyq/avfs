@@ -177,6 +177,8 @@ typedef struct {
 #define AV_TIME_LESS(t1, t2) ((t1).sec < (t2).sec || \
                               ((t1).sec == (t2).sec && (t1).nsec < (t2).nsec))
 
+#define AV_TIME_EQ(t1, t2) ((t1).sec == (t2).sec && (t1).nsec == (t2).nsec)
+
 #define AV_BLOCKS(x) AV_DIV(x, 512)
 
 #define AV_MAXTIME (~(1L << (sizeof(avtime_t) * 8 - 1)))

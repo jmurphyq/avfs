@@ -143,8 +143,8 @@ void av_log(int type, const char *format, ...)
     vsnprintf(buf, LOGMSG_SIZE, format, ap);
 #else
     strncpy(buf, format, LOGMSG_SIZE);
-    buf[LOGMSG_SIZE] = '\0';
 #endif  
+    buf[LOGMSG_SIZE] = '\0';
     va_end(ap);
 
     if((type & AVLOG_ERROR) != 0)

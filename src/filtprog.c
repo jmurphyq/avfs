@@ -313,7 +313,7 @@ static int filtprog_startput(void *data, void **resp)
     struct filtprog *fp = (struct filtprog *) data;
     struct filtconn *fc;
 
-    res = av_truncate(fp->vf, 0);
+    res = av_ftruncate(fp->vf, 0);
     if(res < 0)
         return res;
 

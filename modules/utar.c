@@ -383,7 +383,7 @@ static void decode_header (union block *header, struct avstat *stat_info,
 	case CHRTYPE:
             stat_info->rdev = 
                 av_mkdev (from_oct (8, header->header.devmajor),
-                            from_oct (8, header->header.devminor));
+                          from_oct (8, header->header.devminor));
             break;
 
 	default:

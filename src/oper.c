@@ -241,23 +241,23 @@ int av_close(vfile *vf)
     return res;
 }
 
-avssize_t av_pread(vfile *vf, char *buf, avsize_t nbyte, avoff_t offset)
-{
-    avssize_t res;
-
-    AV_LOCK(vf->lock);
-    res = av_file_pread(vf, buf, nbyte, offset);
-    AV_UNLOCK(vf->lock);
-
-    return res;
-}
-
 avssize_t av_read(vfile *vf, char *buf, avsize_t nbyte)
 {
     avssize_t res;
 
     AV_LOCK(vf->lock);
     res = av_file_read(vf, buf, nbyte);
+    AV_UNLOCK(vf->lock);
+
+    return res;
+}
+
+avssize_t av_pread(vfile *vf, char *buf, avsize_t nbyte, avoff_t offset)
+{
+    avssize_t res;
+
+    AV_LOCK(vf->lock);
+    res = av_file_pread(vf, buf, nbyte, offset);
     AV_UNLOCK(vf->lock);
 
     return res;
@@ -297,7 +297,7 @@ avoff_t av_lseek(vfile *vf, avoff_t offset, int whence)
     return res;
 }
 
-int av_truncate(vfile *vf, avoff_t length)
+int av_ftruncate(vfile *vf, avoff_t length)
 {
     int res;
 
@@ -308,7 +308,7 @@ int av_truncate(vfile *vf, avoff_t length)
     return res;
 }
 
-int av_getattr(vfile *vf, struct avstat *buf, int attrmask)
+int av_fgetattr(vfile *vf, struct avstat *buf, int attrmask)
 {
     int res;
     
@@ -319,13 +319,27 @@ int av_getattr(vfile *vf, struct avstat *buf, int attrmask)
     return res;
 }
 
-int av_setattr(vfile *vf, struct avstat *buf, int attrmask)
+int av_fsetattr(vfile *vf, struct avstat *buf, int attrmask)
 {
     int res;
 
     AV_LOCK(vf->lock);
     res = av_file_setattr(vf, buf, attrmask);
     AV_UNLOCK(vf->lock);
+
+    return res;
+}
+
+int av_getattr(ventry *ve, struct avstat *buf, int attrmask, int flags)
+{
+    int res;
+    vfile vf;
+
+    res = av_file_open(&vf, ve, AVO_NOPERM | flags, 0);
+    if(res == 0) {
+        res = av_file_getattr(&vf, buf, attrmask);
+        av_file_close(&vf);
+    }
 
     return res;
 }

@@ -193,7 +193,7 @@ static int filt_getfile(struct filtfile *ff, ventry *ve, vfile *vf,
     struct avstat buf;
     int attrmask = AVA_INO | AVA_DEV | AVA_SIZE | AVA_MTIME;
 
-    res = av_getattr(vf, &buf, attrmask);
+    res = av_fgetattr(vf, &buf, attrmask);
     if(res < 0)
         return res;
 
@@ -408,7 +408,7 @@ static void filt_afterflush(vfile *vf, struct filtnode *nod)
     avoff_t size = -1;
     vfile *bvf;
 
-    res = av_getattr(nod->vf, &stbuf, AVA_SIZE);
+    res = av_fgetattr(nod->vf, &stbuf, AVA_SIZE);
     if(res == 0)
         size = stbuf.size;
 
@@ -420,7 +420,7 @@ static void filt_afterflush(vfile *vf, struct filtnode *nod)
     if(res < 0)
         return;
 
-    res = av_getattr(bvf, &stbuf, attrmask);
+    res = av_fgetattr(bvf, &stbuf, attrmask);
     if(res == 0 && filt_same_file(&nod->id, &stbuf) && stbuf.size == size)
         filt_mod_set(&nod->mod, &stbuf);
         
@@ -467,7 +467,7 @@ static int filt_getattr(vfile *vf, struct avstat *buf, int attrmask)
 
     AV_LOCK(nod->lock);
     ino = nod->ino;
-    res = av_getattr(nod->vf, &origbuf, AVA_ALL & ~AVA_SIZE);
+    res = av_fgetattr(nod->vf, &origbuf, AVA_ALL & ~AVA_SIZE);
     if(res == 0) { 
         size = av_sfile_size(nod->sf);
         if(size < 0)
@@ -501,7 +501,7 @@ static int filt_setattr(vfile *vf, struct avstat *buf, int attrmask)
     struct filtnode *nod = ff->nod;
 
     AV_LOCK(nod->lock);
-    res = av_setattr(nod->vf, buf, attrmask);
+    res = av_fsetattr(nod->vf, buf, attrmask);
     AV_UNLOCK(nod->lock);
 
     return res;    
@@ -532,8 +532,8 @@ static void filt_destroy(struct avfs *avfs)
 }
 
 int av_init_filt(struct vmodule *module, const char *name,
-                   const char *prog[], const char *revprog[],
-                   struct ext_info *exts, struct avfs **resp)
+                 const char *prog[], const char *revprog[],
+                 struct ext_info *exts, struct avfs **resp)
 {
     int res;
     struct avfs *avfs;

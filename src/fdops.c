@@ -37,9 +37,7 @@ static int find_unused()
 static void put_file(vfile *vf)
 {
     AV_UNLOCK(vf->lock);
-
     av_unref_obj(vf);
-
 }
 
 static int get_file(int fd, vfile **resp)

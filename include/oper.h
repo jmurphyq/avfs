@@ -15,9 +15,10 @@ avssize_t  av_pread(vfile *vf, char *buf, avsize_t nbyte,  avoff_t offset);
 avssize_t  av_pwrite(vfile *vf, const char *buf, avsize_t nbyte,
                        avoff_t offset);
 avoff_t    av_lseek(vfile *vf, avoff_t offset, int whence);
-int        av_truncate(vfile *vf, avoff_t length);
-int        av_getattr(vfile *vf, struct avstat *buf, int attrmask);
-int        av_setattr(vfile *vf, struct avstat *buf, int attrmask);
+int        av_ftruncate(vfile *vf, avoff_t length);
+int        av_getattr(ventry *ve, struct avstat *buf, int attrmask, int flags);
+int        av_fgetattr(vfile *vf, struct avstat *buf, int attrmask);
+int        av_fsetattr(vfile *vf, struct avstat *buf, int attrmask);
 int        av_access(ventry *ve, int amode);
 int        av_readlink(ventry *ve, char **bufp);
 int        av_unlink(ventry *ve);

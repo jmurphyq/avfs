@@ -7,7 +7,7 @@
 
     GUNZIP module
 */
-
+#if 0
 #include "zfilt.h"
 #include "cache.h"
 #include "zipconst.h"
@@ -566,3 +566,4 @@ int __av_init_module_ugz(ave *v)
 
     return __av_add_vdev(v, vdev);
 }
+#endif

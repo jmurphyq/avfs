@@ -23,7 +23,8 @@ struct sfile {
     char *localfile;
     avoff_t numbytes;
     int fd;
-    enum { SF_BEGIN, SF_READ, SF_IDLE } state;
+    int dirty;
+    enum { SF_BEGIN, SF_READ, SF_FINI } state;
 };
 
 static void sfile_init(struct sfile *fil)
@@ -33,6 +34,7 @@ static void sfile_init(struct sfile *fil)
     fil->numbytes = 0;
     fil->fd = -1;
     fil->state = SF_BEGIN;
+    fil->dirty = 0;
 }
 
 static void sfile_end(struct sfile *fil)
@@ -83,7 +85,7 @@ static int sfile_open_localfile(struct sfile *fil)
     if(res < 0)
         return res;
     
-    openfl = O_RDWR | O_CREAT | O_TRUNC | O_APPEND;
+    openfl = O_RDWR | O_CREAT | O_TRUNC;
     fil->fd = open(fil->localfile, openfl, 0600);
     if(fil->fd == -1) {
         __av_log(AVLOG_ERROR, "Error opening file %s: %s", fil->localfile,
@@ -129,7 +131,7 @@ static avssize_t sfile_do_read(struct sfile *fil, char *buf, avssize_t nbyte)
         if(res == 0) {
             __av_unref_obj(fil->conndata);
             fil->conndata = NULL;
-            fil->state = SF_IDLE;
+            fil->state = SF_FINI;
             break;
         }
         
@@ -141,31 +143,46 @@ static avssize_t sfile_do_read(struct sfile *fil, char *buf, avssize_t nbyte)
     return numbytes;
 }
 
+static avssize_t sfile_cached_pwrite(struct sfile *fil, const char *buf,
+                                     avssize_t nbyte, avoff_t offset)
+{
+    avssize_t res;
+
+    res = pwrite(fil->fd, buf, nbyte, offset);
+    if(res == -1 && (errno == ENOSPC || errno == EDQUOT)) {
+        __av_cache_diskfull();
+        res = pwrite(fil->fd, buf, nbyte, offset);
+    }
+    if(res == -1) {
+        __av_log(AVLOG_ERROR, "Error writing file %s: %s", fil->localfile,
+                 strerror(errno));
+        return -EIO;
+    }
+    if(res != nbyte) {
+        __av_log(AVLOG_ERROR, "Error writing file %s: short write",
+                 fil->localfile);
+        return -EIO;
+    }
+
+    if(offset + nbyte > fil->numbytes)
+        __av_cache_checkspace();
+
+    return res;
+}
 
 static avssize_t sfile_read(struct sfile *fil, char *buf, avssize_t nbyte)
 {
     avssize_t res;
-    avssize_t wres;
 
     res = sfile_do_read(fil, buf, nbyte);
     if(res <= 0)
         return res;
 
-    if(!(fil->flags & SFILE_NOCACHE)) {
-        wres = write(fil->fd, buf, res);
-        if(wres < 0) {
-            __av_log(AVLOG_ERROR, "Error writing file %s: %s", fil->localfile,
-                     strerror(errno));
-            return -EIO;
-        }
-        if(wres != res) {
-            __av_log(AVLOG_ERROR, "Error writing file %s: short write",
-                     fil->localfile);
-            return -EIO;
-        }
-    }
-    
-    fil->numbytes += res;
+    if(!(fil->flags & SFILE_NOCACHE))
+        res = sfile_cached_pwrite(fil, buf, res, fil->numbytes);
+
+    if(res > 0)
+        fil->numbytes += res;
 
     return res;
 }
@@ -190,7 +207,7 @@ static int sfile_dummy_read(struct sfile *fil, avoff_t offset)
     return 0;
 }
 
-static avssize_t sfile_cached_read(struct sfile *fil, char *buf,
+static avssize_t sfile_cached_pread(struct sfile *fil, char *buf,
                                    avssize_t nbyte, avoff_t offset)
 {
     avssize_t res;
@@ -200,8 +217,8 @@ static avssize_t sfile_cached_read(struct sfile *fil, char *buf,
 
     res = pread(fil->fd, buf, nbyte, offset);
     if(res < 0) {
-        __av_log(AVLOG_ERROR, "Error reading file %s: %s",
-                 fil->localfile, strerror(errno));
+        __av_log(AVLOG_ERROR, "Error reading file %s: %s", fil->localfile,
+                 strerror(errno));
         return -EIO;
     }
     if(res != nbyte) {
@@ -223,7 +240,7 @@ static avssize_t sfile_finished_read(struct sfile *fil, char *buf,
         
     nact = AV_MIN(nbyte, fil->numbytes - offset);
 
-    return sfile_cached_read(fil, buf, nact, offset);
+    return sfile_cached_pread(fil, buf, nact, offset);
 }
 
 static avssize_t sfile_pread(struct sfile *fil, char *buf, avsize_t nbyte,
@@ -233,7 +250,7 @@ static avssize_t sfile_pread(struct sfile *fil, char *buf, avsize_t nbyte,
 
     while(fil->state == SF_READ) {
         if(offset + nbyte <= fil->numbytes)
-            return sfile_cached_read(fil, buf, nbyte, offset);
+            return sfile_cached_pread(fil, buf, nbyte, offset);
         
         if(offset == fil->numbytes)
             return sfile_read(fil, buf, nbyte);
@@ -295,11 +312,33 @@ avssize_t __av_sfile_pread(struct sfile *fil, char *buf, avsize_t nbyte,
 }
 
 
+static int sfile_read_until(struct sfile *fil, avoff_t offset, int finish)
+{
+    avssize_t res;
+
+    if(finish && (fil->flags & SFILE_NOCACHE) != 0)
+        sfile_reset_usecache(fil);
+    else if(fil->state == SF_FINI)
+        return 0;
+
+    res = sfile_pread_force(fil, NULL, 0, offset);
+    if(res < 0)
+        return res;
+
+    if(finish && fil->state != SF_FINI) {
+        __av_unref_obj(fil->conndata);
+        fil->conndata = NULL;
+        fil->state = SF_FINI;
+    }
+
+    return 0;
+}
+
 avoff_t __av_sfile_size(struct sfile *fil)
 {
     avssize_t res;
 
-    res = sfile_pread_force(fil, NULL, 0, AV_MAXOFF);
+    res = sfile_read_until(fil, AV_MAXOFF, 0);
     if(res < 0)
         return res;
 
@@ -308,16 +347,115 @@ avoff_t __av_sfile_size(struct sfile *fil)
 
 int __av_sfile_startget(struct sfile *fil)
 {
-    return sfile_pread_force(fil, NULL, 0, 0);
+    return sfile_read_until(fil, 0, 0);
 }
 
-avssize_t __av_sfile_truncate(struct sfile *fil, avoff_t length)
+int __av_sfile_truncate(struct sfile *fil, avoff_t length)
 {
-    return -ENOSYS;
+    int res;
+
+    if(length == 0) {
+        if(fil->state == SF_FINI && fil->numbytes == 0)
+            return 0;
+
+        sfile_reset_usecache(fil);
+        res = sfile_open_localfile(fil);
+        if(res < 0)
+            return res;
+
+        fil->state = SF_FINI;
+        fil->dirty = 1;
+        return 0;
+    }
+    
+    res = sfile_read_until(fil, length, 1);
+    if(res < 0)
+        return res;
+
+    if(fil->numbytes > length) {
+        ftruncate(fil->fd, length);
+        fil->numbytes = length;
+        fil->dirty = 1;
+    }
+    
+    return 0;
 }
 
 avssize_t __av_sfile_pwrite(struct sfile *fil, const char *buf, avsize_t nbyte,
                             avoff_t offset)
 {
-    return -ENOSYS;
+    avssize_t res;
+    avoff_t end;
+
+    if(nbyte == 0)
+        return 0;
+
+    res = sfile_read_until(fil, AV_MAXOFF, 1);
+    if(res < 0)
+        return res;
+    
+    res = sfile_cached_pwrite(fil, buf, nbyte, offset);
+    if(res < 0) {
+        sfile_reset(fil);
+        return res;
+    }
+
+    end = offset + nbyte; 
+    if(end > fil->numbytes)
+        fil->numbytes = end;
+
+    fil->dirty = 1;
+    return res;
+}
+
+static int sfile_writeout(struct sfile *fil, void *conndata)
+{
+    avssize_t res;
+    const int tmpbufsize = 8192;
+    char tmpbuf[tmpbufsize];
+    avoff_t offset;
+
+    for(offset = 0; offset < fil->numbytes;) {
+        avsize_t nact = AV_MIN(tmpbufsize, fil->numbytes - offset);
+
+        res = sfile_cached_pread(fil, tmpbuf, nact, offset);
+        if(res < 0)
+            return res;
+        
+        res = fil->func->write(conndata, tmpbuf, nact);
+        if(res < 0)
+            return res;
+
+        offset += res;
+    }
+    
+    return 0;
+}
+
+int __av_sfile_flush(struct sfile *fil)
+{
+    int res;
+    void *conndata;
+
+    if(!fil->dirty)
+        return 0;
+    
+    res = fil->func->startput(fil->data, &conndata);
+    if(res == 0) {
+        res = sfile_writeout(fil, conndata);
+        if(res == 0)
+            res = fil->func->endput(conndata);
+    }
+    __av_unref_obj(conndata);
+    if(res < 0)
+        sfile_reset(fil);
+
+    fil->dirty = 0;
+
+    return res;
+}
+
+void *__av_sfile_getdata(struct sfile *fil)
+{
+    return fil->data;
 }

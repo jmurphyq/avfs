@@ -9,5 +9,5 @@
 #include "avfs.h"
 
 int __av_init_filt(struct vmodule *module, const char *name,
-                   const char *prog[], struct ext_info *exts,
-                   struct avfs **resp);
+                   const char *prog[], const char *revprog[],
+                   struct ext_info *exts, struct avfs **resp);

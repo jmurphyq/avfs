@@ -27,11 +27,22 @@ static int file_open(vfile *vf, ventry *ve, int flags, avmode_t mode)
     if(res < 0)
 	return res;
 
+    if((flags & AVO_EXCL) != 0 && (flags & AVO_CREAT) == 0)
+        flags &= ~AVO_EXCL;
+
+    if((flags & AVO_TRUNC) != 0 && !AV_ISWRITE(flags)) {
+        if((flags & AVO_ACCMODE) == AVO_RDONLY)
+            flags = (flags & ~AVO_ACCMODE) | AVO_RDWR;
+        else
+            flags = (flags & ~AVO_ACCMODE) | AVO_WRONLY;
+    }        
+
     AVFS_LOCK(avfs);
     res = avfs->open(ve, flags, mode, &vf->data);
     AVFS_UNLOCK(avfs);
     if(res < 0) {
 	__av_free_vmount(vf->mnt);
+        vf->mnt = NULL;
         return res;
     }
 
@@ -138,7 +149,7 @@ int __av_open(ventry *ve, int flags, avmode_t mode, vfile **resp)
     res = file_open(vf, ve, flags, mode);
     if(res < 0) {
         AV_FREELOCK(vf->lock);
-        __av_free(vf);
+        __av_unref_obj(vf);
     }
     else 
         *resp = vf;
@@ -151,10 +162,12 @@ int __av_open(ventry *ve, int flags, avmode_t mode, vfile **resp)
 */
 int __av_close(vfile *vf)
 {
-    int res;
+    int res = 0;
 
-    res = file_close(vf);
-    __av_unref_obj(vf);
+    if(vf != NULL) {
+        res = file_close(vf);
+        __av_unref_obj(vf);
+    }
 
     return res;
 }
@@ -217,7 +230,7 @@ avssize_t __av_pwrite(vfile *vf, const char *buf, avsize_t nbyte,
     avssize_t res;
 
     AV_LOCK(vf->lock);
-    res = check_file_access(vf, AVO_RDONLY);
+    res = check_file_access(vf, AVO_WRONLY);
     if(res == 0) {
         avoff_t sres;
         struct avfs *avfs = vf->mnt->avfs;
@@ -228,6 +241,24 @@ avssize_t __av_pwrite(vfile *vf, const char *buf, avsize_t nbyte,
             res = sres;
         else
             res = avfs->write(vf, buf, nbyte);
+        AVFS_UNLOCK(avfs);
+    }
+    AV_UNLOCK(vf->lock);
+
+    return res;
+}
+
+avssize_t __av_write(vfile *vf, const char *buf, avsize_t nbyte)
+{
+    avssize_t res;
+
+    AV_LOCK(vf->lock);
+    res = check_file_access(vf, AVO_WRONLY);
+    if(res == 0) {
+        struct avfs *avfs = vf->mnt->avfs;
+
+        AVFS_LOCK(avfs);
+        res = avfs->write(vf, buf, nbyte);
         AVFS_UNLOCK(avfs);
     }
     AV_UNLOCK(vf->lock);

@@ -17,6 +17,7 @@ int __av_init_module_ugz(struct vmodule *module)
     struct avfs *avfs;
     struct ext_info ugz_exts[3];
     const char *ugz_args[3];
+    const char *gz_args[2];
 
     ugz_exts[0].from = ".gz",  ugz_exts[0].to = NULL;
     ugz_exts[1].from = ".tgz", ugz_exts[1].to = ".tar";
@@ -26,5 +27,8 @@ int __av_init_module_ugz(struct vmodule *module)
     ugz_args[1] = "-d";
     ugz_args[2] = NULL;
 
-    return __av_init_filt(module, "ugz", ugz_args, ugz_exts, &avfs);
+    gz_args[0] = "gzip";
+    gz_args[1] = NULL;
+
+    return __av_init_filt(module, "ugz", ugz_args, gz_args, ugz_exts, &avfs);
 }

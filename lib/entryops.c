@@ -79,6 +79,17 @@ int virt_readlink(const char *path, char *buf, size_t bsiz)
     return res;
 }
 
+int __av_unlink(ventry *ve)
+{
+    int res;
+    struct avfs *avfs = ve->mnt->avfs;
+    
+    AVFS_LOCK(avfs);
+    res = avfs->unlink(ve);
+    AVFS_UNLOCK(avfs);
+
+    return res;
+}
 
 int virt_unlink(const char *path)
 {
@@ -87,11 +98,7 @@ int virt_unlink(const char *path)
 
     res = __av_get_ventry(path, 0, &ve);
     if(res == 0) {
-        struct avfs *avfs = ve->mnt->avfs;
-
-        AVFS_LOCK(avfs);
-	res = avfs->unlink(ve);
-        AVFS_UNLOCK(avfs);
+        __av_unlink(ve);
 	__av_free_ventry(ve);
     }
     if(res < 0) {

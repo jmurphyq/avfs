@@ -55,7 +55,7 @@ struct node {
     avino_t ino;
     struct attr attr;
     struct dir dir;
-    cacheobj *file;
+    struct cacheobj *file;
 };
 
 struct filesys {
@@ -84,7 +84,7 @@ static void rem_free_node(struct node *nod)
     __av_unref_obj(nod->ent);
     rem_free_dir(&nod->dir);
     __av_free(nod->attr.linkname);
-    __av_del_cacheobj(nod->file);
+    __av_unref_obj(nod->file);
 
     AV_FREELOCK(nod->lock);
     AV_FREELOCK(nod->filelock);
@@ -580,7 +580,7 @@ static void rem_check_file(struct filesys * fs, struct entry *ent)
     if(fil != NULL) {
         res = rem_check_node(fs, nod, parent);
         if(res < 0 || !rem_signature_valid(&fil->sig, &nod->attr.st)) {
-            __av_del_cacheobj(nod->file);
+            __av_unref_obj(nod->file);
             nod->file = NULL;
         }
         __av_unref_obj(fil);
@@ -738,7 +738,6 @@ static int rem_get_file(struct filesys *fs, struct node *nod,
     struct file *fil;
     struct remote *rem = fs->rem;
     struct getparam gp;
-    struct cache_params cp;
     char *objname;
     
     fil = (struct file *) __av_cacheobj_get(nod->file);
@@ -765,16 +764,12 @@ static int rem_get_file(struct filesys *fs, struct node *nod,
     fil->data = gp.data;
     rem_get_signature(fs, nod->ent, &fil->sig);
 
-    __av_del_cacheobj(nod->file);
-    nod->file = __av_new_cacheobj(fil);
-
-    __av_cache_init_params(&cp);
-    cp.name = objname;
-    if(fil->data == NULL) 
-        cp.diskusage = rem_local_size(fil->localname);
-
-    __av_cacheobj_set_params(nod->file, &cp);
+    __av_unref_obj(nod->file);
+    nod->file = __av_cacheobj_new(fil, objname);
     __av_free(objname);
+
+    if(res == 0)
+        __av_cacheobj_setsize(nod->file, rem_local_size(fil->localname));
 
     *resp = fil;
 
@@ -786,19 +781,9 @@ static int rem_wait_data(struct filesys *fs, struct node *nod,
 {
     int res;
     struct remote *rem = fs->rem;
-    struct cache_params cp;
     
     if(fil->data == NULL)
         return 0;
-
-    if(fil->sig.size != -1) {
-        avoff_t realend;
-        realend = AV_MIN(fil->sig.size, end);
-
-        __av_cache_init_params(&cp);
-        cp.diskusage = realend;
-        __av_cacheobj_set_params(nod->file, &cp);
-    }
 
     res = rem->wait(rem, fil->data, end);
     if(res < 0)
@@ -807,11 +792,8 @@ static int rem_wait_data(struct filesys *fs, struct node *nod,
     if(res == 0) {
         __av_unref_obj(fil->data);
         fil->data = NULL;
+        __av_cacheobj_setsize(nod->file, rem_local_size(fil->localname));
     }
-
-    __av_cache_init_params(&cp);
-    cp.diskusage = rem_local_size(fil->localname);
-    __av_cacheobj_set_params(nod->file, &cp);
 
     return 0;
 }
@@ -859,7 +841,7 @@ static avssize_t rem_read(vfile *vf, char *buf, avsize_t nbyte)
             res = rem_real_read(fil, vf, buf, nbyte);
 
         if(res < 0) {
-            __av_del_cacheobj(nod->file);
+            __av_unref_obj(nod->file);
             nod->file = NULL;
         }
         __av_unref_obj(fil);

@@ -26,5 +26,7 @@ avssize_t __av_sfile_pread(struct sfile *fil, char *buf, avsize_t nbyte,
 avssize_t __av_sfile_pwrite(struct sfile *fil, const char *buf, avsize_t nbyte,
                             avoff_t offset);
 avoff_t __av_sfile_size(struct sfile *fil);
+int __av_sfile_truncate(struct sfile *fil, avoff_t length);
 int __av_sfile_startget(struct sfile *fil);
-void __av_sfile_change(struct sfile *fil, void *data);
+int __av_sfile_flush(struct sfile *fil);
+void *__av_sfile_getdata(struct sfile *fil);

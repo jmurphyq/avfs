@@ -6,171 +6,232 @@
     the GNU GPL. See the file COPYING.LIB and COPYING. 
 */
 
-#include "cache.h"
+/* 
+   TODO:
+   
+   Virtual filesystem where all the cached files can be found.
+*/
 
-struct _cacheobj {
+#include "cache.h"
+#include "internal.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+
+struct cacheobj {
     void *obj;
     avoff_t diskusage;
-    avtimestruc_t lastaccess;
     char *name;
 
-    cacheobj *next;
-    cacheobj **prevp;
+    struct cacheobj *next;
+    struct cacheobj *prev;
 };
 
 #define MBYTE (1024 * 1024)
 
 static AV_LOCK_DECL(cachelock);
-static cacheobj *cachefirst;
+static struct cacheobj cachelist;
 static avoff_t disk_cache_limit = 100 * MBYTE;
 static avoff_t disk_keep_free = 10 * MBYTE;
 static avoff_t disk_usage = 0;
 
-cacheobj *__av_new_cacheobj(void *obj)
+static int cache_getoff(struct entry *ent, const char *param, char **retp)
 {
-    cacheobj *cobj;
+    char buf[64];
+    struct statefile *sf = (struct statefile *) __av_namespace_get(ent);
+    avoff_t *offp = (avoff_t *)  sf->data;
 
-    AV_NEW(cobj);
+    AV_LOCK(cachelock);
+    sprintf(buf, "%llu\n", *offp);
+    AV_UNLOCK(cachelock);
+
+    *retp = __av_strdup(buf);
+    return 0;
+}
+
+static int cache_setoff(struct entry *ent, const char *param, const char *val)
+{
+    struct statefile *sf = (struct statefile *) __av_namespace_get(ent);
+    avoff_t *offp = (avoff_t *) sf->data;
+    avoff_t offval;
+    char *end;
+    
+    offval = strtoll(val, &end, 0);
+    if(end == val)
+        return -EINVAL;
+    if(*end == '\n')
+        end ++;
+    if(*end != '\0')
+        return -EINVAL;
+    if(offval < 0)
+        return -EINVAL;
+
+    AV_LOCK(cachelock);
+    *offp = offval;
+    AV_UNLOCK(cachelock);
+
+    return 0;
+}
+
+void __av_init_cache()
+{
+    struct statefile statf;
+
+    cachelist.next = &cachelist;
+    cachelist.prev = &cachelist;
+
+    statf.get = cache_getoff;
+    statf.set = cache_setoff;
+ 
+    statf.data = &disk_cache_limit;
+    __av_avfsstat_register("cache/limit", &statf);
+    
+    statf.data = &disk_keep_free;
+    __av_avfsstat_register("cache/keep_free", &statf);
+
+    statf.set = NULL;
+    statf.data = &disk_usage;
+    __av_avfsstat_register("cache/usage", &statf);
+}
+
+static void cacheobj_remove(struct cacheobj *cobj)
+{
+    struct cacheobj *next;
+    struct cacheobj *prev;
+    
+    next = cobj->next;
+    prev = cobj->prev;
+    next->prev = prev;
+    prev->next = next;
+}
+
+static void cacheobj_insert(struct cacheobj *cobj)
+{
+    struct cacheobj *next;
+    struct cacheobj *prev;
+
+    next = cachelist.next;
+    prev = &cachelist;
+    next->prev = cobj;
+    prev->next = cobj;
+    cobj->next = next;
+    cobj->prev = prev;
+}
+
+static void cacheobj_free(struct cacheobj *cobj)
+{
+    __av_unref_obj(cobj->obj);
+    __av_log(AVLOG_DEBUG, "got rid of cached object <%s> size %lli",
+             cobj->name != NULL ? cobj->name : "?", cobj->diskusage);
+    __av_free(cobj->name);
+}
+
+static void cacheobj_delete(struct cacheobj *cobj)
+{
+    AV_LOCK(cachelock);
+    if(cobj->obj != NULL) {
+        cacheobj_remove(cobj);
+        disk_usage -= cobj->diskusage;
+    }
+    AV_UNLOCK(cachelock);
+
+    if(cobj->obj != NULL)
+        cacheobj_free(cobj);
+}
+
+struct cacheobj *__av_cacheobj_new(void *obj, const char *name)
+{
+    struct cacheobj *cobj;
+
+    if(obj == NULL)
+        return NULL;
+
+    AV_NEW_OBJ(cobj, cacheobj_delete);
     cobj->obj = obj;
     cobj->diskusage = 0;
-    __av_curr_time(&cobj->lastaccess);
+    cobj->name = __av_strdup(name);
     __av_ref_obj(obj);
 
     AV_LOCK(cachelock);
-    cobj->prevp = &cachefirst;
-    cobj->next = cachefirst;
-    if(cachefirst != NULL)
-        cachefirst->prevp = &cobj->next;
-    cachefirst = cobj;
+    cacheobj_insert(cobj);
     AV_UNLOCK(cachelock);
 
     return cobj;
 }
 
-static void unlink_cacheobj(cacheobj *cobj)
+static int cache_free_one()
 {
-    if(cobj->next != NULL)
-        cobj->next->prevp = cobj->prevp;
-    if(cobj->prevp != NULL)
-        *cobj->prevp = cobj->next;
+    struct cacheobj *cobj;
+    struct cacheobj tmpcobj;
 
-    disk_usage -= cobj->diskusage;
-}
-
-void __av_del_cacheobj(cacheobj *cobj)
-{
-    if(cobj != NULL) {
-        AV_LOCK(cachelock);
-        unlink_cacheobj(cobj);
-        AV_UNLOCK(cachelock);
-        
-        __av_unref_obj(cobj->obj);
-        
-        if(cobj->obj != NULL) 
-            __av_log(AVLOG_DEBUG, "got rid of cached object <%s> size %lli",
-                     cobj->name != NULL ? cobj->name : "", cobj->diskusage);
-        
-        __av_free(cobj->name);
-        __av_free(cobj);
-    }
-}
-
-static int cache_try_free(cacheobj *keepobj)
-{
-    cacheobj *cobj;
-    cacheobj *oldest;
-    void *obj;
-    char *name;
-    avoff_t size;
-
-    oldest = NULL;
-
-    for(cobj = cachefirst; cobj != NULL; cobj = cobj->next) {
-        if(cobj != keepobj && cobj->diskusage != 0 &&
-           (oldest == NULL || 
-            AV_TIME_LESS(cobj->lastaccess, oldest->lastaccess)))
-            oldest = cobj;
-    }
-    if(oldest == NULL)
+    cobj = cachelist.prev;
+    if(cobj == &cachelist)
         return 0;
-    
-    unlink_cacheobj(oldest);
-    obj = oldest->obj;
-    name = oldest->name;
-    size = oldest->diskusage;
-    
-    oldest->obj = NULL;
-    oldest->name = NULL;
-    oldest->diskusage = 0;
-    
+
+    cacheobj_remove(cobj);
+    disk_usage -= cobj->diskusage;
+    tmpcobj = *cobj;
+    cobj->obj = NULL;
     AV_UNLOCK(cachelock);
-
-    __av_unref_obj(obj);
-
-    if(obj != NULL) 
-        __av_log(AVLOG_DEBUG, "got rid of cached object <%s> size %lli",
-                 name != NULL ? name : "", size);
-    
-    __av_free(name);
-
+    cacheobj_free(&tmpcobj);
     AV_LOCK(cachelock);
+
     return 1;
 }
 
-void __av_cache_init_params(struct cache_params *params)
+static void cache_checkspace(int full)
 {
-    params->diskusage = 0;
-    params->name = NULL;
-}
-
-static void cacheobj_set_diskusage(cacheobj *cobj, avoff_t diskusage)
-{
-    /* under cachelock */
-    static avoff_t tmpfree;
-    static avtime_t lastcheck;
+    avoff_t tmpfree;
     avoff_t limit;
-    avtime_t now;
-
-    now = __av_time();
-    if(lastcheck != now) {
-        tmpfree = __av_tmp_free();
-        lastcheck = now;
-    }
-
-    disk_usage -= cobj->diskusage;
-    cobj->diskusage = diskusage;
-    disk_usage += cobj->diskusage;
+    avoff_t keepfree;
     
+    if(full)
+        tmpfree = 0;
+    else
+        tmpfree = __av_tmp_free();
+    
+    keepfree = disk_keep_free;
+    if(keepfree < 100 * 1024)
+        keepfree = 100 * 1024;
+
     limit = disk_usage - disk_keep_free + tmpfree;
     if(disk_cache_limit < limit)
         limit = disk_cache_limit;
     
     while(disk_usage > limit)
-        if(!cache_try_free(cobj))
+        if(!cache_free_one())
             break;        
 }
 
-static void cacheobj_set_name(cacheobj *cobj, const char *name)
-{
-    __av_free(cobj->name);
-    cobj->name = __av_strdup(name);
-}
-
-void __av_cacheobj_set_params(cacheobj *cobj, struct cache_params *params)
+void __av_cache_checkspace()
 {
     AV_LOCK(cachelock);
-    if(params->diskusage > 0) {
-        avoff_t rounddiskusage = AV_DIV(params->diskusage, 4096) * 4096;
-
-        if(cobj->diskusage != rounddiskusage)
-            cacheobj_set_diskusage(cobj, rounddiskusage);
-    }
-    if(params->name != NULL) 
-        cacheobj_set_name(cobj, params->name);
+    cache_checkspace(0);
     AV_UNLOCK(cachelock);
 }
 
-void *__av_cacheobj_get(cacheobj *cobj)
+void __av_cache_diskfull()
+{
+    AV_LOCK(cachelock);
+    cache_checkspace(1);
+    AV_UNLOCK(cachelock);
+}
+
+
+void __av_cacheobj_setsize(struct cacheobj *cobj, avoff_t diskusage)
+{
+    AV_LOCK(cachelock);
+    if(cobj->obj != NULL && cobj->diskusage != diskusage) {
+        disk_usage -= cobj->diskusage;
+        cobj->diskusage = diskusage;
+        disk_usage += cobj->diskusage;
+        
+        cache_checkspace(0);
+    }
+    AV_UNLOCK(cachelock);
+}
+
+void *__av_cacheobj_get(struct cacheobj *cobj)
 {
     void *obj;
 
@@ -178,9 +239,12 @@ void *__av_cacheobj_get(cacheobj *cobj)
         return NULL;
 
     AV_LOCK(cachelock);
-    __av_curr_time(&cobj->lastaccess);
     obj = cobj->obj;
-    __av_ref_obj(obj);
+    if(obj != NULL) {
+        cacheobj_remove(cobj);
+        cacheobj_insert(cobj);
+        __av_ref_obj(obj);
+    }
     AV_UNLOCK(cachelock);
 
     return obj;

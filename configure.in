@@ -226,7 +226,7 @@ AC_SUBST(install_scriptcomps)
 AC_SUBST(avfscoda_all)
 AC_SUBST(avfscoda_install)
 
-AC_OUTPUT(lib/Makefile include/Makefile avfscoda/Makefile lib/modules/Makefile lib/zlib/Makefile avfscoda/redir/Makefile extfs/Makefile scripts/Makefile)
+AC_OUTPUT(lib/Makefile include/Makefile avfscoda/Makefile lib/modules/Makefile lib/zlib/Makefile avfscoda/redir/Makefile extfs/Makefile scripts/Makefile test/Makefile)
 
 
 

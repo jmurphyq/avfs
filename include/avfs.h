@@ -315,6 +315,7 @@ avoff_t    __av_tmp_free();
 int        __av_open(ventry *ve, int flags, avmode_t mode, vfile **retp);
 int        __av_close(vfile *vf);
 avssize_t  __av_read(vfile *vf, char *buf, avsize_t nbyte);
+avssize_t __av_write(vfile *vf, const char *buf, avsize_t nbyte);
 avssize_t  __av_pread(vfile *vf, char *buf, avsize_t nbyte,  avoff_t offset);
 avssize_t  __av_pwrite(vfile *vf, const char *buf, avsize_t nbyte,
                        avoff_t offset);
@@ -323,6 +324,7 @@ int        __av_truncate(vfile *vf, avoff_t length);
 int        __av_getattr(vfile *vf, struct avstat *buf, int attrmask);
 int        __av_setattr(vfile *vf, struct avstat *buf, int attrmask);
 int        __av_access(ventry *ve, int amode);
+int        __av_unlink(ventry *ve);
 
 
 #endif /* _AVFS_H */

@@ -10,7 +10,7 @@ i_sbindir = $(install_root)$(sbindir)
 
 CC = @CC@
 CFLAGS = @CFLAGS@
-CPPFLAGS = @CPPFLAGS@ -I../include
+CPPFLAGS = @CPPFLAGS@ -I../include -D_REENTRANT -D_POSIX_PTHREAD_SEMANTICS 
 LDFLAGS = -Wl,-E -ldl -lpthread $(DAV_LIBS)
 
 INSTALL = @INSTALL@

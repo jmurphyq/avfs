@@ -155,6 +155,7 @@ static void destroy()
         }
         AV_UNLOCK(avfs_lock);
 
+        __av_destroy_filecache();
 	__av_delete_tmpdir();
 
         inited = 0;
@@ -183,6 +184,8 @@ static int init()
             __av_init_dynamic_modules();
             __av_init_logstat();
             init_stats();
+            __av_init_cache();
+            __av_init_filecache();
             atexit(destroy);
             inited = 1;
             __av_log(AVLOG_DEBUG, "INIT successful");

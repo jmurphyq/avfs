@@ -10,6 +10,7 @@
 #include "state.h"
 
 #define AVFS_SEP_CHAR    '#'
+#define AVFS_SEP_STR     "#"
 
 #define AVFS_LOCK(avfs)   if(!(avfs->flags & AVF_NOLOCK)) AV_LOCK(avfs->lock)
 #define AVFS_UNLOCK(avfs) if(!(avfs->flags & AVF_NOLOCK)) AV_UNLOCK(avfs->lock)
@@ -24,6 +25,9 @@ void __av_close_all_files();
 void __av_delete_tmpdir();
 void __av_init_avfsstat();
 void __av_init_logstat();
+void __av_init_cache();
 void __av_check_malloc();
+void __av_init_filecache();
+void __av_destroy_filecache();
 
 void __av_avfsstat_register(const char *path, struct statefile *func);

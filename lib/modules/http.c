@@ -24,7 +24,7 @@ struct localfile {
 
 struct entry {
     char *url;
-    cacheobj *cobj;
+    struct cacheobj *cobj;
     avoff_t size;
     struct entry *next;
 };
@@ -399,7 +399,6 @@ static struct sfile *http_get_serialfile(struct file *fil)
     struct sfile *sf;
     struct file *filcpy;
     struct entry *ent = fil->ent;
-    struct cache_params cp;
     static struct sfilefuncs func = {
         http_start,
         http_sread
@@ -414,12 +413,8 @@ static struct sfile *http_get_serialfile(struct file *fil)
 
     sf = __av_sfile_new(&func, filcpy, 0);
 
-    __av_del_cacheobj(ent->cobj);
-    ent->cobj = __av_new_cacheobj(sf);
-
-    __av_cache_init_params(&cp);
-    cp.name = ent->url;
-    __av_cacheobj_set_params(ent->cobj, &cp);
+    __av_unref_obj(ent->cobj);
+    ent->cobj = __av_cacheobj_new(sf, ent->url);
 
     return sf;
 }
@@ -584,7 +579,7 @@ static void http_destroy(struct avfs *avfs)
     while(ent != NULL) {
         nextent = ent->next;
         __av_free(ent->url);
-        __av_del_cacheobj(ent->cobj);
+        __av_unref_obj(ent->cobj);
         __av_free(ent);
         ent = nextent;
     }

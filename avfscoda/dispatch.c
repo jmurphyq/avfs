@@ -20,6 +20,8 @@
 #include <grp.h>
 #include <pwd.h>
 #include <sys/time.h>
+#include <ctype.h>
+#include <dirent.h>
 
 #include <sys/stat.h>
 
@@ -41,8 +43,6 @@
 /* Maximum number of child processes running: */
 #define MAXUSERS 10
 
-
-
 #define MAXMSGLEN 1045
 
 
@@ -52,7 +52,6 @@ struct operation {
 	
     char ibuf[MAXMSGLEN];
 };
-
 
 struct userinfo {
     uid_t uid;
@@ -66,7 +65,6 @@ struct userinfo {
 };
 
 static struct userinfo currusers[MAXUSERS];
-
 
 static int codafd;
 static const char *codadir;
@@ -96,6 +94,8 @@ struct fileinfo {
     unsigned int unique;
 	
     time_t lasttime;
+    int use;
+    int iscwd;
 	
     struct openfile *ofs;
 };
@@ -107,6 +107,8 @@ static unsigned int nextunique = 0;
 static struct fileinfo rootinfo;
 static int needflush;
 
+static void log(const char *, ...) __attribute__ ((format (printf, 1, 2)));
+
 static void log(const char *fmt, ...)
 {
     if(debugmode) {
@@ -115,6 +117,20 @@ static void log(const char *fmt, ...)
 	va_start(ap, fmt);
 	vfprintf(logfile, fmt, ap);
 	va_end(ap);
+    }
+}
+
+static void log_date()
+{
+    if(debugmode) {
+        struct tm tm;
+        struct timeval tv;
+
+        gettimeofday(&tv, NULL);
+        localtime_r(&tv.tv_sec, &tm);        
+        log("%02i/%02i %02i:%02i:%02i.%03i\n", 
+            tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
+            (int) (tv.tv_usec / 1000));
     }
 }
 
@@ -180,7 +196,8 @@ static struct fileinfo *get_file(struct fileinfo *parentdir, const char *name)
 	
     fi = malloc(sizeof(*fi));
     if(fi == NULL) {
-        return NULL;
+        log("Out of memory");
+        clean_exit(1);
     }
     
     for(i = 0; i < FMAPSIZE; i++) {
@@ -203,11 +220,15 @@ static struct fileinfo *get_file(struct fileinfo *parentdir, const char *name)
         clean_exit(1);
     }
 
+    log("New fid: 0x%x\n", fi->unique);
+
     numfids ++;
 
     fi->subdir = NULL;
     fi->lasttime = time(NULL);
     fi->ofs = NULL;
+    fi->use = 0;
+    fi->iscwd = 0;
 
     add_name(fi, parentdir, name);    
 	
@@ -225,13 +246,14 @@ static void put_file(struct fileinfo *fi)
         return;
     }
 
+    log("Delete fid: 0x%x\n", fi->unique);
+
     index = fi->unique % FMAPSIZE;
     fmap[index] = NULL;
 
     free(fi);
     numfids --;
 }
-
 
 static struct fileinfo *look_info(ViceFid *id)
 {
@@ -243,7 +265,7 @@ static struct fileinfo *look_info(ViceFid *id)
         clean_exit(1);
     }
 	
-    log("unique: 0x%x\n", id->Unique);
+    log("unique: 0x%x\n", (unsigned int) id->Unique);
 	
     if(id->Unique == 0) 
         return &rootinfo;
@@ -251,8 +273,14 @@ static struct fileinfo *look_info(ViceFid *id)
         unsigned int index = (id->Unique % FMAPSIZE);
         fi = fmap[index];
         if(fi == NULL || fi->unique != id->Unique) {
-            log("Invalid Fid: 0x%x\n", id->Unique);
-            clean_exit(1);
+            if(fi == NULL)
+                log("Invalid Fid; 0x%x (deleted)\n",
+                    (unsigned int) id->Unique);
+            else
+                log("Invalid Fid: 0x%x (0x%x)\n", (unsigned int) id->Unique,
+                    (unsigned int) fi->unique);
+
+            return NULL;
         }
 
         fi->lasttime = time(NULL);
@@ -266,12 +294,29 @@ static char *look_name(ViceFid *id)
     struct fileinfo *fi;
 	
     fi = look_info(id);
+    if(fi == NULL)
+        return NULL;
+
     log("path: %s\n", fi->path);
 	
     return fi->path;
 }
 
+static void ref_fid(ViceFid *fid)
+{
+    struct fileinfo *fi = look_info(fid);
 
+    if(fi != NULL)
+        fi->use ++;
+}
+
+static void unref_fid(ViceFid *fid)
+{
+    struct fileinfo *fi = look_info(fid);
+
+    if(fi != NULL)
+        fi->use --;
+}
 
 static void reset_signal_handlers()
 {
@@ -302,10 +347,10 @@ static struct fileinfo *create_file(const char *filename, ViceFid *parentid,
 {
     struct fileinfo *fi;
 
-    fi = look_info(parentid);    
-    fi = get_file(fi, filename);
-    if(fi == NULL) 
+    fi = look_info(parentid);
+    if(fi == NULL)
         return NULL;
+    fi = get_file(fi, filename);
 
     newid->Volume = 0;
     newid->Vnode = 0;
@@ -315,12 +360,14 @@ static struct fileinfo *create_file(const char *filename, ViceFid *parentid,
 }
 
 
+
 static void purge_file(struct fileinfo *fi)
 {
     union outputArgs rep;
 
     log("=================================================================\n");
-    log("Cleaning out %p\n", fi);
+    log_date();
+    log("Cleaning out 0x%x\n", fi->unique);
     log("CODA_PURGEFID\n");
     
     rep.oh.opcode = CODA_PURGEFID;
@@ -338,7 +385,8 @@ static void zap_file(struct fileinfo *fi)
     union outputArgs rep;
 
     log("=================================================================\n");
-    log("Cleaning out %p\n", fi);
+    log_date();
+    log("Cleaning out 0x%x\n", fi->unique);
     log("CODA_ZAPFILE\n");
     
     rep.oh.opcode = CODA_ZAPFILE;
@@ -357,7 +405,8 @@ static void zap_dir(struct fileinfo *fi)
     union outputArgs rep;
 
     log("=================================================================\n");
-    log("Cleaning out %p\n", fi);
+    log_date();
+    log("Cleaning out 0x%x\n", fi->unique);
     log("CODA_ZAPDIR\n");
     
     rep.oh.opcode = CODA_ZAPDIR;
@@ -371,7 +420,6 @@ static void zap_dir(struct fileinfo *fi)
 }
 #endif
 
-
 static void clean_up_dir(struct fileinfo *dir, time_t oldtime)
 {
     struct fileinfo **fip, *fi;
@@ -381,29 +429,101 @@ static void clean_up_dir(struct fileinfo *dir, time_t oldtime)
 		
         if(fi->subdir != NULL) 
             clean_up_dir(fi, oldtime);
-		
-        if(fi->subdir == NULL && (!oldtime || fi->lasttime < oldtime)) {
-            *fip = fi->next;
 
-            free(fi->name);
-            free(fi->path);
-            fi->next = NULL;
-            fi->name = NULL;
-            fi->path = NULL;
-
-            purge_file(fi);
-            put_file(fi);
+        if(!oldtime || fi->lasttime < oldtime) {
+            if(fi->subdir != NULL)
+                log("* %s not empty\n", fi->path);
+            else if(fi->use != 0)
+                log("* %s still in use (%i)\n", fi->path, fi->use);
+            else if(fi->iscwd)
+                log("* %s is a cwd\n", fi->path);
+            else {
+                *fip = fi->next;
+                
+                free(fi->name);
+                free(fi->path);
+                fi->next = NULL;
+                fi->name = NULL;
+                fi->path = NULL;
+                
+                purge_file(fi);
+                put_file(fi);
+                fi = NULL;
+            }
         }
-        else 
+        if(fi != NULL) {
+            fi->iscwd = 0;
             fip = &(*fip)->next;
+        }
     }
+}
+
+static struct fileinfo *resolve_path_info(char *path)
+{
+    struct fileinfo *fi = &rootinfo;
+    char c;
+    
+    do {
+        unsigned int seglen;
+        for(seglen = 0; path[seglen] != '\0' && path[seglen] != '/'; seglen++);
+        c = path[seglen];
+        path[seglen] = '\0';
+        fi = find_name(fi, path);
+        if(fi == NULL)
+            return NULL;
+
+        path += seglen + 1;
+    } while(c != '\0');
+
+    return fi;
+}
+
+
+static void find_cwds()
+{
+    DIR *dp;
+    struct dirent *ent;
+    char pathbuf[256];
+    char linkbuf[4096];
+    int res;
+    unsigned int codadirlen = strlen(codadir);
+    struct fileinfo *fi;
+
+    dp = opendir("/proc");
+    if(dp == NULL)
+        return;
+
+    while((ent = readdir(dp)) != NULL) {
+        if(!isdigit(ent->d_name[0]))
+            continue;
+        
+        sprintf(pathbuf, "/proc/%s/cwd", ent->d_name);
+        res = readlink(pathbuf, linkbuf, 4095);
+        if(res == -1)
+            continue;
+
+        linkbuf[res] = '\0';
+        if(res <= codadirlen + 1 ||
+           strncmp(linkbuf, codadir, codadirlen) != 0 ||
+           linkbuf[codadirlen] != '/')
+            continue;
+
+        fi = resolve_path_info(linkbuf + codadirlen + 1);
+        if(fi != NULL) 
+            fi->iscwd = 1;
+    }
+    closedir(dp);
 }
 
 static void clean_up_names()
 {
-    clean_up_dir(&rootinfo, time(NULL) - KEEPTIME);
-}
+    find_cwds();
 
+    if(numfids > FMAPSIZE / 2)
+        clean_up_dir(&rootinfo, 0);
+    else
+        clean_up_dir(&rootinfo, time(NULL) - KEEPTIME);
+}
 
 static void open_file(union inputArgs *req, struct openfile *of)
 {
@@ -467,7 +587,8 @@ static void del_file(const char *tmpname)
                 tmpname, strerror(errno));
 }
 
-static void close_file(struct openfile *of, struct openfile **ofp)
+static void close_file(struct openfile *of, struct openfile **ofp,
+                       ViceFid *fid)
 {
     
     if(of->use > 0) of->use --;
@@ -478,9 +599,9 @@ static void close_file(struct openfile *of, struct openfile **ofp)
         free(of->tmpfile);
         *ofp = of->next;
         free(of);
+        unref_fid(fid);
     }
 }
-
 
 static void reply(union inputArgs *req, int res)
 {
@@ -515,6 +636,27 @@ static void check_servers()
     }
 }
 
+static void grab_fids(union inputArgs *req)
+{
+    /* All have first VFid in the same place */
+    ref_fid(&req->coda_getattr.VFid);
+    
+    if(req->ih.opcode == CODA_LINK)
+        ref_fid(&req->coda_link.destFid);
+    if(req->ih.opcode == CODA_RENAME)
+        ref_fid(&req->coda_rename.destFid);
+}
+
+static void release_fids(union inputArgs *req)
+{
+    /* All have first VFid in the same place */
+    unref_fid(&req->coda_getattr.VFid);
+    
+    if(req->ih.opcode == CODA_LINK)
+        unref_fid(&req->coda_link.destFid);
+    if(req->ih.opcode == CODA_RENAME)
+        unref_fid(&req->coda_rename.destFid);
+}
 
 static void process_answer(struct userinfo *user)
 {
@@ -549,8 +691,9 @@ static void process_answer(struct userinfo *user)
 	
     log("+ %i/%i [%i] +++++++++++++++++++++++++++++++++++++++++++++++++++\n",
         user->uid, user->gid, user->serverpid);
+    log_date();
     log("%i (%i) bytes: opcode: %li, result: %i, unique: %li\n", 
-        numread, insize, rep->oh.opcode, rep->oh.result, rep->oh.unique);
+        numread, insize, rep->oh.opcode, (int) rep->oh.result, rep->oh.unique);
 	
     for(opp = &user->ops; *opp != NULL; opp = &(*opp)->next) 
         if((*opp)->req->ih.unique == rep->oh.unique) break;
@@ -560,7 +703,7 @@ static void process_answer(struct userinfo *user)
     if(op == NULL)
         log("Operation not found!!!!\n");
     else {
-        log("Found operation: %i\n", op->req->ih.unique);
+        log("Found operation: %li\n", op->req->ih.unique);
 		
         switch(rep->oh.opcode) {
 #ifdef CODA_OPEN_BY_FD
@@ -569,7 +712,7 @@ static void process_answer(struct userinfo *user)
         case CODA_OPEN:
             if(rep->oh.result == 0) {
                 fi = look_info(&op->req->coda_open.VFid);
-				
+
                 for(of = fi->ofs; of != NULL; of = of->next) 
                     if(of->pid == op->req->ih.pid) break;
 				
@@ -597,10 +740,8 @@ static void process_answer(struct userinfo *user)
                 log("Output file not found!!!\n");
                 reply(op->req, ENOENT);
             }
-            else {
-                close_file(of, ofp);
-                put_file(fi);
-            }
+            else
+                close_file(of, ofp, &op->req->coda_close.VFid);
 
             send_to_kernel(rep, numread);
 	    zap_file(fi);
@@ -612,7 +753,7 @@ static void process_answer(struct userinfo *user)
                 fi = create_file(filename, &op->req->coda_lookup.VFid,
                                  &rep->coda_lookup.VFid);
                 if(fi == NULL)
-                    rep->oh.result = ENOMEM;
+                    rep->oh.result = ENOENT;
             }
             send_to_kernel(rep, numread);
             break;
@@ -623,7 +764,7 @@ static void process_answer(struct userinfo *user)
                 fi = create_file(filename, &op->req->coda_create.VFid,
                                  &rep->coda_create.VFid);
                 if(fi == NULL)
-                    rep->oh.result = ENOMEM;
+                    rep->oh.result = ENOENT;
             }
             send_to_kernel(rep, numread);
             break;
@@ -634,7 +775,7 @@ static void process_answer(struct userinfo *user)
                 fi = create_file(filename, &op->req->coda_mkdir.VFid,
                                  &rep->coda_mkdir.VFid);
                 if(fi == NULL)
-                    rep->oh.result = ENOMEM;
+                    rep->oh.result = ENOENT;
             }
             send_to_kernel(rep, numread);
             break;
@@ -644,10 +785,6 @@ static void process_answer(struct userinfo *user)
                 filename = (char *) op->req + op->req->coda_remove.name;
                 fi = look_info(&op->req->coda_remove.VFid);
                 fi = remove_name(fi, filename);
-                if(fi != NULL) {
-                    purge_file(fi);
-                    put_file(fi);
-                }
             }
             send_to_kernel(rep, numread);
             break;
@@ -657,8 +794,6 @@ static void process_answer(struct userinfo *user)
                 filename = (char *) op->req + op->req->coda_rmdir.name;
                 fi = look_info(&op->req->coda_rmdir.VFid);
                 fi = remove_name(fi, filename);
-                if(fi != NULL)
-                    put_file(fi);
             }
             send_to_kernel(rep, numread);
             break;
@@ -671,10 +806,6 @@ static void process_answer(struct userinfo *user)
                 newname = (char *) op->req + op->req->coda_rename.destname;
                 newfi = look_info(&op->req->coda_rename.destFid);
                 fi = remove_name(newfi, newname);
-                if(fi != NULL) {
-                    purge_file(fi);
-                    put_file(fi);
-                }
 
                 filename = (char *) op->req + op->req->coda_rename.srcname;
                 fi = look_info(&op->req->coda_rename.sourceFid);
@@ -689,7 +820,8 @@ static void process_answer(struct userinfo *user)
             send_to_kernel(rep, numread);
 			
         }
-		
+        
+        release_fids(op->req);
         *opp = op->next;
         free(op);
     }
@@ -697,11 +829,9 @@ static void process_answer(struct userinfo *user)
     if(user->ops != NULL) {
         log("Remaining operations: ");
         for(op = user->ops; op != NULL; op = op->next)
-            log("%i ", op->req->ih.unique);
+            log("%li ", op->req->ih.unique);
         log("\n");
-    }
-	
-	
+    }	
 }
 
 static void process_child_answer()
@@ -801,7 +931,6 @@ static void kill_child()
 	
     check_servers();
 }
-
 
 static int new_child(struct userinfo *user, uid_t uid, gid_t gid)
 {
@@ -920,7 +1049,7 @@ static struct userinfo *get_user(uid_t uid, gid_t gid)
                 if(currusers[i].serverpid == -1) break;
 			
             if(i == MAXUSERS) {
-				/* No free slots, must kill a child */
+                /* No free slots, must kill a child */
                 kill_child();
             }
         } while(i == MAXUSERS);
@@ -934,6 +1063,7 @@ static struct userinfo *get_user(uid_t uid, gid_t gid)
     return user;
 }
 
+
 static void send_to_child(union inputArgs *req, int reqsize, char *path1,
 			  char *path2)
 {
@@ -946,7 +1076,8 @@ static void send_to_child(union inputArgs *req, int reqsize, char *path1,
     char *message, *mp;
     int msgoff;
     int res;
-	
+    
+
     user = get_user(uid, gid);
     if(user == NULL) {
         reply(req, ENOMEM);
@@ -1012,6 +1143,7 @@ static void send_to_child(union inputArgs *req, int reqsize, char *path1,
         reply(req, errno);
     }
     else {
+        grab_fids(req);
         op->next = user->ops;
         user->ops = op;
     }
@@ -1025,6 +1157,11 @@ static void send_with_path(union inputArgs *req, int reqsize, char *filename,
     char *path;
 
     fi = look_info(id);
+    if(fi == NULL) {
+        reply(req, ENOENT);
+        return;
+    }
+
     path = fi->path;
 		
     sprintf(pathbuf, "%s/%s", path, filename);
@@ -1038,12 +1175,12 @@ static void send_with_path(union inputArgs *req, int reqsize, char *filename,
             send_to_child(req, reqsize, pathbuf, path2);
 }
 
-
 static void coda_flush()
 {
     union outputArgs rep;
 	
     log("=================================================================\n");
+    log_date();
     log("CODA_FLUSH\n");
 	
     rep.oh.opcode = CODA_FLUSH;
@@ -1110,6 +1247,7 @@ static void process_kernel_req()
     }
 	
     log("=================================================================\n");
+    log_date();
     log("%i bytes: opcode: %li, unique: %li\n", 
         numread, req->ih.opcode, req->ih.unique);
 	
@@ -1130,14 +1268,20 @@ static void process_kernel_req()
     case CODA_GETATTR:
         log("CODA_GETATTR\n");
         path = look_name(&req->coda_getattr.VFid);
-        send_to_child(req, numread, path, NULL); 
+        if(path == NULL)
+            reply(req, ENOENT);
+        else
+            send_to_child(req, numread, path, NULL); 
         break;
 		
     case CODA_ACCESS:
         log("CODA_ACCESS, flags: 0x%04x\n", req->coda_access.flags);
 		
         path = look_name(&req->coda_access.VFid);
-        send_to_child(req, numread, path, NULL);
+        if(path == NULL)
+            reply(req, ENOENT);
+        else
+            send_to_child(req, numread, path, NULL);
         break;
 		
 #ifdef CODA_OPEN_BY_FD
@@ -1149,6 +1293,11 @@ static void process_kernel_req()
             log("CODA_OPEN, flags: 0x%04x\n", req->coda_open.flags);
         
         fi = look_info(&req->coda_open.VFid);
+        if(fi == NULL) {
+            reply(req, ENOENT);
+            break;
+        }
+
         path = fi->path;
         log("path: %s\n", path);
 		
@@ -1188,7 +1337,8 @@ static void process_kernel_req()
                     of->fd = -1;
                     of->next = fi->ofs;
                     fi->ofs = of;
-					
+                    ref_fid(&req->coda_open.VFid);
+
                     log("tmpfile: %s\n", of->tmpfile);
                     send_to_child(req, numread, path, tmpname);
                 }
@@ -1200,6 +1350,11 @@ static void process_kernel_req()
         log("CODA_CLOSE, flags: 0x%04x\n", req->coda_close.flags);
 		
         fi = look_info(&req->coda_close.VFid);
+        if(fi == NULL) {
+            reply(req, ENOENT);
+            break;
+        }
+
         path = fi->path;
         log("path: %s\n", path);
 		
@@ -1228,7 +1383,7 @@ static void process_kernel_req()
                 }
             }
             if(!dowrite) {
-                close_file(of, ofp);
+                close_file(of, ofp, &req->coda_close.VFid);
                 reply(req, 0);
             }
         }
@@ -1250,7 +1405,8 @@ static void process_kernel_req()
         filename = ibuf + req->coda_create.name;
 		
         log("CODA_CREATE, name: '%s', mode: 0%o, rdev: 0x%04x\n", 
-            filename, req->coda_create.mode, req->coda_create.attr.va_rdev);
+            filename, req->coda_create.mode,
+            (int) req->coda_create.attr.va_rdev);
 		
         send_with_path(req, numread, filename, &req->coda_create.VFid, NULL);
         break;
@@ -1259,14 +1415,20 @@ static void process_kernel_req()
         log("CODA_READLINK\n");
 		
         path = look_name(&req->coda_readlink.VFid);
-        send_to_child(req, numread, path, NULL);
+        if(path == NULL)
+            reply(req, ENOENT);
+        else
+            send_to_child(req, numread, path, NULL);
         break;
 
     case CODA_SETATTR:
         log("CODA_SETATTR\n");
 
         path = look_name(&req->coda_setattr.VFid);
-        send_to_child(req, numread, path, NULL);
+        if(path == NULL)
+            reply(req, ENOENT);
+        else
+            send_to_child(req, numread, path, NULL);
         break;
 
     case CODA_REMOVE:
@@ -1301,6 +1463,10 @@ static void process_kernel_req()
         log("CODA_RENAME, name1: '%s', name2: '%s'\n", filename, filename2); 
 
         fi = look_info(&req->coda_rename.destFid);
+        if(fi == NULL) {
+            reply(req, ENOENT);
+            break;
+        }
         sprintf(pathbuf, "%s/%s", fi->path, filename2);
         
         send_with_path(req, numread, filename, &req->coda_rename.sourceFid,
@@ -1319,6 +1485,10 @@ static void process_kernel_req()
 
     case CODA_LINK:
         fi = look_info(&req->coda_link.sourceFid);
+        if(fi == NULL) {
+            reply(req, ENOENT);
+            break;
+        }
         filename = fi->path;
         filename2 = ibuf + req->coda_link.tname;        
         
@@ -1345,6 +1515,8 @@ static void process_kernel_req()
         else {
             /* FIXME: Inform the child that the operation
                is interrupted */
+
+            release_fids(op->req);
             *opp = op->next;
             free(op);
         }
@@ -1410,7 +1582,6 @@ static void process()
             continue;
 
         log("Numfids: %i\n", numfids);
-        
 
         if(FD_ISSET(codafd, &rfds))
             process_kernel_req();

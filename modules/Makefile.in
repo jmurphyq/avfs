@@ -27,8 +27,8 @@ modules = \
 	utar.o       \
 	urar.o       \
 	uzip.o       \
+	floppy.o     \
 	extfs.o
-#	floppy.o     \
 
 modules_objs = \
 	$(modules)   \

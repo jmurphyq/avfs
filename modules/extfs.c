@@ -16,7 +16,7 @@
 #include "filebuf.h"
 #include "parsels.h"
 #include "realfile.h"
-#include "prog.h"
+#include "runprog.h"
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -127,60 +127,31 @@ static void parse_extfs_line(struct lscache *lc, char *line,
     av_free(linkname);
 }
 
-static int read_extfs_list(struct filebuf *fbs[2], struct archive *arch,
-                           ventry *ve)
-{
-    int res = 0;
-    struct lscache *lc;
-
-    lc = av_new_lscache();
-
-    while(!av_filebuf_eof(fbs[0]) || !av_filebuf_eof(fbs[1])) {
-        char *line;
-
-        /* FIXME: timeout? */
-        res = av_filebuf_check(fbs, 2, -1);
-        if(res < 0)
-            break;
-
-        while((res = av_filebuf_readline(fbs[0], &line)) == 1) {
-            parse_extfs_line(lc, line, arch);
-            av_free(line);
-        }
-        if(res < 0)
-            break;
-
-        while((res = av_filebuf_readline(fbs[1], &line)) == 1) {
-            av_log(AVLOG_WARNING, "%s: stderr: %s", ve->mnt->avfs->name, line);
-            av_free(line);
-        }
-        if(res < 0)
-            break;
-    }
-  
-    av_unref_obj(lc);
-
-    if(res < 0)
-        return res;
-
-    return 0;
-}
-
-static int extfs_do_list(struct extfsdata *info, ventry *ve,
-                         struct archive *arch, int pipeout[2], int pipeerr[2])
-
+static int read_extfs_list(struct program *pr, struct lscache *lc,
+                           struct archive *arch)
 {
     int res;
-    struct proginfo pri;
-    struct realfile *rf;
-    char *prog[4];
-    struct filebuf *fbs[2];
-    
-    if(pipe(pipeout) == -1 || pipe(pipeerr) == -1)
-        return -errno;
 
-    av_registerfd(pipeout[0]);
-    av_registerfd(pipeerr[0]);
+    while(1) {
+        char *line;
+
+        res = av_program_getline(pr, &line, -1);
+        if(res <= 0)
+            return res;
+        if(line == NULL)
+            return 0;
+        parse_extfs_line(lc, line, arch);
+        av_free(line);
+    }
+}
+
+static int extfs_list(void *data, ventry *ve, struct archive *arch)
+{
+    int res;
+    const char *prog[4];
+    struct realfile *rf;
+    struct program *pr;
+    struct extfsdata *info = (struct extfsdata *) data;    
 
     if(info->needbase) {
         res = av_get_realfile(ve->mnt->base, &rf);
@@ -190,64 +161,19 @@ static int extfs_do_list(struct extfsdata *info, ventry *ve,
     else
         rf = NULL;
     
-    av_init_proginfo(&pri);
-
     prog[0] = info->progpath;
     prog[1] = "list";
     prog[2] = rf == NULL ? NULL : rf->name;
     prog[3] = NULL;
-  
-    pri.prog = (const char **) prog;
 
-    pri.ifd = open("/dev/null", O_RDONLY);
-    pri.ofd = pipeout[1];
-    pri.efd = pipeerr[1];
-    pipeout[1] = -1;
-    pipeerr[1] = -1;
-
-    res = av_start_prog(&pri);
-    close(pri.ifd);
-    close(pri.ofd);
-    close(pri.efd);
-
+    res = av_start_program(prog, &pr);
     if(res == 0) {
-        fbs[0] = av_filebuf_new(pipeout[0], FILEBUF_NONBLOCK);
-        fbs[1] = av_filebuf_new(pipeerr[0], FILEBUF_NONBLOCK);
-        pipeout[0] = -1;
-        pipeerr[0] = -1;
-    
-        res = read_extfs_list(fbs, arch, ve);
-        av_unref_obj(fbs[0]);
-        av_unref_obj(fbs[1]);
-    
-        if(res == 0)
-            res = av_wait_prog(&pri, 0, 0);
-        else
-            av_wait_prog(&pri, 1, 0);
+        struct lscache *lc = av_new_lscache();
+        res = read_extfs_list(pr, lc, arch);
+        av_unref_obj(lc);
+        av_unref_obj(pr);
     }
     av_unref_obj(rf);
-
-    return res;
-}
-
-static int extfs_list(void *data, ventry *ve, struct archive *arch)
-{
-    int res;
-    int pipeout[2];
-    int pipeerr[2];
-    struct extfsdata *info = (struct extfsdata *) data;
-
-    pipeerr[0] = -1;
-    pipeerr[1] = -1;
-    pipeout[0] = -1;
-    pipeout[1] = -1;
-    
-    res = extfs_do_list(info, ve, arch, pipeout, pipeerr);
-
-    close(pipeout[0]);
-    close(pipeout[1]);
-    close(pipeerr[0]);
-    close(pipeerr[1]);
 
     return res;
 }
@@ -259,10 +185,8 @@ static int get_extfs_file(ventry *ve, struct archfile *fil,
     struct archparams *ap = (struct archparams *) ve->mnt->avfs->data;
     struct extfsdata *info = (struct extfsdata *) ap->data;
     struct extfsnode *enod = (struct extfsnode *) fil->nod->data;
-    struct proginfo pri;
     const char *prog[6];
     struct realfile *rf;
-    int pipeout[2];
   
     if(info->needbase) {
         res = av_get_realfile(ve->mnt->base, &rf);
@@ -272,10 +196,6 @@ static int get_extfs_file(ventry *ve, struct archfile *fil,
     else 
         rf = NULL;
   
-    pipeout[0] = -1;
-    pipeout[1] = -1;
-    pipe(pipeout);
-
     prog[0] = info->progpath;
     prog[1] = "copyout";
     prog[2] = rf == NULL ? "/" : rf->name;
@@ -283,31 +203,7 @@ static int get_extfs_file(ventry *ve, struct archfile *fil,
     prog[4] = tmpfile;
     prog[5] = NULL;
   
-    av_init_proginfo(&pri);
-    pri.prog = (const char **) prog;
-    pri.ifd = open("/dev/null", O_RDONLY);
-    pri.ofd = pipeout[1];
-    pri.efd = pipeout[1];
-
-    res = av_start_prog(&pri);
-    close(pri.ifd);
-    close(pri.ofd);
-
-    if(res == 0) {
-        struct filebuf *fb = av_filebuf_new(pipeout[0], FILEBUF_NONBLOCK);
-        char *line;
-        
-        while(av_filebuf_getline(fb, &line, -1) == 1 && line != NULL) {
-            av_log(AVLOG_WARNING, "%s: output: %s", ve->mnt->avfs->name, line);
-            av_free(line);
-        }
-        av_unref_obj(fb);
-
-        res = av_wait_prog(&pri, 0, 0);
-    }
-    else
-        close(pipeout[0]);
-
+    res = av_run_program(prog);
     av_unref_obj(rf);
 
     return res;
@@ -370,7 +266,7 @@ static avssize_t extfs_read(vfile *vf, char *buf, avsize_t nbyte)
 static int extfs_open(ventry *ve, struct archfile *fil)
 {
     int res;
-    struct extfsfile *extfil;
+    struct extfsfile *efil;
     char *tmpfile;
     int fd;
 
@@ -393,11 +289,11 @@ static int extfs_open(ventry *ve, struct archfile *fil)
         return res;
     }
 
-    AV_NEW(extfil);
-    extfil->tmpfile = tmpfile;
-    extfil->fd = fd;
+    AV_NEW(efil);
+    efil->tmpfile = tmpfile;
+    efil->fd = fd;
 
-    fil->data = extfil;
+    fil->data = efil;
     
     return 0;
 }
@@ -516,7 +412,6 @@ static int extfs_init(struct vmodule *module)
 
     return 0;
 }
-
 
 extern int av_init_module_extfs(struct vmodule *module);
 

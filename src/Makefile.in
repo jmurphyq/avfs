@@ -19,6 +19,7 @@ core_objs = \
 	ugid.o       \
 	parse.o      \
 	prog.o       \
+	runprog.o    \
 	cache.o      \
 	filebuf.o    \
 	local.o      \

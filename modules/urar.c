@@ -10,8 +10,13 @@
 */
 
 #include "archive.h"
+#include "realfile.h"
+#include "prog.h"
 #include "oper.h"
 #include "version.h"
+
+#include <fcntl.h>
+#include <unistd.h>
 
 #define DOS_DIR_SEP_CHAR  '\\'
 
@@ -115,6 +120,11 @@ struct rar_entinfo {
     avoff_t datastart;
     block_header bh;
     file_header fh;
+};
+
+struct rarfile {
+    char *tmpfile;
+    int fd;
 };
 
 static void initCRC(void)
@@ -456,98 +466,132 @@ static int parse_rarfile(void *data, ventry *ve, struct archive *arch)
     return res;  
 }
 
-#if 0
 /* FIXME: Because we use the 'rar' program to extract the contents of
    each file individually , we get _VERY_ poor performance */
 
-static int do_unrar(ave *v, vpath *path, arch_fdi *di)
+static int get_rar_file(ventry *ve, struct archfile *fil, int fd)
 {
-    struct proginfo pri;
-    rar_inodat *info = (rar_inodat *) di->ino->udata;
-    const char *prog[10];
-    real_file *basefile;
     int res;
+    struct rarnode *info = (struct rarnode *) fil->nod->data;
+    struct realfile *rf;
+    const char *prog[7];
+    struct proginfo pri;
 
-    if(di->file.fh != -1) av_close(DUMMYV, di->file.fh);
-    di->offset = 0;
-    di->size = di->ino->st.size;
+    res = av_get_realfile(ve->mnt->base, &rf);
+    if(res < 0)
+        return res;
 
-    di->file.fh = av_get_tmpfd(v);
-    if(di->file.fh == -1) return -1;
-
-    basefile = av_get_realfile(v, BASE(path));
-    if(basefile == NULL) return -1;
-  
+    /* FIXME: if the program 'rar' doesn't exist, try 'unrar' */
     prog[0] = "rar";
     prog[1] = "p";
     prog[2] = "-c-";
     prog[3] = "-ierr";
-    prog[4] = basefile->name;
-    prog[5] = info->orig_path;
+    prog[4] = rf->name;
+    prog[5] = info->path;
     prog[6] = NULL;
-  
+ 
     av_init_proginfo(&pri);
     pri.prog = prog;
-    pri.ifd = av_localopen(DUMMYV, "/dev/null", AVO_RDONLY, 0);
-    pri.ofd = di->file.fh;
-    pri.efd = av_get_logfile(v);
+    pri.ifd = open("/dev/null", O_RDONLY);
+    pri.ofd = fd;
+    pri.efd = pri.ifd;
+    
+    res = av_start_prog(&pri);
+    close(pri.ifd);
 
-    res = av_start_prog(v, &pri);
- 
-    av_localclose(DUMMYV, pri.ifd);
-    av_localclose(DUMMYV, pri.efd);
+    if(res == 0)
+        res = av_wait_prog(&pri, 0, 0);
 
-    if(res == -1) 
-        av_log(AVLOG_WARNING, "URAR: Could not start %s", prog[0]);
-    else {
-        res = av_wait_prog(v, &pri, 0, 0);
-        if(res == -1) 
-            av_log(AVLOG_WARNING, "URAR: Prog %s returned with an error", prog[0]);
-    }
-
-    av_free_realfile(basefile);
-    av_lseek(v, di->file.fh, 0, AVSEEK_SET);
-    di->file.ptr = 0;
+    av_unref_obj(rf);
 
     return res;
 }
 
-static void *rar_open(ave *v,  vpath *path, int flags, int mode)
+static int do_unrar(ventry *ve, struct archfile *fil)
 {
-    arch_fdi *di;
-    arch_devd *dd = (arch_devd *) av_get_vdev(path)->devdata;
-    rar_inodat *info;
+    int res;
+    struct rarfile *rfil;
+    char *tmpfile;
+    int fd;
 
-    di = (arch_fdi *) (*dd->vdev->open)(v, path, flags, mode);
-    if(di == NULL) return NULL;
+    res = av_get_tmpfile(&tmpfile);
+    if(res < 0)
+        return res;
 
-    if(AV_ISDIR(di->ino->st.mode))
-        return di;
-
-    info = (rar_inodat *) di->ino->udata;
-    if(info->flags & FF_WITH_PASSWORD) {
-        av_log(AVLOG_WARNING, "Sorry, can't open password protected RAR-file");
-        v->errn = EACCES;
-        goto error;
+    fd = open(tmpfile, O_RDWR | O_CREAT | O_TRUNC);
+    if(fd == -1) {
+        res = -errno; 
+        av_log(AVLOG_ERROR, "RAR: Could not open %s: %s", tmpfile,
+               strerror(errno));
+        av_del_tmpfile(tmpfile);
+        return res;
     }
 
-    if(info->method != M_STORE) {
-        int res;
-
-        res = do_unrar(v, path, di);
-        if(res == -1) goto error;
+    res = get_rar_file(ve, fil, fd);
+    if(res < 0) {
+        close(fd);
+        av_del_tmpfile(tmpfile);
+        return res;
     }
-  
-    return (void *) di;
 
-  error:
-    (*dd->vdev->close)(v, (void *) di);
-    return NULL;
+    AV_NEW(rfil);
+    rfil->tmpfile = tmpfile;
+    rfil->fd = fd;
+
+    fil->data = rfil;
+
+    return 0;
 }
 
-/* FIXME: no CRC checking is done while reading files. How to do it? */
 
-#endif
+static int rar_open(ventry *ve, struct archfile *fil)
+{
+    struct rarnode *info = (struct rarnode *) fil->nod->data;
+
+    if(info->flags & FF_WITH_PASSWORD) {
+        av_log(AVLOG_WARNING, "URAR: File password protected, sorry...");
+        return -EACCES;
+    }
+
+    if(info->method != M_STORE)
+        return do_unrar(ve, fil);
+    
+    return 0;
+}
+
+static int rar_close(struct archfile *fil)
+{
+    struct rarfile *rfil = (struct rarfile *) fil->data;
+
+    if(rfil != NULL) {
+        close(rfil->fd);
+        av_del_tmpfile(rfil->tmpfile);
+        av_free(rfil);
+    }
+    
+    return 0;
+}
+
+static avssize_t rar_read(vfile *vf, char *buf, avsize_t nbyte)
+{
+    avssize_t res;
+    struct archfile *fil = arch_vfile_file(vf);
+    struct rarfile *rfil = (struct rarfile *) fil->data;
+
+    if(rfil == NULL)
+        return av_arch_read(vf, buf, nbyte);
+
+    if(lseek(rfil->fd, vf->ptr, SEEK_SET) == -1)
+        return -errno;
+
+    res = read(rfil->fd, buf, nbyte);
+    if(res == -1)
+        return -errno;
+
+    vf->ptr += res;
+
+    return res;
+}
 
 extern int av_init_module_urar(struct vmodule *module);
 
@@ -568,6 +612,9 @@ int av_init_module_urar(struct vmodule *module)
     
     ap = (struct archparams *) avfs->data;
     ap->parse = parse_rarfile;
+    ap->open = rar_open;
+    ap->close = rar_close;
+    ap->read = rar_read;
 
     initCRC();
 

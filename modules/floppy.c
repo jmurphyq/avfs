@@ -8,10 +8,9 @@
     FLOPPY module (interface for mtools)
 */
 
-#if 0
+#include "remote.h"
 
-#include "archives.h"
-#include "filebuf.h"
+#if 0
 
 #define FLOPPY_PARAM_SEP '-'
 
@@ -691,243 +690,32 @@ static int floppy_rename(ave *v, vpath *path, vpath *newpath)
 }
 
 
-static int floppy_close(ave *v, void *devinfo)
+#endif
+
+static void floppy_destroy(struct remote *rem)
 {
-    arch_fdi *di = (arch_fdi *) devinfo;
-    int res = 0;
-
-    if(di->udata != AVNULL) {
-        struct floppy_fdidat *ffd = (struct floppy_fdidat *) di->udata;
-        if(ffd != AVNULL) {
-            av_wait_prog(DUMMYV, &ffd->pri, 1, 0);
-
-            if(di->file.fh != -1 && (di->ino->flags & INOF_DIRTY)) {
-                if(ffd->error) {
-                    av_log(AVLOG_WARNING, 
-                             "Floppy: not writing back file because of error(s)");
-                    v->errn = EIO;
-                    res = -1;
-                }
-                else {
-                    if(!(di->ino->flags & INOF_CREATED)) do_mdel(v, ffd->dosname);
-                    res = start_mcopy(v, ffd->tmpname, ffd->dosname, &ffd->pri);
-                    av_wait_prog(DUMMYV, &ffd->pri, 0, 0);
-                }
-                di->ino->flags &= ~(INOF_DIRTY | INOF_CREATED);
-                /* Archive is not valid anymore */
-                av_cache_op(di->arch->cobj, COBJ_DELETE);
-            }
-      
-            av_del_tmpfile(ffd->tmpname);
-
-            av_free(ffd->dosname);
-        }
-    }
-  
-    if((*di->vdev->close)(v, devinfo) == -1) res = -1;
-  
-    return res;
+    av_free(rem->name);
+    av_free(rem);
 }
 
+extern int av_init_module_floppy(struct vmodule *module);
 
-static void *floppy_open(ave *v, vpath *path, int flags, int mode)
+int av_init_module_floppy(struct vmodule *module)
 {
     int res;
-    arch_fdi *di;
-    arch_devd *dd = (arch_devd *) av_get_vdev(path)->devdata;
-    struct floppy_fdidat *ffd;
-
-    di = (arch_fdi *) (*dd->vdev->open)(v, path, flags, mode);
-    if(di == AVNULL) return AVNULL;
-
-    if(AV_ISDIR(di->ino->st.mode)) return (void *) di;
-
-
-    AV_NEW(v, ffd);
-    if(ffd == AVNULL) goto error;
-  
-    di->udata = (void *) ffd;
-    di->file.fh = -1;
-  
-    av_init_proginfo(&(ffd->pri));
-    ffd->cursize = 0;
-    ffd->error = 0;
-    ffd->tmpname = AVNULL;
-    ffd->dosname = AVNULL;
-    ffd->rdonly = ((flags & AVO_ACCMODE) == AVO_RDONLY);
-
-    ffd->tmpname = av_get_tmpfile(v);
-    if(ffd->tmpname == AVNULL) goto error;
-  
-    ffd->dosname =  get_dosname(v, path);
-    if(ffd->dosname == AVNULL) goto error;
-  
-    if(!(di->ino->flags & INOF_DIRTY) && di->ino->st.size != 0) {
-        res = start_mcopy(v, ffd->dosname, ffd->tmpname, &ffd->pri);
-        if(res == -1) goto error;
-    }
-    else {
-        /* dirty means that we just created a new inode, or truncated a file */
+    struct remote *rem;
+    struct avfs *avfs;
     
-        res = av_localopen(v, ffd->tmpname, AVO_RDWR | AVO_CREAT | AVO_EXCL,
-                             0600);
-        if(res == -1) goto error;
-        di->file.fh = res;
-        di->file.ptr = 0;
-    }
-  
-    ffd->cursize = 0;
-    di->offset = 0;
-    di->size = di->ino->st.size;
-  
-    return (void *) di;
-
-  error:
-    floppy_close(v, (void *) di);
-    return AVNULL;
-}
-
-
-
-static avssize_t floppy_read(ave *v, void *devinfo, char *buf, avsize_t nbyte)
-{
-    arch_fdi *di = (arch_fdi *) devinfo;
-    struct floppy_fdidat *ffd = (struct floppy_fdidat *) di->udata;
-
-    if(AV_ISDIR(di->ino->st.mode)) {
-        v->errn = EISDIR;
-        return -1;
-    }
-
-    if(ffd->pri.pid != -1) {
-        avoff_t nact;
-  
-        if(di->ptr >= di->size || nbyte == 0) return 0;
+    AV_NEW(rem);
     
-        nact = AV_MIN(nbyte, (avsize_t) (di->size - di->ptr));
-        if(di->file.fh == -1 || ffd->cursize < di->ptr + nact) 
-            wait_until(v, di, di->ptr + nact);
-    }
-  
-    if(di->file.fh == -1 || 
-       (ffd->cursize < di->size && di->ptr > ffd->cursize)) {
-        v->errn = EIO;
-        return -1;
-    }
+    rem->data    = NULL;
+    rem->name    = av_strdup("floppy");
+    rem->destroy = floppy_destroy;
+//    rem->list    = floppy_list;
+//    rem->get     = floppy_get;
+//    rem->wait    = floppy_wait;
 
-    nbyte = AV_MIN(nbyte, (avsize_t) (ffd->cursize - di->ptr));
+    res = av_remote_init(module, rem, &avfs);
 
-    return (*di->vdev->read)(v, devinfo, buf, nbyte);
-}
-
-static avssize_t floppy_write(ave *v, void *devinfo, const char *buf, 
-			      avsize_t nbyte)
-{
-    arch_fdi *di = (arch_fdi *) devinfo;
-    struct floppy_fdidat *ffd = (struct floppy_fdidat *) di->udata;
-    avssize_t res;
-
-    if(AV_ISDIR(di->ino->st.mode)) {
-        v->errn = EISDIR;
-        return -1;
-    }
-
-    if(ffd->pri.pid != -1) {
-        avoff_t nact;
-  
-        nact = AV_MIN(nbyte, (avsize_t) (di->size - di->ptr));
-        if(di->file.fh == -1 || ffd->cursize < di->ptr + nact) {
-            if(wait_until(v, di, di->ptr + nact) == -1) {
-                ffd->error = 1;
-                v->errn = EIO;
-                return -1;
-            }
-        }
-    }
-
-    if(di->ptr != di->file.ptr) {
-        di->file.ptr = av_locallseek(v, di->file.fh, di->ptr, AVSEEK_SET);
-        if(di->file.ptr == -1) {
-            ffd->error = 1;
-            return -1;
-        }
-    }
-  
-    res = av_localwrite(v, di->file.fh, buf, nbyte);
-    if(res == -1) {
-        av_log(AVLOG_ERROR, "floppy: Error writing to tmp file");
-        ffd->error = 1;
-    }
-    else {
-        di->file.ptr += res;
-        if(res != (avssize_t) nbyte) {
-            av_log(AVLOG_ERROR, "floppy: Writing to tmp file was short");
-            v->errn = EIO;
-            ffd->error = 1;
-            return -1;
-        }
-        di->ptr += nbyte;
-        if(di->ptr > di->size) di->ino->st.size = di->size = di->ptr;
-    }
-
-    di->ino->flags |= INOF_DIRTY;
     return res;
 }
-
-static struct vdev_info *init_floppy(ave *v, const char *name)
-{
-    struct vdev_info *floppy_vdev;
-    arch_devd *dd;
-
-    floppy_vdev = av_init_arch(v, name, AVNULL, AV_VER);
-    if(floppy_vdev == AVNULL) return AVNULL;
-  
-    dd = (arch_devd *) floppy_vdev->devdata;
-    dd->flags = DEVF_NOFILE | DEVF_WRITABLE;
-    dd->parsefunc = read_floppytree;
-    dd->getminor = get_floppy_minor;
-    dd->valid_time = 2;
-
-    floppy_vdev->open    = floppy_open;
-    floppy_vdev->close   = floppy_close;
-    floppy_vdev->read    = floppy_read;
-    floppy_vdev->write   = floppy_write;
-    floppy_vdev->unlink  = floppy_unlink;
-    floppy_vdev->mkdir   = floppy_mkdir;
-    floppy_vdev->rmdir   = floppy_rmdir;
-    floppy_vdev->rename  = floppy_rename;
-    floppy_vdev->link    = AVNULL;
-    floppy_vdev->symlink = AVNULL;
-    floppy_vdev->mknod   = AVNULL;
-
-    return floppy_vdev;
-}
-
-extern int av_init_module_floppy(ave *v);
-
-int av_init_module_floppy(ave *v)
-{
-    struct vdev_info *vdev;
-    arch_devd *dd;
-    int major;
-
-    vdev = init_floppy(v, "floppy");
-    if(vdev == AVNULL) return -1;
-
-    dd = (arch_devd *) vdev->devdata;
-
-    if(av_add_vdev(v, vdev) == -1) return -1;
-    major = vdev->major;
-  
-    vdev = init_floppy(DUMMYV, "a");
-    if(vdev != AVNULL) {
-        dd = (arch_devd *) vdev->devdata;    
-        dd->udata = (void *) av_strdup(DUMMYV, "a");
-        if(dd->udata == AVNULL) av_destroy_vdev(vdev);
-        else if(av_add_vdev(v, vdev) != -1) vdev->major = major;
-    }
-
-    return major;
-}
-
-#endif

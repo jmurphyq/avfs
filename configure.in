@@ -185,8 +185,9 @@ printf("%s", UTS_RELEASE);
 		initstyle=suse
 	elif test -f /etc/rc.d/init.d/functions; then
 		initstyle=redhat
+        elif test -d /etc/rc2.d; then
+		initstyle=debian
 	else
-		# Debian, etc. missing
 		initstyle=generic
 	fi;
 	AC_MSG_RESULT([$initstyle])
@@ -203,7 +204,7 @@ printf("%s", UTS_RELEASE);
 	if test "$initstyle" = redhat; then
 		install_scriptcomps="$install_scriptcomps install_scriptlinks"
 		rcdir=/etc/rc.d
-		rcscriptdir=init.d/
+		rcscriptdir=init.d
 		start_levels="2 3 4 5"
 		stop_levels="0 1 6"
 		start_prio=85
@@ -216,6 +217,14 @@ printf("%s", UTS_RELEASE);
 		stop_levels="2 3"
 		start_prio=20
 		stop_prio=20
+	elif test "$initstyle" = debian; then
+		install_scriptcomps="$install_scriptcomps install_scriptlinks"
+		rcdir=/etc
+		rcscriptdir=init.d
+		start_levels="2 3 4 5"
+		stop_levels="0 1 6"
+		start_prio=85
+		stop_prio=25
 	else
 		rcdir=/etc/rc.d
 		rcscriptdir=
@@ -232,11 +241,11 @@ printf("%s", UTS_RELEASE);
 	profiledir=
 	if test "$newredir" = no; then
 		AC_MSG_CHECKING([for profile directory])
+		install_scriptcomps="$install_scriptcomps install_profilescripts"
 		if test -d /etc/profile.d; then
-			install_scriptcomps="$install_scriptcomps install_profilescripts"
 			profiledir=/etc/profile.d
 		else 
-			profiledir=none
+			profiledir=/etc
 		fi
 		AC_MSG_RESULT([$profiledir])
 	fi
@@ -246,7 +255,6 @@ printf("%s", UTS_RELEASE);
 fi
 
 AC_SUBST(install_scriptcomps)
-
 AC_SUBST(avfscoda_build)
 AC_SUBST(preload_build)
 

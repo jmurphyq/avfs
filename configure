@@ -2637,8 +2637,9 @@ echo "configure:2636: checking for init-script style" >&5
 		initstyle=suse
 	elif test -f /etc/rc.d/init.d/functions; then
 		initstyle=redhat
+        elif test -d /etc/rc2.d; then
+		initstyle=debian
 	else
-		# Debian, etc. missing
 		initstyle=generic
 	fi;
 	echo "$ac_t""$initstyle" 1>&6
@@ -2655,7 +2656,7 @@ echo "configure:2636: checking for init-script style" >&5
 	if test "$initstyle" = redhat; then
 		install_scriptcomps="$install_scriptcomps install_scriptlinks"
 		rcdir=/etc/rc.d
-		rcscriptdir=init.d/
+		rcscriptdir=init.d
 		start_levels="2 3 4 5"
 		stop_levels="0 1 6"
 		start_prio=85
@@ -2668,6 +2669,14 @@ echo "configure:2636: checking for init-script style" >&5
 		stop_levels="2 3"
 		start_prio=20
 		stop_prio=20
+	elif test "$initstyle" = debian; then
+		install_scriptcomps="$install_scriptcomps install_scriptlinks"
+		rcdir=/etc
+		rcscriptdir=init.d
+		start_levels="2 3 4 5"
+		stop_levels="0 1 6"
+		start_prio=85
+		stop_prio=25
 	else
 		rcdir=/etc/rc.d
 		rcscriptdir=
@@ -2684,12 +2693,12 @@ echo "configure:2636: checking for init-script style" >&5
 	profiledir=
 	if test "$newredir" = no; then
 		echo $ac_n "checking for profile directory""... $ac_c" 1>&6
-echo "configure:2688: checking for profile directory" >&5
+echo "configure:2697: checking for profile directory" >&5
+		install_scriptcomps="$install_scriptcomps install_profilescripts"
 		if test -d /etc/profile.d; then
-			install_scriptcomps="$install_scriptcomps install_profilescripts"
 			profiledir=/etc/profile.d
 		else 
-			profiledir=none
+			profiledir=/etc
 		fi
 		echo "$ac_t""$profiledir" 1>&6
 	fi
@@ -2697,7 +2706,6 @@ echo "configure:2688: checking for profile directory" >&5
 
 	install_scriptcomps="$install_scriptcomps install_avfscodamisc"
 fi
-
 
 
 

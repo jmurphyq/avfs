@@ -45,5 +45,6 @@ distclean: clean
 	rm -f include/config.h
 	rm -f */Makefile */Makefile.old
 	rm -f */*/Makefile */*/Makefile.old
+	rm -f scripts/avfs-config
 	rm -f TAGS
 

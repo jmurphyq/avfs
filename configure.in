@@ -20,6 +20,9 @@ if test "$validstring" = invalid; then
   AC_MSG_ERROR([type 'make realclean' before running configure])
 fi
 
+VERSION=0.9.3
+AC_SUBST(VERSION)
+
 os=`uname -s`
 
 AC_MSG_CHECKING([whether to build preload, avfscoda and/or shared library])
@@ -179,11 +182,19 @@ moduledir='${libdir}/avfs'
 
 AC_SUBST(moduledir)
 
+install_scriptcomps=
+
+AC_CHECK_PROG(EMACS, emacs, yes, no)
+
+if test $EMACS = yes; then
+	install_scriptcomps="$install_scriptcomps install_emacsscript"
+fi
+
 dnl ================================================================
 dnl == Now comes the stuff that is only for preload               ==
 dnl ================================================================
 
-if test $avfscoda_build = no; then
+if test $preload_build = yes; then
 	origlibs=$LIBS
 	LIBS=
 	AC_CHECK_FUNCS(lseek64 getdents64 open64 creat64 stat64 acl)
@@ -197,9 +208,6 @@ fi
 dnl ================================================================
 dnl == Now comes the stuff that is only for avfscoda              ==
 dnl ================================================================
-
-install_scriptcomps=
-
 
 if test $avfscoda_build = yes; then
 
@@ -327,9 +335,17 @@ if test $avfscoda_build = yes; then
 	install_scriptcomps="$install_scriptcomps install_avfscodamisc"
 fi
 
+dnl ================================================================
+dnl == Now comes the stuff that is only for shared                ==
+dnl ================================================================
+
+if test $shared_build = yes; then
+	install_scriptcomps="$install_scriptcomps install_avfsconfig"
+fi
+
 AC_SUBST(install_scriptcomps)
 AC_SUBST(avfscoda_build)
 AC_SUBST(preload_build)
 AC_SUBST(shared_build)
 
-AC_OUTPUT(src/Makefile modules/Makefile zlib/Makefile bzlib/Makefile lib/Makefile include/Makefile avfscoda/Makefile avfscoda/redir/Makefile preload/Makefile libneon/Makefile extfs/Makefile scripts/Makefile test/Makefile)
+AC_OUTPUT([src/Makefile modules/Makefile zlib/Makefile bzlib/Makefile lib/Makefile include/Makefile avfscoda/Makefile avfscoda/redir/Makefile preload/Makefile libneon/Makefile extfs/Makefile scripts/Makefile scripts/avfs-config test/Makefile], [chmod +x scripts/avfs-config])

@@ -60,12 +60,18 @@ install_avfscodamisc:
 	@if ! test -e $(i_codadev0); then mknod -m 600 $(i_codadev0) c 67 0; fi
 	@if ! test -e $(i_codadev1); then mknod -m 600 $(i_codadev1) c 67 1; fi
 
+install_emacsscript:
+	@../mkinstalldirs $(i_emacsstart)
+	$(INSTALL) -m 644 avfscoda.el $(i_emacsstart)/avfscoda.el
+
+install_avfsconfig:
+	@../mkinstalldirs $(i_bindir)
+	$(INSTALL) -m 755 avfs-config $(i_bindir)/avfs-config
+
 install: $(install_scriptcomps)
 	@../mkinstalldirs $(i_bindir)
 	$(INSTALL) -m 755 ftppass $(i_bindir)/ftppass
 	$(INSTALL) -m 755 davpass $(i_bindir)/davpass
-	@../mkinstalldirs $(i_emacsstart)
-	$(INSTALL) -m 644 avfscoda.el $(i_emacsstart)/avfscoda.el
 
 start:
 	$(absrcscriptdir)/avfscoda start

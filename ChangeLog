@@ -1,3 +1,7 @@
+2003-05-08  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* avfs-config and logging improvements by Daniel Koukola
+	
 2003-04-28  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Added shared lib build and fixes by Daniel Koukola

@@ -36,9 +36,10 @@
 static int loginited;
 static int logmask;
 static char *logfile;
+static int logfd;
 static AV_LOCK_DECL(loglock);
 
-static int logstat_get(struct entry *ent, const char *param, char **retp)
+static int debug_get(struct entry *ent, const char *param, char **retp)
 {
     char buf[32];
     
@@ -50,7 +51,7 @@ static int logstat_get(struct entry *ent, const char *param, char **retp)
     return 0;
 }
 
-static int logstat_set(struct entry *ent, const char *param, const char *val)
+static int debug_set(struct entry *ent, const char *param, const char *val)
 {
     int mask;
 
@@ -67,51 +68,92 @@ static int logstat_set(struct entry *ent, const char *param, const char *val)
     return 0;
 }
 
-static int get_logmask()
+static void log_open()
 {
-    int mask;
+    if(logfile != NULL) {
+        if(strcmp(logfile, "-") == 0)
+            logfd = STDERR_FILENO;
+        else
+            logfd = open(logfile, O_WRONLY | O_APPEND | O_CREAT, 0600);
+    } else {
+        openlog("avfs", LOG_CONS | LOG_PID, LOG_USER);
+    }
+}
+
+static void log_close()
+{
+    if(logfile != NULL) {
+        if(strcmp(logfile, "-") != 0 && logfd != -1)
+            close(logfd);
+    } else {
+        closelog();
+    }
+}
+
+static void log_init()
+{
+    char *logenv;
+
+    logmask = DEFAULT_LOGMASK;
+    logenv = getenv("AVFS_DEBUG");
+    if(logenv != NULL &&
+       logenv[0] >= '0' && logenv[0] <= '7' &&
+       logenv[1] >= '0' && logenv[1] <= '7' &&
+       logenv[2] == '\0')
+        logmask = (logenv[0] - '0') * 8 + (logenv[1] - '0');
+
+    logfile = getenv("AVFS_LOGFILE");
+    log_open();
+    loginited = 1;
+}
+
+static int logfile_get(struct entry *ent, const char *param, char **retp)
+{
+    char *s;
 
     AV_LOCK(loglock);
-    if(!loginited) {
-	char *logenv;
-
-        logmask = DEFAULT_LOGMASK;
-	logenv = getenv("AVFS_DEBUG");
-	if(logenv != NULL &&
-	   logenv[0] >= '0' && logenv[0] <= '7' &&
-	   logenv[1] >= '0' && logenv[1] <= '7' &&
-	   logenv[2] == '\0') 
-	    logmask = (logenv[0] - '0') * 8 + (logenv[1] - '0');
-
-        logfile = getenv("AVFS_LOGFILE");
-        if(logfile == NULL)
-            openlog("avfs", LOG_CONS | LOG_PID, LOG_USER);
-
-        loginited = 1;
-    }
-    mask = logmask;
+    if(logfile != NULL)
+        s = av_stradd(NULL, logfile, "\n", NULL);
+    else
+        s = av_strdup("");
     AV_UNLOCK(loglock);
 
-    return mask;
+    *retp = s;
+
+    return 0;
+}
+
+static int logfile_set(struct entry *ent, const char *param, const char *val)
+{
+    char *s;
+    unsigned int len;
+
+    s = av_strdup(val);
+    len = strlen(s);
+    if(len > 0 && s[len-1] == '\n')
+        s[len-1] = '\0';
+
+    if(s[0] == '\0') {
+        av_free(s);
+        s = NULL;
+    }
+
+    AV_LOCK(loglock);
+    log_close();
+    av_free(logfile);
+    logfile = s;
+    log_open();
+    AV_UNLOCK(loglock);
+
+    return 0;
 }
 
 #define LOGMSG_SIZE 1024
-static void filelog(const char *filename, const char *msg)
+static void filelog(const char *msg)
 {
-    int fd;
-    int do_close;
     char buf[LOGMSG_SIZE + 128];
 
-    if(strcmp(filename, "-") == 0) {
-        fd = STDERR_FILENO;
-        do_close = 0;
-    }
-    else {
-        fd = open(filename, O_WRONLY | O_APPEND | O_CREAT, 0600);
-        do_close = 1;
-    }
-    
-    if(fd != -1) {
+    if(logfd != -1) {
         struct avtm tmbuf;
 
         av_localtime(time(NULL), &tmbuf);
@@ -119,35 +161,43 @@ static void filelog(const char *filename, const char *msg)
                 tmbuf.mon + 1, tmbuf.day, tmbuf.hour, tmbuf.min, tmbuf.sec,
                 (unsigned long) getpid(), msg);
         
-        write(fd, buf, strlen(buf));
-        if(do_close)
-            close(fd);
+        write(logfd, buf, strlen(buf));
     }
 }
 
 void av_init_logstat()
 {
-    struct statefile logstat;
-    
-    logstat.data = NULL;
-    logstat.get = logstat_get;
-    logstat.set = logstat_set;
-    
-    av_avfsstat_register("debug", &logstat);
+    struct statefile statf;
+
+    if(!loginited)
+        log_init();
+
+    statf.data = NULL;
+    statf.get = debug_get;
+    statf.set = debug_set;
+
+    av_avfsstat_register("debug", &statf);
+
+    statf.get = logfile_get;
+    statf.set = logfile_set;
+
+    av_avfsstat_register("logfile", &statf);
 }
 
 void av_log(int type, const char *format, ...)
 {
     va_list ap;
     char buf[LOGMSG_SIZE+1];
-    int logmask;
 
-    /* note get_logmask also causes initialization of 'logfile' and
-       'logmask' based on environment variables */
-    logmask = get_logmask();
+    AV_LOCK(loglock);
 
-    if((type & logmask) == 0)
+    if(!loginited)
+        log_init();
+
+    if((type & logmask) == 0) {
+        AV_UNLOCK(loglock);
         return;
+    }
 
     va_start(ap, format);
 #ifdef HAVE_VSNPRINTF
@@ -161,7 +211,8 @@ void av_log(int type, const char *format, ...)
     if(logfile == NULL)
         syslog(LOG_INFO, buf);
     else
-        filelog(logfile, buf);
+        filelog(buf);
+    AV_UNLOCK(loglock);
 }
 
 avdev_t av_mkdev(int major, int minor)

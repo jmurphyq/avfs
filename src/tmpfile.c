@@ -154,8 +154,9 @@ avoff_t av_tmp_free()
 
     AV_LOCK(tmplock);
     if(tmpdir != NULL) {
+        /* Check if fs supports df info (ramfs doesn't) */
         res = statvfs(tmpdir->path, &stbuf);
-        if(res != -1)
+        if(res != -1 && stbuf.f_blocks != 0)
             freebytes = (avoff_t) stbuf.f_bavail * (avoff_t) stbuf.f_frsize;
     }
     AV_UNLOCK(tmplock);

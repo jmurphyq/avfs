@@ -32,8 +32,9 @@ modules = \
 
 modules_objs = \
 	$(modules)   \
-	mod_static.o \
-	@DAV_LS@
+	@DAV_LS@     \
+	mod_static.o
+
 
 all: modules.o
 

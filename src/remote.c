@@ -732,8 +732,13 @@ static avoff_t rem_local_size(const char *localname)
     struct stat stbuf;
     
     res = stat(localname, &stbuf);
-    if(res == 0)
-        return stbuf.st_blocks * 512;
+    if(res == 0) {
+        /* Ramfs returns 0 diskusage */
+        if(stbuf.st_blocks == 0)
+            return stbuf.st_size;
+        else
+            return stbuf.st_blocks * 512;
+    }
     else
         return -1;
     

@@ -89,7 +89,12 @@ AC_SUBST(ZLIB_CFLAGS)
 
 CPPFLAGS="$CPPFLAGS -D_REENTRANT -D_POSIX_PTHREAD_SEMANTICS"
 
-AC_CHECK_PROG(LD, ld, [ld -r], [$CC -Wl,-r -nostdlib])
+if test -z "$LD"; then
+	AC_CHECK_PROG(LD, ld, [ld -r], [$CC -Wl,-r -nostdlib])
+else
+	LD="$LD -r"
+	AC_SUBST(LD)
+fi
 
 AC_CHECK_FUNCS(vsnprintf strncasecmp strcasecmp mkdtemp)
 AC_HEADER_MAJOR

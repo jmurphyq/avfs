@@ -75,15 +75,20 @@ static int cache_setoff(struct entry *ent, const char *param, const char *val)
     avoff_t offval;
     char *end;
     
-    offval = strtoll(val, &end, 0);
-    if(end == val)
-        return -EINVAL;
-    if(*end == '\n')
-        end ++;
-    if(*end != '\0')
-        return -EINVAL;
-    if(offval < 0)
-        return -EINVAL;
+    /* Make truncate work with fuse */
+    if(!val[0])
+        offval = 0;
+    else {
+        offval = strtoll(val, &end, 0);
+        if(end == val)
+            return -EINVAL;
+        if(*end == '\n')
+            end ++;
+        if(*end != '\0')
+            return -EINVAL;
+        if(offval < 0)
+            return -EINVAL;
+    }
 
     AV_LOCK(cachelock);
     *offp = offval;
@@ -222,6 +227,10 @@ static void cache_checkspace(int full)
         tmpfree = 0;
     else
         tmpfree = av_tmp_free();
+
+    /* If free space can't be determined, then it is taken to be infinite */
+    if(tmpfree == -1)
+        tmpfree = AV_MAXOFF;
     
     keepfree = disk_keep_free;
     if(keepfree < 100 * 1024)

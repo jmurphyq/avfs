@@ -1,0 +1,6 @@
+#!/bin/sh
+MntDir=${HOME}/.avfs
+grep -q "avfsd ${MntDir}" /proc/mounts || {
+   echo Mounting AVFS on $MntDir...
+   avfsd $MntDir
+}

@@ -448,7 +448,10 @@ static avssize_t arch_read(vfile *vf, char *buf, avsize_t nbyte)
     struct archparams *ap = (struct archparams *) vf->mnt->avfs->data;
     
     AV_LOCK(arch->lock);
-    res =  ap->read(vf, buf, nbyte);
+    if(AV_ISDIR(fil->nod->st.mode))
+	res = -EISDIR;
+    else
+	res =  ap->read(vf, buf, nbyte);
     AV_UNLOCK(arch->lock);
 
     return res;
@@ -567,6 +570,10 @@ static int arch_readlink(ventry *ve, char **bufp)
         res = -ENOENT;
     else if(!AV_ISLNK(nod->st.mode))
         res = -EINVAL;
+    else if(nod->linkname == NULL) {
+	av_log(AVLOG_ERROR, "ARCH: linkname is NULL");
+	res = -EIO;
+    }
     else {
         *bufp = av_strdup(nod->linkname);
         res = 0;

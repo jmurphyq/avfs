@@ -996,8 +996,10 @@ static void tar_release(struct archive *arch, struct archnode *nod)
 {
     struct tarnode *tn = (struct tarnode *) nod->data;
 
-    av_free(tn->sparsearray);
-    tn->sparsearray = NULL;
+    if(tn != NULL) {
+	av_free(tn->sparsearray);
+	tn->sparsearray = NULL;
+    }
 }
 
 

@@ -22,7 +22,11 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#define AVFS_SERVER_PATH "/usr/lib/avfs/avfs_server"
+#ifndef AVFS_SERVER_DIR
+#define AVFS_SERVER_DIR "/usr/lib/avfs"
+#endif
+
+#define AVFS_SERVER_PATH AVFS_SERVER_DIR "/avfs_server"
 
 #define PWBUFSIZE 256
 #define MAXUSERNAME 32

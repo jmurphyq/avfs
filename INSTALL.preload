@@ -16,26 +16,40 @@ To install, log in as root and type
 
   make install
 
-This will install the 'avfs_server' program in /usr/bin/ and the
-'avfs_preload.so' shared library in /usr/lib/. It will also install
-some extfs handlers under /usr/lib/avfs.
+This will install the 'avfs_server' program in '/usr/lib/avfs/' and
+the 'avfs_preload.so' shared library in '/usr/lib/'. It will also
+install some extfs handlers under '/usr/lib/avfs/extfs/'.
 
-If you want to install to some place other then /usr/, then specify
+If you want to install to some place other then '/usr/', then specify
 the '--prefix' argument to 'configure'.
+
+If you do not have root access you can still use avfs. You should
+either pass '--prefix' a directory that you own (for example your home
+directory), or copy the files manually.
+
+The avfs_server is started automatically, whenever it is first
+needed. If you used 'make install' to install the components, avfs
+should find the server automatically. Otherwise you will need to set
+the AVFS_SERVER_PATH environment variable to the complete pathname of
+the server (e.g. 'setenv AVFS_SERVER_PATH=/foo/bar/avfs_server')
 
 Enabling AVFS
 -------------
 
 To enable AVFS support, set the environment variable LD_PRELOAD to
-libavfs.so:
+avfs_preload.so:
 
 in C-shell type shells (csh, tcsh, ...)
 
-  setenv LD_PRELOAD libavfs.so
+  setenv LD_PRELOAD avfs_preload.so
+    or
+  setenv LD_PRELOAD /usr/lib/avfs_preload.so
 
 in Bourne-shell type shells (sh, bash, ...)
   
-  export LD_PRELOAD=libavfs.so
+  export LD_PRELOAD=avfs_preload.so
+    or
+  export LD_PRELOAD=/usr/lib/avfs_preload.so
 
 
 You can try it out by entering the command
@@ -67,7 +81,7 @@ For example your .Xclients could look like this:
 ----------------------------------------------------------------------
 #!/bin/bash
 # add any local customizations here, before startke runs
-export LD_PRELOAD=libavfs.so
+export LD_PRELOAD=avfs_preload.so
 /opt/kde/bin/startkde
 ----------------------------------------------------------------------
 

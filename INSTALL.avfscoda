@@ -14,9 +14,6 @@ Avfscoda has been designed with security in mind, but it may not yet
 be 100% secure. Do not install it, if local security is very important
 (i.e. if you do not want a non root user to be able gain root access)!
 
-I have tested avfscoda on a RedHat 6.0 box, and a SuSE 6.0 box. Please
-tell me your experiences on other distros. 
-
 A Little Background
 -------------------
 
@@ -92,10 +89,17 @@ How To Compile
 
   2) Type './configure'. It should detect that avfscoda should be built:
 
-        checking whether avfscoda should be built... yes
+        checking whether to build preload or avfscoda... avfscoda
   
      If for some reason it does not, you can force it by adding
      '--disable-preload' argument to configure.
+
+     If the configure script cannot find an xml library for dav, then
+     you have two options:
+
+      - install an xml library (expat or gnome-xml)
+      or
+      - pass the '--disable-dav' argument to configure
 
   3) Do 'make'
 

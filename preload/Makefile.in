@@ -2,14 +2,19 @@ SHELL = /bin/sh
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
-sbindir = @sbindir@
+libdir = @libdir@
+serverdir = @moduledir@
 top_srcdir = @top_srcdir@
 
-i_sbindir = $(install_root)$(sbindir)
+i_libdir = $(install_root)$(libdir)
+i_serverdir = $(install_root)$(serverdir)
 
 CC = @CC@
-CFLAGS = -I$(top_srcdir)/include @CFLAGS@ -fPIC @CPPFLAGS@
+CFLAGS = -I$(top_srcdir)/include @CFLAGS@ -fPIC @CPPFLAGS@ \
+	-DAVFS_SERVER_DIR=\"$(serverdir)\"
 LDFLAGS = @LDFLAGS@ @LIBS@
+
+INSTALL = @INSTALL@
 
 all: all-@preload_build@
 install: install-@preload_build@
@@ -44,6 +49,10 @@ avfs_preload_objs = \
 
 avfs_preload.so: $(avfs_preload_objs)
 	$(CC) -shared -o avfs_preload.so $(avfs_preload_objs) -lsocket
+
+install-yes:
+	$(INSTALL) -m 755 avfs_server $(i_serverdir)/avfs_server
+	$(INSTALL) -m 755 avfs_preload.so $(i_libdir)/avfs_preload.so
 
 depend-yes:
 	cp -f Makefile Makefile.old

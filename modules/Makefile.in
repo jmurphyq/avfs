@@ -15,7 +15,7 @@ modules = \
 	rsh.o        \
 	http.o       \
 	ftp.o        \
-	dav.o        \
+	@DAV@        \
 	ugz.o        \
 	ubz2.o       \
 	ugzip.o      \
@@ -33,7 +33,7 @@ modules = \
 modules_objs = \
 	$(modules)   \
 	mod_static.o \
-	dav_ls.o
+	@DAV_LS@
 
 all: modules.o
 

@@ -61,9 +61,6 @@
 /* Define if you have the <unistd.h> header file.  */
 #undef HAVE_UNISTD_H
 
-/* Define if you have the posix4 library (-lposix4).  */
-#undef HAVE_LIBPOSIX4
-
 /* Define to be the neon version string */
 #undef NEON_VERSION
 

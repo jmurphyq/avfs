@@ -20,11 +20,45 @@ if test "$validstring" = invalid; then
   AC_MSG_ERROR([type 'make realclean' before running configure])
 fi
 
+os=`uname -s`
+
+AC_MSG_CHECKING([whether to build preload or avfscoda])
+if test "$os" = "SunOS"; then
+    preload=yes
+else
+    preload=no
+fi
+
+AC_ARG_ENABLE(preload,
+[  --enable-preload        Compile the preloaded library and server
+  --disable-preload       Compile avfscoda (which uses the coda interface)],
+[if test "$enableval" = yes; then preload=yes; else preload=no; fi])
+
+if test "$preload" = yes; then
+   AC_MSG_RESULT([preload])
+   avfscoda_build=no
+   preload_build=yes
+else
+   AC_MSG_RESULT([avfscoda])
+   avfscoda_build=yes
+   preload_build=no
+fi
+
+AC_MSG_CHECKING([whether debugging is enabled])
 AC_ARG_ENABLE(debug,
 [  --enable-debug          Compile in debug information
   --disable-debug         Do not compile in debug information],
 [if test "$enableval" = yes; then debug=yes; else debug=no; fi],
 debug=yes)
+AC_MSG_RESULT([$debug])
+
+AC_MSG_CHECKING([whether building the dav module is enabled])
+AC_ARG_ENABLE(dav,
+[  --enable-dav            Compile the dav module (needs an xml library)
+  --disable-dav           Do not compile the dav module],
+[if test "$enableval" = yes; then dav=yes; else dav=no; fi],
+dav=yes)
+AC_MSG_RESULT([$dav])
 
 dnl Checks for programs.
 cflags="$CFLAGS"
@@ -58,7 +92,6 @@ CPPFLAGS="$CPPFLAGS -D_REENTRANT -D_POSIX_PTHREAD_SEMANTICS"
 AC_CHECK_PROG(LD, ld, [ld -r], [$CC -Wl,-r -nostdlib])
 
 AC_CHECK_FUNCS(vsnprintf strncasecmp strcasecmp mkdtemp)
-AC_CHECK_FUNC(nanosleep, , [AC_CHECK_LIB(posix4, nanosleep)])
 AC_HEADER_MAJOR
 
 dnl For zlib
@@ -72,31 +105,39 @@ if test $my_cv_struct_d_type = yes; then
   AC_DEFINE(HAVE_D_TYPE)
 fi
 
-dnl We require neon 0.12
-NEON_REQUIRE(0,12)
+AC_SEARCH_LIBS(nanosleep, posix4)
+AC_SEARCH_LIBS(gethostbyname, nsl)
+AC_SEARCH_LIBS(socket, socket inet)
 
-dnl Build neon. We support a VPATH build.
-NEON_BUNDLED('${top_srcdir}/libneon', [
-    NEON_NORMAL_BUILD
-    NEON_XML_PARSER
-])
+if test "$dav" = yes; then
+  dnl We require neon 0.12
+  NEON_REQUIRE(0,12)
 
-LIBS=$NEONLIBS
+  dnl Build neon. We support a VPATH build.
+  NEON_BUNDLED('${top_srcdir}/libneon', [
+      NEON_NORMAL_BUILD
+      NEON_XML_PARSER
+  ])
+  LIBS=$NEONLIBS
+  DAV=dav.o
+  DAV_LS=dav_ls.o
+else
+  NEON_BUILD_BUNDLED=no
+  AC_SUBST(NEON_BUILD_BUNDLED)
+  DAV=
+  DAV_LS=
+fi
+
+AC_SUBST(DAV)
+AC_SUBST(DAV_LS)
+
 LIBS="$LIBS -ldl -lpthread"
 
 moduledir='${libdir}/avfs'
 
 AC_SUBST(moduledir)
 
-os=`uname -s`
 
-if test "$os" = "Linux"; then
-    avfscoda_build=yes
-    preload_build=no
-else
-    avfscoda_build=no
-    preload_build=yes
-fi
 
 dnl ================================================================
 dnl == Now comes the stuff that is only for avfscoda              ==

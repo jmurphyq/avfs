@@ -3,7 +3,7 @@
  * For conditions of distribution and use, see copyright notice in zlib.h 
  */
 
-/* @(#) $Id: zconf.h,v 1.2 2002/12/03 18:50:27 mszeredi Exp $ */
+/* @(#) $Id: zconf.h,v 1.3 2002/12/05 15:58:06 mszeredi Exp $ */
 
 #ifndef _ZCONF_H
 #define _ZCONF_H
@@ -217,6 +217,7 @@ typedef unsigned char  Byte;  /* 8 bits */
 #endif
 typedef unsigned int   uInt;  /* 16 bits or more */
 typedef unsigned long  uLong; /* 32 bits or more */
+typedef unsigned long long  uLongLong; /* 64 bits */
 
 #ifdef SMALL_MEDIUM
    /* Borland C/C++ and some old MSC versions ignore FAR inside typedef */

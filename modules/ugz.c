@@ -31,6 +31,7 @@ struct gzfile {
     struct zfile *zfil;
     vfile *base;
     struct gznode *node;
+    int validsize;
 };
 
 #define GZBUFSIZE 1024
@@ -51,7 +52,7 @@ struct gzbuf {
 
 /* gzip flag byte */
 #define GZFL_ASCII        0x01 /* bit 0 set: file probably ascii text */
-#define GZFL_HEAD_CRC     0x02 /* bit 1 set: header CRC present */
+#define GZFL_CONTINUATION 0x02 /* bit 1 set: continuation of multi-part gzip file */
 #define GZFL_EXTRA_FIELD  0x04 /* bit 2 set: extra field present */
 #define GZFL_ORIG_NAME    0x08 /* bit 3 set: original file name present */
 #define GZFL_COMMENT      0x10 /* bit 4 set: file comment present */
@@ -60,8 +61,8 @@ struct gzbuf {
 
 #define BI(ptr, i)  ((avbyte) (ptr)[i])
 #define DBYTE(ptr) (BI(ptr,0) | (BI(ptr,1)<<8))
-#define QBYTE(ptr) (BI(ptr,0) | (BI(ptr,1)<<8) | \
-                   (BI(ptr,2)<<16) | (BI(ptr,3)<<24))
+#define QBYTE(ptr) ((avuint) (BI(ptr,0) | (BI(ptr,1)<<8) | \
+                   (BI(ptr,2)<<16) | (BI(ptr,3)<<24)))
 
 static int gzbuf_getbyte(struct gzbuf *gb)
 {
@@ -112,6 +113,7 @@ static int gzbuf_read(struct gzbuf *gb, char *buf, avsize_t nbyte)
 static int gz_read_header(vfile *vf, struct gznode *nod)
 {
     int res;
+    avoff_t sres;
     struct gzbuf gb;
     unsigned char buf[GZHEADER_SIZE];
     int method, flags;
@@ -146,6 +148,12 @@ static int gz_read_header(vfile *vf, struct gznode *nod)
   
     /* Ignore bytes 8 and 9 */
 
+    if((flags & GZFL_CONTINUATION) != 0) {
+        res = gzbuf_read(&gb, buf, 2);
+        if(res < 0)
+            return res;
+    }
+
     if((flags & GZFL_EXTRA_FIELD) != 0) {
         avsize_t len;
 
@@ -171,17 +179,12 @@ static int gz_read_header(vfile *vf, struct gznode *nod)
         if(res < 0)
             return res;
     }
-    if((flags & GZFL_HEAD_CRC) != 0) {
-        res = gzbuf_read(&gb, buf, 2);
-        if(res < 0)
-            return res;
-    }
 
     nod->dataoff = gb.total;
 
-    res = av_lseek(vf, -8, AVSEEK_END);
-    if(res < 0)
-        return res;
+    sres = av_lseek(vf, -8, AVSEEK_END);
+    if(sres < 0)
+        return sres;
 
     res = av_read_all(vf, buf, 8);
     if(res < 0)
@@ -189,6 +192,7 @@ static int gz_read_header(vfile *vf, struct gznode *nod)
 
     nod->crc = QBYTE(buf);
     nod->size = QBYTE(buf + 4);
+
     nod->ready = 1;
     
     return 0;
@@ -253,7 +257,7 @@ static int gz_getnode(ventry *ve, vfile *base, struct gznode **resp)
 {
     int res;
     struct avstat stbuf;
-    int attrmask = AVA_INO | AVA_DEV | AVA_SIZE | AVA_MTIME;
+    const int attrmask = AVA_INO | AVA_DEV | AVA_SIZE | AVA_MTIME;
     struct gznode *nod;
     char *key;
 
@@ -321,7 +325,7 @@ static int gz_lookup(ventry *ve, const char *name, void **newp)
     if(path == NULL) {
         if(name[0] != '\0')
             return -ENOENT;
-	if(ve->mnt->opts[0] != '\0')
+	if(ve->mnt->opts[0] != '\0' && strcmp(ve->mnt->opts, "-s") != 0)
             return -ENOENT;
         path = av_strdup(name);
     }
@@ -366,12 +370,16 @@ static int gz_open(ventry *ve, int flags, avmode_t mode, void **resp)
 
     AV_NEW(fil);
     if((flags & AVO_ACCMODE) != AVO_NOPERM)
-        fil->zfil = av_zfile_new(base, nod->dataoff, nod->crc);
+        fil->zfil = av_zfile_new(base, nod->dataoff, nod->crc, 1);
     else
         fil->zfil = NULL;
 
     fil->base = base;
     fil->node = nod;
+    if(strcmp(ve->mnt->opts, "-s") == 0)
+        fil->validsize = 0;
+    else
+        fil->validsize = 1;
     
     *resp = fil;
     return 0;
@@ -422,27 +430,60 @@ static avssize_t gz_read(vfile *vf, char *buf, avsize_t nbyte)
     return res;
 }
 
+static int gz_getsize(vfile *vf, struct avstat *buf)
+{
+    int res;
+    struct gzfile *fil = (struct gzfile *) vf->data;
+    struct zcache *zc;
+    struct cacheobj *cobj;
+    avoff_t size;
+
+    AV_LOCK(fil->node->lock);
+    zc = gz_getcache(vf->mnt->base, fil->node);
+    cobj = fil->node->cache;
+    av_ref_obj(cobj);
+    AV_UNLOCK(fil->node->lock);
+
+    res = av_zfile_size(fil->zfil, zc, &size);
+    if(res == 0 && size == -1) {
+        fil->zfil = av_zfile_new(fil->base, fil->node->dataoff,
+                                 fil->node->crc, 0);
+        res = av_zfile_size(fil->zfil, zc, &size);
+    }
+    buf->size = size;
+
+    av_unref_obj(zc);
+    av_unref_obj(cobj);
+
+    return res;
+}
 
 static int gz_getattr(vfile *vf, struct avstat *buf, int attrmask)
 {
     int res;
     struct gzfile *fil = (struct gzfile *) vf->data;
     struct gznode *nod = fil->node;
+    const int basemask = AVA_MODE | AVA_UID | AVA_GID | AVA_ATIME | AVA_CTIME;
 
-    res = av_fgetattr(fil->base, buf, AVA_ALL & ~AVA_SIZE);
+    res = av_fgetattr(fil->base, buf, basemask);
     if(res < 0)
         return res;
+
+    buf->size = nod->size;
+    if(!fil->validsize && (attrmask & (AVA_SIZE | AVA_BLKCNT)) != 0) {
+        res = gz_getsize(vf, buf);
+        if(res < 0)
+            return res;
+    }
 
     buf->mode &= ~(07000);
     buf->blksize = 4096;
     buf->dev = vf->mnt->avfs->dev;
     buf->ino = nod->ino;
-    buf->size = nod->size;
-    buf->blocks = AV_BLOCKS(nod->size);
+    buf->nlink = 1;
+    buf->blocks = AV_BLOCKS(buf->size);
     buf->mtime.sec = nod->mtime;
     buf->mtime.nsec = 0;
-    buf->atime = buf->mtime;
-    buf->ctime = buf->mtime;
     
     return 0;
 }

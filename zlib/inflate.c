@@ -307,7 +307,7 @@ z_streamp z;
   uInt n;       /* number of bytes to look at */
   Bytef *p;     /* pointer to bytes */
   uInt m;       /* number of marker bytes found in a row */
-  uLong r, w;   /* temporaries to save total_in and total_out */
+  uLongLong r, w;   /* temporaries to save total_in and total_out */
 
   /* set up */
   if (z == Z_NULL || z->state == Z_NULL)

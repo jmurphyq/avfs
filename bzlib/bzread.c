@@ -173,7 +173,7 @@ static int bzfile_seek_index(struct bzfile *fil, struct bzindex *zi)
     fil->inbuf[2] = (val >> 8) & 0xFF;
     fil->inbuf[3] = val & 0xFF;
 
-    av_log(AVLOG_DEBUG, "BZREAD: restore: %lli %lli/%i %08x %i",
+    av_log(AVLOG_DEBUG, "BZFILE: restore: %lli %lli/%i %08x %i",
            bz_total_out(fil->s), bz_total_in(fil->s), bitsrem,
            zi->crc, zi->blocksize);
         
@@ -235,7 +235,7 @@ static void bzfile_save_state(struct bzcache *zc, bz_stream *s,
     zi->crc = crc;
     zi->blocksize = blocksize;
 
-    av_log(AVLOG_DEBUG, "BZREAD: new block end: %lli %lli/%i %08x %i",
+    av_log(AVLOG_DEBUG, "BZFILE: new block end: %lli %lli/%i %08x %i",
            zi->offset, bz_total_in(s), bitsrem, zi->crc, zi->blocksize);
 
 }
@@ -437,7 +437,7 @@ int av_bzfile_size(struct bzfile *fil, struct bzcache *zc, avoff_t *sizep)
     AV_UNLOCK(bzread_lock);
     
     if(size == -1) {
-        av_log(AVLOG_ERROR, "ZFILE: Internal error: could not find size");
+        av_log(AVLOG_ERROR, "BZFILE: Internal error: could not find size");
         return -EIO;
     }
     

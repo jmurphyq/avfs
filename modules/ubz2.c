@@ -84,7 +84,7 @@ static int bz_getnode(ventry *ve, vfile *base, struct bznode **resp)
 {
     int res;
     struct avstat stbuf;
-    int attrmask = AVA_INO | AVA_DEV | AVA_SIZE | AVA_MTIME;
+    const int attrmask = AVA_INO | AVA_DEV | AVA_SIZE | AVA_MTIME;
     struct bznode *nod;
     char *key;
 
@@ -197,12 +197,13 @@ static int bz_getattr(vfile *vf, struct avstat *buf, int attrmask)
     struct bzipfile *fil = (struct bzipfile *) vf->data;
     struct bznode *nod = fil->node;
     avoff_t size;
+    const int basemask = AVA_MODE | AVA_UID | AVA_GID | AVA_MTIME | AVA_ATIME | AVA_CTIME;
 
-    res = av_fgetattr(fil->base, buf, AVA_ALL & ~AVA_SIZE);
+    res = av_fgetattr(fil->base, buf, basemask);
     if(res < 0)
         return res;
 
-    if((attrmask & AVA_SIZE) != 0) {
+    if((attrmask & (AVA_SIZE | AVA_BLKCNT)) != 0) {
         res = av_bzfile_size(fil->zfil, fil->node->cache, &size);
         if(res == 0 && size == -1) {
             fil->zfil = av_bzfile_new(fil->base);
@@ -212,13 +213,14 @@ static int bz_getattr(vfile *vf, struct avstat *buf, int attrmask)
             return res;
 
         buf->size = size;
+        buf->blocks = AV_BLOCKS(buf->size);
     }
 
     buf->mode &= ~(07000);
     buf->blksize = 4096;
     buf->dev = vf->mnt->avfs->dev;
     buf->ino = nod->ino;
-    buf->blocks = AV_BLOCKS(buf->size);
+    buf->nlink = 1;
     
     return 0;
 }

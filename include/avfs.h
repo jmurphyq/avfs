@@ -79,7 +79,7 @@ struct _vfile {
     void *data;
     struct vmount *mnt;
     int flags;
-    int ptr;
+    avoff_t ptr;
     avmutex lock;
 };
 

@@ -10,8 +10,18 @@
 #include <fuse.h>
 #include <virtual.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
+
+struct fuse *fuse;
+
+static int fdcache;
+static char *pathcache;
+
 
 static int avfsd_getattr(const char *path, struct stat *stbuf)
 {
@@ -191,24 +201,39 @@ static int avfsd_open(const char *path, int flags)
     return 0;
 }
 
+static void pathcache_close()
+{
+    virt_close(fdcache);
+    free(pathcache);
+    pathcache = NULL;
+}
+
 static int avfsd_read(const char *path, char *buf, size_t size, off_t offset)
 {
-    int fd;
     int res;
 
-    fd = virt_open(path, O_RDONLY, 0);
-    if(fd == -1)
-        return -errno;
-    
-    if(virt_lseek(fd, offset, SEEK_SET) == -1)
+    if(pathcache == NULL || strcmp(pathcache, path) != 0) {
+        if(pathcache != NULL)
+            pathcache_close();
+        
+        fdcache = virt_open(path, O_RDONLY, 0);
+        if(fdcache == -1)
+            return -errno;
+        
+        pathcache = strdup(path);
+    }
+
+    if(virt_lseek(fdcache, offset, SEEK_SET) == -1)
         res = -errno;
     else {
-        res = virt_read(fd, buf, size);
+        res = virt_read(fdcache, buf, size);
         if(res == -1)
             res = -errno;
     }
+
+    if(res < 0)
+        pathcache_close();
     
-    virt_close(fd);
     return res;
 }
 
@@ -255,8 +280,61 @@ static struct fuse_operations avfsd_oper = {
     statfs:     NULL,
 };
 
+static void exit_handler()
+{
+    fuse_exit(fuse);
+}
+
+static void set_signal_handlers()
+{
+    struct sigaction sa;
+
+    sa.sa_handler = exit_handler;
+    sigemptyset(&(sa.sa_mask));
+    sa.sa_flags = 0;
+
+    if (sigaction(SIGHUP, &sa, NULL) == -1 || 
+	sigaction(SIGINT, &sa, NULL) == -1 || 
+	sigaction(SIGTERM, &sa, NULL) == -1) {
+	
+	perror("Cannot set exit signal handlers");
+        exit(1);
+    }
+
+    sa.sa_handler = SIG_IGN;
+    
+    if(sigaction(SIGPIPE, &sa, NULL) == -1) {
+	perror("Cannot set ignored signals");
+        exit(1);
+    }
+}
+
 int main(int argc, char *argv[])
 {
-    fuse_main(argc, argv, &avfsd_oper);
+    int flags = 0;
+    int fd;
+    char *mountpoint;
+
+    mountpoint = argv[1];
+    fd = fuse_mount(mountpoint, NULL);
+    if(fd == -1)
+        exit(1);
+
+    set_signal_handlers();
+
+    if(argc > 2 && strcmp(argv[2], "-d") == 0)
+        flags |= FUSE_DEBUG;
+
+    fuse = fuse_new(fd, flags, &avfsd_oper);
+    fuse_loop(fuse);
+
+    close(fd);
+    fuse_unmount(mountpoint);
+    
+    fuse_destroy(fuse);
+    pathcache_close();
+
     return 0;
 }
+
+

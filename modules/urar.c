@@ -603,7 +603,7 @@ int av_init_module_urar(struct vmodule *module)
     struct archparams *ap;
 
     rarexts[0].from = ".rar",  rarexts[0].to = NULL;
-    rarexts[1].from = ".sfx",  rarexts[0].to = NULL;
+    rarexts[1].from = ".sfx",  rarexts[1].to = NULL;
     rarexts[2].from = NULL;
 
     res = av_archive_init("urar", rarexts, AV_VER, module, &avfs);

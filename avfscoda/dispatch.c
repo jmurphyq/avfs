@@ -84,11 +84,16 @@ struct fileinfo {
 	
     char *name;
     char *path;
+    unsigned int unique;
 	
     time_t lasttime;
 	
     struct openfile *ofs;
 };
+
+#define FMAPSIZE 65536
+static struct fileinfo *fmap[FMAPSIZE];
+static unsigned int nextunique = 0;
 
 static struct fileinfo rootinfo;
 static int needflush;
@@ -158,6 +163,7 @@ static void add_name(struct fileinfo *fi, struct fileinfo *parentdir,
 static struct fileinfo *get_file(struct fileinfo *parentdir, const char *name)
 {
     struct fileinfo *fi;
+    int i;
 	
     fi = find_name(parentdir, name);
     if(fi != NULL)
@@ -167,7 +173,27 @@ static struct fileinfo *get_file(struct fileinfo *parentdir, const char *name)
     if(fi == NULL) {
         return NULL;
     }
-	
+    
+    for(i = 0; i < FMAPSIZE; i++) {
+        unsigned int index;
+
+        nextunique ++;
+        if(nextunique == 0)
+            nextunique = 1;
+
+        index = nextunique % FMAPSIZE;
+        if(fmap[index] == NULL) {
+            fmap[index] = fi;
+            fi->unique = nextunique;
+            break;
+        }
+    }
+
+    if(i == FMAPSIZE) {
+        log("fmap full\n");
+        clean_exit(1);
+    }
+
     numfids ++;
 
     fi->subdir = NULL;
@@ -181,6 +207,7 @@ static struct fileinfo *get_file(struct fileinfo *parentdir, const char *name)
 
 static void put_file(struct fileinfo *fi)
 {
+    unsigned int index;
     if(fi->name != NULL || fi->ofs != NULL)
         return;
 
@@ -188,6 +215,9 @@ static void put_file(struct fileinfo *fi)
         log("Deleted nonepty dir\n");
         return;
     }
+
+    index = fi->unique % FMAPSIZE;
+    fmap[index] = NULL;
 
     free(fi);
     numfids --;
@@ -204,12 +234,18 @@ static struct fileinfo *look_info(ViceFid *id)
         clean_exit(1);
     }
 	
-    log("ptr: %p\n", (void *) id->Unique);
+    log("unique: 0x%x\n", id->Unique);
 	
     if(id->Unique == 0) 
         return &rootinfo;
     else {
-        fi =  (struct fileinfo *) id->Unique;
+        unsigned int index = (id->Unique % FMAPSIZE);
+        fi = fmap[index];
+        if(fi == NULL || fi->unique != id->Unique) {
+            log("Invalid Fid: 0x%x\n", id->Unique);
+            clean_exit(1);
+        }
+
         fi->lasttime = time(NULL);
 		
         return fi;
@@ -264,7 +300,7 @@ static struct fileinfo *create_file(const char *filename, ViceFid *parentid,
 
     newid->Volume = 0;
     newid->Vnode = 0;
-    newid->Unique = (int) fi;
+    newid->Unique = fi->unique;
 
     return fi;
 }
@@ -283,7 +319,7 @@ static void purge_file(struct fileinfo *fi)
     rep.oh.unique = 0;
     rep.coda_purgefid.CodaFid.Volume = 0;
     rep.coda_purgefid.CodaFid.Vnode  = 0;
-    rep.coda_purgefid.CodaFid.Unique = (int) fi;
+    rep.coda_purgefid.CodaFid.Unique = fi->unique;
     
     send_to_kernel(&rep, sizeof(rep.coda_purgefid));
 }
@@ -301,7 +337,7 @@ static void zap_file(struct fileinfo *fi)
     rep.oh.unique = 0;
     rep.coda_zapfile.CodaFid.Volume = 0;
     rep.coda_zapfile.CodaFid.Vnode  = 0;
-    rep.coda_zapfile.CodaFid.Unique = (int) fi;
+    rep.coda_zapfile.CodaFid.Unique = fi->unique;
     
     send_to_kernel(&rep, sizeof(rep.coda_zapfile));
 }
@@ -320,7 +356,7 @@ static void zap_dir(struct fileinfo *fi)
     rep.oh.unique = 0;
     rep.coda_zapdir.CodaFid.Volume = 0;
     rep.coda_zapdir.CodaFid.Vnode  = 0;
-    rep.coda_zapdir.CodaFid.Unique = (int) fi;
+    rep.coda_zapdir.CodaFid.Unique = fi->unique;
     
     send_to_kernel(&rep, sizeof(rep.coda_zapdir));
 }

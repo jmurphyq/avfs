@@ -230,7 +230,8 @@ int av_fd_readdir(int fd, struct avdirent *buf, avoff_t *posp)
 	res = avfs->readdir(vf, buf);
         AVFS_UNLOCK(avfs);
 
-        avdirent_escape_magic(buf);
+        if(res > 0)
+            avdirent_escape_magic(buf);
 
 	put_file(vf);
     }

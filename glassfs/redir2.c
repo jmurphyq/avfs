@@ -18,7 +18,7 @@ static struct dentry *(*orig_lookup)(struct inode *, struct dentry *,
 
 
 static struct vfsmount *orig_mount;
-static struct semaphore *redir2_sem;
+static struct semaphore redir2_sem;
 
 static struct super_operations dummy_super_operations;
 static struct super_block dummy_sb = {
@@ -101,26 +101,16 @@ Elong:
 	return ERR_PTR(-ENAMETOOLONG);
 }
 
-static struct dentry *mount_avfs(struct dentry *orig_dentry, char *path,
-				 int mode)
+static int mount_avfs(struct dentry *dentry, char *path, int mode)
 {
-	struct dentry *dentry;
 	struct inode *inode;
 
 	inode = new_inode(&dummy_sb);
 	if (!inode)
-		return NULL;
+		return -ENOMEM;
 
 	inode->i_mode = mode;
-
-	dentry = d_alloc(orig_dentry->d_parent, &orig_dentry->d_name);
-	if (!dentry) {
-		iput(inode);
-		return NULL;
-	}
-	
-	dentry->d_op = &redir2_dentry_operations;
-	d_add(dentry, inode);
+	d_instantiate(dentry, inode);
 	
 	char *argv[] = { "/bin/mount", "--bind", path, path + OVERLAY_DIR_LEN,
 			 NULL };
@@ -129,10 +119,11 @@ static struct dentry *mount_avfs(struct dentry *orig_dentry, char *path,
 	ret = call_usermodehelper("/bin/mount", argv, envp, 1);
 	printk("mount ret: %i\n", ret);
 	if (ret) {
-		dput(dentry);
-		dentry = NULL;
+		d_delete(dentry);
+		return -EINVAL;
 	}
-	return dentry;
+
+	return 0;
 }
 
 static int exists_avfs(char *path, int *modep)
@@ -159,20 +150,20 @@ static int exists_avfs(char *path, int *modep)
 	return 1;
 }
 
-static struct dentry *lookup_avfs(struct dentry *dentry, struct nameidata *nd)
+static int lookup_avfs(struct dentry *dentry, struct nameidata *nd)
 {
 	char *page;
 	char *path;
-	struct dentry *result;
+	int err;
 	
-	result = ERR_PTR(-ENOMEM);
+	err = -ENOMEM;
 	page = (char *) __get_free_page(GFP_KERNEL);
 	if (page) {
 		unsigned int offset = PAGE_SIZE - dentry->d_name.len - 2;
 		spin_lock(&dcache_lock);
 		path = my_d_path(nd->dentry, nd->mnt, nd->mnt->mnt_sb->s_root, nd->mnt, page, offset);
 		spin_unlock(&dcache_lock);
-		result = ERR_PTR(-ENAMETOOLONG);
+		err = -ENAMETOOLONG;
 		if (!IS_ERR(path) && page + OVERLAY_DIR_LEN < path) {
 			unsigned int pathlen = strlen(path);
 			int mode;
@@ -184,20 +175,20 @@ static struct dentry *lookup_avfs(struct dentry *dentry, struct nameidata *nd)
 			memcpy(path, OVERLAY_DIR, OVERLAY_DIR_LEN);
 			
 			if (exists_avfs(path, &mode))
-				result = mount_avfs(dentry, path, mode);
+				err = mount_avfs(dentry, path, mode);
 			else
-				result = NULL;
+				err = -ENOENT;
 		}
 		free_page((unsigned long) page);
 	}
-	return result;
+	return err;
 }
 
 static int redir2_dentry_revalidate(struct dentry *dentry,
 				    struct nameidata *nd)
 {
 	//printk("redir2_dentry_revalidate\n");
-
+	return 0;
 }
 
 static struct dentry_operations redir2_dentry_operations = {
@@ -213,6 +204,25 @@ static inline int is_create(struct nameidata *nd)
 	return 0;
 }
 
+static struct dentry *lookup_maybeavfs(struct inode *dir,
+				       struct dentry *dentry,
+				       struct nameidata *nd)
+{
+	int err;
+
+	dentry->d_op = &redir2_dentry_operations;
+	dentry->d_flags |= DCACHE_AUTOFS_PENDING;
+		
+	d_add(dentry, NULL);
+	up(&dir->i_sem);
+	err = lookup_avfs(dentry, nd);
+	down(&dir->i_sem);
+	if (err)
+		return ERR_PTR(err);
+	return NULL;
+
+}
+
 static struct dentry *redir2_lookup(struct inode *dir, struct dentry *dentry,
 				    struct nameidata *nd)
 {
@@ -220,14 +230,8 @@ static struct dentry *redir2_lookup(struct inode *dir, struct dentry *dentry,
 
 	if (is_create(nd) || !is_avfs(dentry->d_name.name, dentry->d_name.len))
 		return orig_lookup(dir, dentry, nd);
-	
-	dentry->d_op = &redir2_dentry_operations;
-	dentry->d_flags |= DCACHE_AUTOFS_PENDING;
-	d_add(new_dentry, NULL);
-	up(&dir->i_sem);
-	dentry->d_op->d_revalidate(dentry, nd);
-	down(&dir->i_sem);
-	return NULL;
+
+	return lookup_maybeavfs(dir, dentry, nd);
 }
 
 static int __init init_redir2(void)

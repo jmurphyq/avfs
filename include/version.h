@@ -6,4 +6,4 @@
     See the file COPYING.
 */
 
-#define AV_VER 90
+#define AV_VER 91

@@ -167,77 +167,54 @@ install_scriptcomps=
 
 if test $avfscoda_build = yes; then
 
-	kernsrcver=
-	kernrunver=
-
-	origcppflags=$CPPFLAGS
-	origlibs=$LIBS
-
-	AC_MSG_CHECKING([running kernel version])
-	kernrunver=`uname -r`
-	AC_MSG_RESULT([$kernrunver])
-
 	AC_MSG_CHECKING([kernel source directory])
-	kernelsrc=/usr/src/linux
-	majver=`echo $kernrunver | cut -f 1 -d .`
-	minver=`echo $kernrunver | cut -f 2 -d .`
-	buildlink=/lib/modules/${kernrunver}/build 
-	if test $majver -ge 2 && test $minver -ge 4 && test -e $buildlink; then
-	    kernelsrc=`(cd $buildlink; /bin/pwd)`
-	fi
-	AC_MSG_RESULT([$kernelsrc])
-	KERNINCLUDE=${kernelsrc}/include
-	AC_SUBST(KERNINCLUDE)
+	kernelsrc=
+	AC_ARG_WITH(kernel,
+		[  --with-kernel          Specify location of kernel source ],
+		[kernelsrc="$withval"])
 	
-	CPPFLAGS="$CPPFLAGS -I$KERNINCLUDE -D__KERNEL__"
-	LIBS=""
-
-	AC_MSG_CHECKING([kernel source version])
-	kernsrcver=`AC_TRY_RUN([
-#include <linux/version.h>
-#include <stdio.h>
-
-int main() {
-printf("%s", UTS_RELEASE);
-	return 0;
-}
-], got_kernsrcver=yes, got_kernsrcver=no)`
-
-	if test "$got_kernsrcver" = no; then
-		AC_MSG_RESULT([Not found])	
-		AC_MSG_WARN([Please install and configure kernel source])
-		kernver=$kernrunver
-	else
-		AC_MSG_RESULT([$kernsrcver])	
-		kernver=$kernsrcver
-
-		if test "$kernsrcver" != "$kernrunver"; then
-			AC_MSG_WARN([Running kernel version does not match kernel source])
+	if test -z "$kernelsrc"; then
+		buildlink=/lib/modules/`uname -r`/build
+		if test -e $buildlink; then
+			kernelsrc=`(cd $buildlink; /bin/pwd)`
+		elif test -e /usr/src/linux; then
+			kernelsrc=/usr/src/linux
+		else
+			AC_MSG_RESULT([Not found])
+			AC_MSG_ERROR([
+*** Please specify the location of the kernel source with
+*** the '--with-kernel=SRCDIR' option])
 		fi
 	fi
+	AC_MSG_RESULT([$kernelsrc])
+	AC_MSG_CHECKING([kernel source version])
 
-	kmoduledir=
-	AC_MSG_CHECKING([for kernel module directory])
-	kmoduledir=/lib/modules/${kernver}/misc
-	AC_MSG_RESULT([$kmoduledir])
-
-	AC_SUBST(kmoduledir)
-
-	AC_MSG_CHECKING([for new style redir])
-	AC_EGREP_HEADER(lookup_virtual, linux/fs.h, newredir=yes, newredir=no)
-	AC_MSG_RESULT([$newredir])
-
-	CPPFLAGS=$origcppflags
-	LIBS=$origlibs
-
-	build_redir=
-	if test "$newredir" = yes; then
-		build_redir=nredir.o
-		install_scriptcomps="$install_scriptcomps install_flushredir"
-	else
-		build_redir=redir.o
+	origlibs=$LIBS
+	LIBS=""
+	kernsrcver=`AC_TRY_RUN([
+	#include "$kernelsrc/include/linux/version.h"
+	#include <stdio.h>
+	
+	int main() {
+	printf("%s\n", UTS_RELEASE);
+		return 0;
+	}
+	], , , true)`
+	
+	if test -z "$kernsrcver"; then
+		AC_MSG_RESULT([Not found])
+		AC_MSG_ERROR([
+*** Cannot determine the version of the linux kernel source. Please 
+*** configure the kernel before running this script])
 	fi
-	AC_SUBST(build_redir)
+	LIBS=$origlibs
+	AC_MSG_RESULT([$kernsrcver])
+
+	KERNINCLUDE=${kernelsrc}/include
+	AC_SUBST(KERNINCLUDE)
+
+	kmoduledir=/lib/modules/${kernsrcver}/misc
+	AC_SUBST(kmoduledir)
 
 	initstyle=
 	AC_MSG_CHECKING([for init-script style])

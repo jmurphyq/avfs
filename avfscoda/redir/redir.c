@@ -1,14 +1,13 @@
+#include <linux/version.h>
 #include <linux/modversions.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/unistd.h>
-#include <linux/mm.h>
 #include <linux/slab.h>
 #include <linux/fs.h>
 #include <linux/smp_lock.h>
 #include <asm/uaccess.h>
 #include <linux/coda_psdev.h>
-#include <linux/version.h>
 
 #ifdef MODULE_LICENSE
 MODULE_LICENSE("GPL");

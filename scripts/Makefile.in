@@ -60,10 +60,6 @@ install_avfscodamisc:
 	@if ! test -e $(i_codadev0); then mknod -m 600 $(i_codadev0) c 67 0; fi
 	@if ! test -e $(i_codadev1); then mknod -m 600 $(i_codadev1) c 67 1; fi
 
-install_flushredir:
-	@../mkinstalldirs $(i_sbindir)
-	$(INSTALL) -m 755 flushredir $(i_sbindir)/flushredir
-
 install: $(install_scriptcomps)
 	@../mkinstalldirs $(i_bindir)
 	$(INSTALL) -m 755 ftppass $(i_bindir)/ftppass

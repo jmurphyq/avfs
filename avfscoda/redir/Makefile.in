@@ -2,7 +2,6 @@ SHELL = /bin/sh
 
 kmoduledir = @kmoduledir@
 i_kmoduledir = $(install_root)$(kmoduledir)
-build_redir = @build_redir@
 
 CC = @CC@
 
@@ -11,7 +10,7 @@ CPPFLAGS = -I@KERNINCLUDE@ -D__KERNEL__ -DMODULE -D_LOOSE_KERNEL_NAMES
 
 INSTALL = @INSTALL@
 
-all: $(build_redir)
+all: redir.o
 
 clean:
 	rm -f core core.* *.o .*.o *.s *.a *~ 
@@ -21,5 +20,5 @@ clean:
 
 install: all
 	@../../mkinstalldirs $(i_kmoduledir)
-	$(INSTALL) -m 644 $(build_redir) $(i_kmoduledir)/redir.o
+	$(INSTALL) -m 644 redir.o $(i_kmoduledir)/redir.o
 	/sbin/depmod -a

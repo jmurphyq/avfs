@@ -1,6 +1,0 @@
-#! /bin/sh
-redirmounts=`cat /proc/mounts | grep '^coda ' | cut -f 2 -d ' ' | grep -v '^/overlay$'`
-if test "x$redirmounts" != x; then
-    umount $redirmounts
-fi
-

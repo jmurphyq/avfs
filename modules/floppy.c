@@ -12,6 +12,7 @@
 #include "runprog.h"
 
 #include <sys/stat.h>
+#include <fcntl.h>
 
 struct floppylocalfile {
     char *tmpfile;
@@ -333,6 +334,14 @@ static int floppy_get(struct remote *rem, struct getparam *gp)
 	return res;
     }
 
+    if(strncmp(gp->hostpath.path, "/.vol-", 6) == 0) {
+        av_free(path);
+        open(tmpfile, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        gp->data = NULL;
+        gp->localname = tmpfile;
+        return 0;
+    }
+
     AV_NEW_OBJ(lf, floppy_free_localfile);
     lf->pr = NULL;
     lf->tmpfile = tmpfile;
@@ -355,7 +364,7 @@ static int floppy_get(struct remote *rem, struct getparam *gp)
     gp->data = lf;
     gp->localname = lf->tmpfile;
 
-    return 0;
+    return 1;
 }
 
 static int floppy_wait(struct remote *rem, void *data, avoff_t end)

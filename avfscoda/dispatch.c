@@ -856,7 +856,7 @@ static int new_child(struct userinfo *user, uid_t uid, gid_t gid)
         num = 1;
         setgroups(num, list);
 		
-#if 0
+#if 1
         {
             struct passwd *pwbuf;
 			

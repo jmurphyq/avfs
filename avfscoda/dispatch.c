@@ -80,6 +80,7 @@ static int debugmode;
 struct openfile {
     pid_t pid;
     char *tmpfile;
+    int fd;
     int use;
     int wuse;
 	
@@ -413,22 +414,43 @@ static void open_file(union inputArgs *req, struct openfile *of)
     rep.oh.opcode = req->ih.opcode;
     rep.oh.unique = req->ih.unique;
 	
-    ret = stat(of->tmpfile, &stbuf);
-    if(ret == -1) 
-        rep.oh.result = errno;
-    else {
-        rep.oh.result = 0;
-        rep.coda_open.dev = stbuf.st_dev;
-        rep.coda_open.inode = stbuf.st_ino;
-		
-        log("dev: %lli, ino: %li\n", rep.coda_open.dev, rep.coda_open.inode);
-        log("size: %li\n", stbuf.st_size);
-        of->use ++;
-        if((req->coda_open.flags & (C_O_WRITE | C_O_TRUNC)) != 0)
-            of->wuse ++;
-    }
+    if(req->ih.opcode == CODA_OPEN) {
+        ret = stat(of->tmpfile, &stbuf);
+        if(ret == -1) 
+            rep.oh.result = errno;
+        else {
+            rep.oh.result = 0;
+            rep.coda_open.dev = stbuf.st_dev;
+            rep.coda_open.inode = stbuf.st_ino;
+            
+            log("dev: %lli, ino: %li\n", rep.coda_open.dev,
+                rep.coda_open.inode);
+            log("size: %li\n", stbuf.st_size);
+            of->use ++;
+            if((req->coda_open.flags & (C_O_WRITE | C_O_TRUNC)) != 0)
+                of->wuse ++;
+        }
 	
-    send_to_kernel(&rep, sizeof(rep.coda_open));
+        send_to_kernel(&rep, sizeof(rep.coda_open));
+    }
+    else {
+        if(of->fd == -1) {
+            of->fd = open(of->tmpfile, O_RDONLY);
+            if(of->fd == -1)
+                rep.oh.result = errno;
+        }
+        if(of->fd != -1) {
+            rep.oh.result = 0;
+            rep.coda_open_by_fd.fd =  of->fd;
+            
+            log("fd: %i\n", of->fd);
+
+            of->use ++;
+            if((req->coda_open.flags & (C_O_WRITE | C_O_TRUNC)) != 0)
+                of->wuse ++;
+        }
+        send_to_kernel(&rep, sizeof(rep.coda_open_by_fd));
+    }
 }
 
 static void del_file(const char *tmpname)
@@ -448,6 +470,8 @@ static void close_file(struct openfile *of, struct openfile **ofp)
     
     if(of->use > 0) of->use --;
     if(of->use == 0 && of->tmpfile != NULL) {
+        if(of->fd != -1)
+            close(of->fd);
         del_file(of->tmpfile);
         free(of->tmpfile);
         *ofp = of->next;
@@ -538,6 +562,7 @@ static void process_answer(struct userinfo *user)
 		
         switch(rep->oh.opcode) {
         case CODA_OPEN:
+        case CODA_OPEN_BY_FD:
             if(rep->oh.result == 0) {
                 fi = look_info(&op->req->coda_open.VFid);
 				
@@ -1112,9 +1137,12 @@ static void process_kernel_req()
         break;
 		
     case CODA_OPEN:
-        /* FIXME: I don't like this !!! */
-        log("CODA_OPEN, flags: 0x%04x\n", req->coda_open.flags);
-		
+    case CODA_OPEN_BY_FD:
+        if(req->ih.opcode == CODA_OPEN)
+            log("CODA_OPEN, flags: 0x%04x\n", req->coda_open.flags);
+        else
+            log("CODA_OPEN_BY_FD, flags: 0x%04x\n", req->coda_open.flags);
+
         fi = look_info(&req->coda_open.VFid);
         path = fi->path;
         log("path: %s\n", path);
@@ -1152,6 +1180,7 @@ static void process_kernel_req()
                     of->wuse = 0;
                     of->pid = req->ih.pid;
                     of->tmpfile = strdup(tmpname);
+                    of->fd = -1;
                     of->next = fi->ofs;
                     fi->ofs = of;
 					
@@ -1317,7 +1346,7 @@ static void process_kernel_req()
         break;
 		
     default:
-        reply(req, EPERM);
+        reply(req, EOPNOTSUPP);
 		
         log("========================================\n");
         log("     N o t   I m p l e m e n t e d      \n");

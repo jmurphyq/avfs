@@ -361,6 +361,7 @@ void *process_request(void *arg)
 	break;
 			
     case CODA_OPEN:
+    case CODA_OPEN_BY_FD:
 	size = sizeof(rep->oh);
 	if(strcmp(path1, "/") == 0)
 	    create_empty_dir(path2);
@@ -485,7 +486,7 @@ void *process_request(void *arg)
 	break;
 
     default:
-	rep->oh.result = EPERM;
+	rep->oh.result = EOPNOTSUPP;
     }
 		
     *(int *) obuf = size;

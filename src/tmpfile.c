@@ -15,7 +15,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#ifdef HAVE_SYS_STATVFS_H
 #include <sys/statvfs.h>
+#endif
 
 struct tmpdir {
     char *path;
@@ -148,10 +150,13 @@ void av_del_tmpfile(char *tmpf)
 
 avoff_t av_tmp_free()
 {
+#ifdef HAVE_SYS_STATVFS_H
     int res;
     struct statvfs stbuf;
+#endif
     avoff_t freebytes = -1;
 
+#ifdef HAVE_SYS_STATVFS_H
     AV_LOCK(tmplock);
     if(tmpdir != NULL) {
         /* Check if fs supports df info (ramfs doesn't) */
@@ -160,6 +165,7 @@ avoff_t av_tmp_free()
             freebytes = (avoff_t) stbuf.f_bavail * (avoff_t) stbuf.f_frsize;
     }
     AV_UNLOCK(tmplock);
+#endif
 
 #if 0    
     if(freebytes != -1)

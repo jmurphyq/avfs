@@ -39,7 +39,9 @@ static int avoflags_to_oflags(int avflags)
     if(avflags & AVO_TRUNC)    flags |= O_TRUNC;
     if(avflags & AVO_APPEND)   flags |= O_APPEND;
     if(avflags & AVO_NONBLOCK) flags |= O_NONBLOCK;
+#ifdef O_SYNC
     if(avflags & AVO_SYNC)     flags |= O_SYNC;
+#endif
 
     return flags;
 }

@@ -58,11 +58,15 @@ char *av_finduname(struct ugidcache *cache, int uid, const char *deflt)
         char *buf = NULL;
         size_t bufsize = 0;
 
+#ifdef HAVE_GETPWUID_R
         do {
             bufsize += 256;
             buf = av_realloc(buf, bufsize);
             res = getpwuid_r(uid, &pw, buf, bufsize, &pwres);
         } while(res == ERANGE);
+#else
+	pwres = getpwuid(uid);
+#endif
 
         av_free(cache->uname);
         if(pwres == NULL)
@@ -71,7 +75,9 @@ char *av_finduname(struct ugidcache *cache, int uid, const char *deflt)
             cache->uname = av_strdup(pwres->pw_name);
 
         cache->uid = uid;
+#ifdef HAVE_GETPWUID_R
         av_free(buf);
+#endif
     }
 
     if(!cache->uname[0])
@@ -92,11 +98,15 @@ int av_finduid(struct ugidcache *cache, const char *uname, int deflt)
         char *buf = NULL;
         size_t bufsize = 0;
 
+#ifdef HAVE_GETPWNAM_R
         do {
             bufsize += 256;
             buf = av_realloc(buf, bufsize);
             res = getpwnam_r(uname, &pw, buf, bufsize, &pwres);
         } while(res == ERANGE);
+#else
+	pwres = getpwnam(uname);
+#endif
 
         if(pwres == NULL)
             cache->uid = -1;
@@ -105,7 +115,9 @@ int av_finduid(struct ugidcache *cache, const char *uname, int deflt)
 
         av_free(cache->uname);
         cache->uname = av_strdup(uname);
+#ifdef HAVE_GETPWNAM_R
         av_free(buf);
+#endif
     }
     
     if(cache->uid == -1)
@@ -126,11 +138,15 @@ char *av_findgname(struct ugidcache *cache, int gid, const char *deflt)
         char *buf = NULL;
         size_t bufsize = 0;
 
+#ifdef HAVE_GETGRGID_R
         do {
             bufsize += 256;
             buf = av_realloc(buf, bufsize);
             res = getgrgid_r(gid, &gr, buf, bufsize, &grres);
         } while(res == ERANGE);
+#else
+	grres = getgrgid(gid);
+#endif
 
         av_free(cache->gname);
         if(grres == NULL)
@@ -139,7 +155,9 @@ char *av_findgname(struct ugidcache *cache, int gid, const char *deflt)
             cache->gname = av_strdup(grres->gr_name);
 
         cache->gid = gid;
+#ifdef HAVE_GETGRGID_R
         av_free(buf);
+#endif
     }
     
     if(!cache->gname[0])
@@ -160,11 +178,15 @@ int av_findgid(struct ugidcache *cache, const char *gname, int deflt)
         char *buf = NULL;
         size_t bufsize = 0;
 
+#ifdef HAVE_GETGRNAM_R
         do {
             bufsize += 256;
             buf = av_realloc(buf, bufsize);
             res = getgrnam_r(gname, &gr, buf, bufsize, &grres);
         } while(res == ERANGE);
+#else
+	grres = getgrnam(gname);
+#endif
 
         if(grres == NULL)
             cache->gid = -1;
@@ -173,7 +195,9 @@ int av_findgid(struct ugidcache *cache, const char *gname, int deflt)
 
         av_free(cache->gname);
         cache->gname = av_strdup(gname);
+#ifdef HAVE_GETGRNAM_R
         av_free(buf);
+#endif
     }
  
     if(cache->gid == -1)

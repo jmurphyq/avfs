@@ -1,3 +1,11 @@
+2004-01-05  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	*  Applied FreeBSD support patch by Mikulas Patocka
+	
+2003-12-09  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	*  Don't include DAV by default
+	
 2003-12-08  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	*  Shared library fix by Miroslav Spousta

@@ -9,9 +9,9 @@
 #ifndef _VIRTUAL_H
 #define _VIRTUAL_H
 
+#include <sys/types.h>
 #include <dirent.h>
 #include <utime.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 
 /*

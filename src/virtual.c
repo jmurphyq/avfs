@@ -30,7 +30,9 @@ static int oflags_to_avfs(int flags)
     if(flags & O_TRUNC)    avflags |= AVO_TRUNC;
     if(flags & O_APPEND)   avflags |= AVO_APPEND;
     if(flags & O_NONBLOCK) avflags |= AVO_NONBLOCK;
+#ifdef O_SYNC
     if(flags & O_SYNC)     avflags |= AVO_SYNC;
+#endif
 
     return avflags;
 }
@@ -272,7 +274,9 @@ static void avdirent_to_dirent(struct dirent *ent, struct avdirent *avent,
 			       avoff_t n)
 {
     ent->d_ino = avent->ino;
+#ifdef HAVE_D_OFF
     ent->d_off = n * AVFS_DIR_RECLEN; 
+#endif
     ent->d_reclen = AVFS_DIR_RECLEN;
 #ifdef HAVE_D_TYPE
     ent->d_type = avent->type;

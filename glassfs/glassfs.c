@@ -24,7 +24,6 @@ struct base_entry {
 
 /* Rules for storing underlying filesystem data:
  *
- *  dentry->d_fsdata:     contains the underlying dentry 
  *  inode->u.generic_ip:  contains a kmalloced base_entry struct 
  *  sb->s_fs_info:        contains the underlying superblock
  */
@@ -66,6 +65,7 @@ static void glassfs_fill_inode(struct inode *inode, int mode, dev_t dev,
 	be->is_avfs = is_avfs;
 
 	inode->i_mode = mode;
+	inode->i_rdev = dev;
 	inode->i_fop = &glassfs_file_operations;
 	
 	switch (mode & S_IFMT) {
@@ -113,7 +113,7 @@ static int glassfs_open(struct inode *inode, struct file *file)
 	struct vfsmount *nmnt = mntget(be->mnt);
 	struct dentry *ndentry = dget(be->dentry);
 	struct file *nfile;
-//	printk("glassfs_open\n");
+	//printk("glassfs_open %.*s\n", ndentry->d_name.len, ndentry->d_name.name);
 	nfile = dentry_open(ndentry, nmnt, file->f_flags);
 	if(IS_ERR(nfile))
 		return PTR_ERR(nfile);
@@ -130,6 +130,76 @@ static int is_avfs(const unsigned char *name, unsigned int len)
 	return 0;
 }
 
+
+static char * my_d_path( struct dentry *dentry, struct vfsmount *vfsmnt,
+			struct dentry *root, struct vfsmount *rootmnt,
+			char *buffer, int buflen)
+{
+	char * end = buffer+buflen;
+	char * retval;
+	int namelen;
+
+	*--end = '\0';
+	buflen--;
+	if (!IS_ROOT(dentry) && d_unhashed(dentry)) {
+		buflen -= 10;
+		end -= 10;
+		if (buflen < 0)
+			goto Elong;
+		memcpy(end, " (deleted)", 10);
+	}
+
+	if (buflen < 1)
+		goto Elong;
+	/* Get '/' right */
+	retval = end-1;
+	*retval = '/';
+
+	for (;;) {
+		struct dentry * parent;
+
+		if (dentry == root && vfsmnt == rootmnt)
+			break;
+		if (dentry == vfsmnt->mnt_root || IS_ROOT(dentry)) {
+			/* Global root? */
+			spin_lock(&vfsmount_lock);
+			if (vfsmnt->mnt_parent == vfsmnt) {
+				spin_unlock(&vfsmount_lock);
+				goto global_root;
+			}
+			dentry = vfsmnt->mnt_mountpoint;
+			vfsmnt = vfsmnt->mnt_parent;
+			spin_unlock(&vfsmount_lock);
+			continue;
+		}
+		parent = dentry->d_parent;
+		prefetch(parent);
+		namelen = dentry->d_name.len;
+		buflen -= namelen + 1;
+		if (buflen < 0)
+			goto Elong;
+		end -= namelen;
+		memcpy(end, dentry->d_name.name, namelen);
+		*--end = '/';
+		retval = end;
+		dentry = parent;
+	}
+
+	return retval;
+
+global_root:
+	namelen = dentry->d_name.len;
+	buflen -= namelen;
+	if (buflen < 0)
+		goto Elong;
+	retval -= namelen-1;	/* hit the slash */
+	memcpy(retval, dentry->d_name.name, namelen);
+	return retval;
+Elong:
+	return ERR_PTR(-ENAMETOOLONG);
+}
+
+
 static int lookup_avfs(struct dentry *dentry, struct nameidata *nd,
 		       struct vfsmount *nmnt, struct base_entry *be)
 {
@@ -142,7 +212,9 @@ static int lookup_avfs(struct dentry *dentry, struct nameidata *nd,
 	if (page) {
 		struct nameidata avfsnd;
 		unsigned int offset = PAGE_SIZE - dentry->d_name.len - 2;
-		path = d_path(nd->dentry,nd->mnt, page, offset);
+		spin_lock(&dcache_lock);
+		path = my_d_path(nd->dentry,nd->mnt, nd->mnt->mnt_sb->s_root, nd->mnt, page, offset);
+		spin_unlock(&dcache_lock);
 		err = -ENAMETOOLONG;
 		if (!IS_ERR(path) && page + OVERLAY_DIR_LEN < path) {
 			unsigned int pathlen = strlen(path);
@@ -190,7 +262,7 @@ static struct dentry *glassfs_lookup(struct inode *dir, struct dentry *dentry,
 {
 	struct base_entry *be = dir->u.generic_ip;
 	struct dentry *ndentry;
-	struct vfsmount *nmnt = mntget(be->mnt);
+	struct vfsmount *nmnt;
 	struct inode *inode = NULL;
 	int curravfs = be->is_avfs;
 
@@ -198,7 +270,11 @@ static struct dentry *glassfs_lookup(struct inode *dir, struct dentry *dentry,
 	down(&be->dentry->d_inode->i_sem);
 	ndentry = lookup_hash(&dentry->d_name, be->dentry);
 	up(&be->dentry->d_inode->i_sem);
-	if(!is_create(nd) && !ndentry->d_inode && !curravfs && 
+	if (IS_ERR(ndentry))
+		return ndentry;
+
+	nmnt = mntget(be->mnt);
+	if (!is_create(nd) && !ndentry->d_inode && !curravfs && 
 	   is_avfs(dentry->d_name.name, dentry->d_name.len)) {
 		struct base_entry avfsbe;
 		int err;
@@ -231,8 +307,8 @@ static struct dentry *glassfs_lookup(struct inode *dir, struct dentry *dentry,
 				   ndentry, nmnt, curravfs);
 	}
 
-	dentry->d_fsdata = ndentry;
 	dentry->d_op = &glassfs_dentry_operations;
+	dput(ndentry);
 	mntput(nmnt);
 	
 	return d_splice_alias(inode, dentry);
@@ -245,25 +321,33 @@ static int glassfs_permission(struct inode *inode, int mask,
 	struct base_entry *be = inode->u.generic_ip;
 	struct inode *ninode = be->dentry->d_inode;
 //	printk("glassfs_permission\n");
+	/* Exec needs i_mode to contain the correct permission bits */
+	inode->i_mode = ninode->i_mode;
 	return permission(ninode, mask, NULL);
 }
 
-/* FIXME: don't use dentry->d_fsdata in create... */
+
 
 static int glassfs_create(struct inode *dir, struct dentry *dentry,
 			  int mode, struct nameidata *nd)
 {
 	int err;
 	struct base_entry *be = dir->u.generic_ip;
-	struct dentry *ndentry = dentry->d_fsdata;
 	struct inode *ndir = be->dentry->d_inode;
+	struct dentry *ndentry;
 	struct inode *inode = glassfs_alloc_inode(dir->i_sb);
 	if (!inode)
 		return -ENOMEM;
 
 //	printk("glassfs_create\n");
 	down(&ndir->i_sem);
-	err = vfs_create(ndir, ndentry, mode, NULL);
+	ndentry = lookup_hash(&dentry->d_name, be->dentry);
+	if (IS_ERR(ndentry)) {
+		err = PTR_ERR(ndentry);
+		ndentry = NULL;
+	}
+	else
+		err = vfs_create(ndir, ndentry, mode, NULL);
 	up(&ndir->i_sem);
 	if (!err && ndentry->d_inode) {
 		struct inode *ninode = ndentry->d_inode;
@@ -272,6 +356,8 @@ static int glassfs_create(struct inode *dir, struct dentry *dentry,
 		d_instantiate(dentry, inode);
 	} else
 		iput(inode);
+
+	dput(ndentry);
 
 	return err;
 }
@@ -280,15 +366,20 @@ static int glassfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 {
 	int err;
 	struct base_entry *be = dir->u.generic_ip;
-	struct dentry *ndentry = dentry->d_fsdata;
 	struct inode *ndir = be->dentry->d_inode;
+	struct dentry *ndentry;
 	struct inode *inode = glassfs_alloc_inode(dir->i_sb);
 	if (!inode)
 		return -ENOMEM;
 
 //	printk("glassfs_mkdir\n");
 	down(&ndir->i_sem);
-	err = vfs_mkdir(ndir, ndentry, mode);
+	ndentry = lookup_hash(&dentry->d_name, be->dentry);
+	if (IS_ERR(ndentry)) {
+		err = PTR_ERR(ndentry);
+		ndentry = NULL;
+	} else 
+		err = vfs_mkdir(ndir, ndentry, mode);
 	up(&ndir->i_sem);
 	if (!err && ndentry->d_inode) {
 		struct inode *ninode = ndentry->d_inode;
@@ -297,6 +388,8 @@ static int glassfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 		d_instantiate(dentry, inode);
 	} else
 		iput(inode);
+
+	dput(ndentry);
 
 	return err;
 }
@@ -307,9 +400,8 @@ static int glassfs_link(struct dentry *old_dentry, struct inode *dir,
 	int err;
 	struct base_entry *be = dir->u.generic_ip;
 	struct base_entry *old_be = old_dentry->d_inode->u.generic_ip;
-	struct dentry *new_ndentry = new_dentry->d_fsdata;
-	struct dentry *old_ndentry = old_dentry->d_fsdata;
 	struct inode *ndir = be->dentry->d_inode;
+	struct dentry *new_ndentry;
 	struct inode *inode;
 
 	if(be->mnt != old_be->mnt)
@@ -321,7 +413,12 @@ static int glassfs_link(struct dentry *old_dentry, struct inode *dir,
 
 //	printk("glassfs_link\n");
 	down(&ndir->i_sem);
-	err = vfs_link(old_ndentry, ndir, new_ndentry);
+	new_ndentry = lookup_hash(&new_dentry->d_name, be->dentry);
+	if (IS_ERR(new_ndentry)) {
+		err = PTR_ERR(new_ndentry);
+		new_ndentry = NULL;
+	} else 
+		err = vfs_link(old_be->dentry, ndir, new_ndentry);
 	up(&ndir->i_sem);
 	if (!err && new_ndentry->d_inode) {
 		struct inode *ninode = new_ndentry->d_inode;
@@ -331,6 +428,8 @@ static int glassfs_link(struct dentry *old_dentry, struct inode *dir,
 	} else
 		iput(inode);
 
+	dput(new_ndentry);
+
 	return err;
 }
 
@@ -339,15 +438,20 @@ static int glassfs_symlink(struct inode *dir, struct dentry *dentry,
 {
 	int err;
 	struct base_entry *be = dir->u.generic_ip;
-	struct dentry *ndentry = dentry->d_fsdata;
 	struct inode *ndir = be->dentry->d_inode;
+	struct dentry *ndentry;
 	struct inode *inode = glassfs_alloc_inode(dir->i_sb);
 	if (!inode)
 		return -ENOMEM;
 
 //	printk("glassfs_symlink\n");
 	down(&ndir->i_sem);
-	err = vfs_symlink(ndir, ndentry, oldname);
+	ndentry = lookup_hash(&dentry->d_name, be->dentry);
+	if (IS_ERR(ndentry)) {
+		err = PTR_ERR(ndentry);
+		ndentry = NULL;
+	} else 
+		err = vfs_symlink(ndir, ndentry, oldname);
 	up(&ndir->i_sem);
 	if (!err && ndentry->d_inode) {
 		struct inode *ninode = ndentry->d_inode;
@@ -356,6 +460,8 @@ static int glassfs_symlink(struct inode *dir, struct dentry *dentry,
 		d_instantiate(dentry, inode);
 	} else
 		iput(inode);
+
+	dput(ndentry);
 
 	return err;
 }
@@ -365,15 +471,20 @@ static int glassfs_mknod(struct inode *dir, struct dentry *dentry, int mode,
 {
 	int err;
 	struct base_entry *be = dir->u.generic_ip;
-	struct dentry *ndentry = dentry->d_fsdata;
 	struct inode *ndir = be->dentry->d_inode;
+	struct dentry *ndentry;
 	struct inode *inode = glassfs_alloc_inode(dir->i_sb);
 	if (!inode)
 		return -ENOMEM;
 
 //	printk("glassfs_mknod\n");
 	down(&ndir->i_sem);
-	err = vfs_mknod(ndir, ndentry, mode, dev);
+	ndentry = lookup_hash(&dentry->d_name, be->dentry);
+	if (IS_ERR(ndentry)) {
+		err = PTR_ERR(ndentry);
+		ndentry = NULL;
+	} else 
+		err = vfs_mknod(ndir, ndentry, mode, dev);
 	up(&ndir->i_sem);
 	if (!err && ndentry->d_inode) {
 		struct inode *ninode = ndentry->d_inode;
@@ -383,6 +494,8 @@ static int glassfs_mknod(struct inode *dir, struct dentry *dentry, int mode,
 	} else
 		iput(inode);
 	
+	dput(ndentry);
+
 	return err;
 }
 
@@ -392,17 +505,47 @@ static int glassfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	int err;
 	struct base_entry *old_be = old_dir->u.generic_ip;
 	struct base_entry *new_be = new_dir->u.generic_ip;
-	struct dentry *old_ndentry = old_dentry->d_fsdata;
-	struct dentry *new_ndentry = new_dentry->d_fsdata;
 	struct inode *old_ndir = old_be->dentry->d_inode;
 	struct inode *new_ndir = new_be->dentry->d_inode;
+	struct dentry *old_ndentry = NULL;
+	struct dentry *new_ndentry = NULL;
+	struct dentry *trap;
 
 	if (old_be->mnt != new_be->mnt)
 		return -EXDEV;
 
-	lock_rename(new_be->dentry, old_be->dentry);
+	trap = lock_rename(new_be->dentry, old_be->dentry);
+	old_ndentry = lookup_hash(&old_dentry->d_name, old_be->dentry);
+	if (IS_ERR(old_ndentry)) {
+		err = PTR_ERR(old_ndentry);
+		old_ndentry = NULL;
+		goto out;
+	}
+	if (old_ndentry == trap) {
+		err = -EINVAL;
+		goto out;
+	}
+	if (!old_ndentry->d_inode) {
+		err = -ENOENT;
+		goto out;
+	}
+		
+	new_ndentry = lookup_hash(&new_dentry->d_name, new_be->dentry);
+	if (IS_ERR(new_ndentry)) {
+		err = PTR_ERR(new_ndentry);
+		new_ndentry = NULL;
+		goto out;
+	}
+	if (new_ndentry == trap) {
+		err = -ENOTEMPTY;
+		goto out;
+	}
 	err = vfs_rename(old_ndir, old_ndentry, new_ndir, new_ndentry);
+
+  out:
 	unlock_rename(new_be->dentry, old_be->dentry);
+	dput(new_ndentry);
+	dput(old_ndentry);
 	
 	return err;
 }
@@ -548,28 +691,42 @@ static int glassfs_statfs(struct super_block *sb, struct kstatfs *buf)
 	return vfs_statfs(nsb, buf);
 }
 
+#if 0
 static void glassfs_dentry_release(struct dentry *dentry)
 {
-	struct dentry *ndentry = dentry->d_fsdata;
+	struct dentry *ndentry = dentry->d_xxfsdata;
 //	printk("glassfs_dentry_release\n");
 	dput(ndentry);
 }
+#endif
+
 
 static int glassfs_dentry_revalidate(struct dentry *dentry,
 				     struct nameidata *nd)
 {
-	struct dentry *ndentry = dentry->d_fsdata;
+	struct base_entry *be;
+	//struct dentry *ndentry = dentry->d_xxfsdata;
 	//printk("glassfs_dentry_revalidate %.*s\n", dentry->d_name.len, dentry->d_name.name);
 
+	if (!dentry->d_inode)
+		return 0;
+
+
+#if 0
 	if (d_unhashed(ndentry))
 		return 0;
 
 	if (nd && !dentry->d_inode &&
 	   is_avfs(dentry->d_name.name, dentry->d_name.len))
 	   return 0;
+#endif
 
-	if (ndentry->d_op && ndentry->d_op->d_revalidate)
-		return ndentry->d_op->d_revalidate(ndentry, NULL);
+	be = dentry->d_inode->u.generic_ip;
+	if (d_unhashed(be->dentry))
+		return 0;
+
+	if (be->dentry->d_op && be->dentry->d_op->d_revalidate)
+		return be->dentry->d_op->d_revalidate(be->dentry, NULL);
 	return 1;
 }
 
@@ -621,7 +778,7 @@ static void glassfs_clear_inode(struct inode *inode)
 
 static struct dentry_operations glassfs_dentry_operations = {
 	.d_revalidate	= glassfs_dentry_revalidate,
-	.d_release      = glassfs_dentry_release,
+//	.d_release      = glassfs_dentry_release,
 };
 
 static struct file_operations glassfs_file_operations = {
@@ -705,7 +862,7 @@ static int glassfs_fill_super(struct super_block * sb, void * data, int silent)
 		return -ENOMEM;
 	}
 	sb->s_fs_info = nsb;
-	root->d_fsdata = dget(nroot);
+	//root->d_xxfsdata = dget(nroot);
 	root->d_op = &glassfs_dentry_operations;
 
 	sb->s_root = root;

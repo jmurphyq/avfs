@@ -1,0 +1,14 @@
+SHELL = /bin/sh
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+includedir = @includedir@
+
+i_includedir = $(install_root)$(includedir)
+
+INSTALL = @INSTALL@
+
+install: avfs.h
+	@../../mkinstalldirs $(i_includedir)
+	$(INSTALL) -m 644 avfs.h $(i_includedir)/avfs.h
+

@@ -1,0 +1,35 @@
+Handlers:
+
+ - Built in
+    o FTP
+    o HTTP
+
+Library:
+
+ - Test with GLIBC 2.1
+ - Make input/output redirection work
+
+Misc:
+
+ - Documentation
+ - Make it LGPL (ask permission from the GNU tar people)
+ - automated testing!
+
+
+coda:
+- holds onto files which are closed          DONE
+- module reference count is not decremented  DONE
+
+avfscoda:
+- attributes are (wrongly) cached
+- lutime(), lchmod() call (???)
+
+avfs:
+- cached files are held open (filter handler)
+
+kernel:
+- shrink_dcache_sb: checks d_count in dentry_unused. Why???
+- check if coda mount allows suid/sgid
+
+nredir:	
+- make it SMP safe

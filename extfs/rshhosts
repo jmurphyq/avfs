@@ -1,0 +1,8 @@
+#! /bin/sh
+
+if test "$1" = list; then
+    hosts=`ypcat hosts | cut -f 2 | cut -f 1 -d \  | sort -u`
+    for i in $hosts; do
+	echo "lrwxrwxrwx   1 0        0               0 Jan  1  1973 $i -> ../@rsh:$i"
+    done
+fi

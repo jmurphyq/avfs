@@ -1,0 +1,41 @@
+SHELL = /bin/sh
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+sbindir = @sbindir@
+
+DAV_LIBS = -lneon -lxml -lz
+
+i_sbindir = $(install_root)$(sbindir)
+
+CC = @CC@
+CFLAGS = @CFLAGS@
+CPPFLAGS = @CPPFLAGS@ -I../include
+LDFLAGS = -Wl,-E -ldl -lpthread $(DAV_LIBS)
+
+INSTALL = @INSTALL@
+
+all: @avfscoda_all@
+install: @avfscoda_install@
+
+avfscoda_all: avfscoda
+	$(MAKE) -C redir all
+
+#leak=leak.o
+
+avfscoda_objs=avfscoda.o mount.o dispatch.o child.o $(leak)
+
+avfscoda: $(avfscoda_objs) ../lib/libavfs.a
+	$(CC) -o avfscoda $(avfscoda_objs) ../lib/libavfs.a $(LDFLAGS)
+
+avfscoda_install:
+	@../mkinstalldirs $(i_sbindir)
+	$(INSTALL) -m 755 avfscoda $(i_sbindir)/avfscoda
+	$(MAKE) -C redir install
+
+depend:
+	cp -f Makefile Makefile.old
+	sed '/^# DO NOT REMOVE THIS LINE/q' < Makefile.old > Makefile
+	gcc -MM $(CPPFLAGS) *.c >> Makefile
+
+# DO NOT REMOVE THIS LINE, OR "make depend" WILL NOT WORK

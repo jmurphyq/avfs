@@ -1,0 +1,244 @@
+What Is AVFS
+------------
+
+AVFS is a system, which enables all programs to look inside gzip, tar,
+zip, ... files, without recompiling the programs or changing the
+kernel.
+
+At the moment it supports floppies, tar and gzip files read/write, and
+zip, bzip2, ar and rar files read only. Quite a few other handlers are
+implemented with the Midnight Commander's external FS.
+
+AVFS is (C) under the GNU LGPL (see the file COPYING.LIB) with the
+exception of the tar handler, which is under GNU GPL (see the file
+COPYING).
+
+AVFS comes with ABSOLUTELY NO WARRANTY, for details see the file COPYING. 
+
+Where Is The Latest Version
+---------------------------
+
+Check out the page
+
+  http://www.inf.bme.hu/~mszeredi/avfs/
+
+Forms of AVFS
+-------------
+
+AVFS can now be installed in two different ways. These are:
+
+ - Avfscoda (NEW)
+	This method in theory works on any Linux system which has the
+        'coda' filesystem compiled in the kernel or as a kernel module.
+
+	In practice it works best with glibc-6.1 or higher, and it has
+        only been tested on 2.2.X kernels.
+
+	It should be used in the following distributions:
+		RedHat 6.0 or higher
+		SuSE 6.1 or higher
+		Debian 2.2 (potato) or higher
+
+ - Preload
+	This works on Linux systems with libc-5.X or glibc-6.0, and on
+	Solaris systems.
+	
+	It _DOES_NOT_ (and will never) work on glibc-6.1 or higher.
+
+	It should be used in the following distributions/systems:
+		Redhat 5.2 or lower
+		SuSE 6.0 or lower
+		Debian 2.1 or lower
+		Solaris
+
+
+Using AVFS is very similar in both cases. Differences will be indicated.
+
+The installation method is different. For installation instructions
+see the files 'INSTALL.preload' and 'INSTALL.avfscoda' respectively.
+
+Using AVFS
+----------
+
+It is quite simple, you just do everything with the virtual files, as
+you would do with real files. Here are some examples:
+
+Listing a tar archive:
+
+  ls -l avfs-0.5.2.tgz@/
+  ls -l avfs-0.5.2.tgz@/avfs-0.5.2/
+
+Obtaining information about avfs itself:
+
+  cat /@avfsstat      - prints copyright information and version
+  cat /@avfsstat-m    - lists available handlers
+  cat /@avfsstat-v    - prints version information
+
+'cd' into an archive:
+  (For the 'preload' method the shell itself must be started with
+   avfs)
+
+  cd avfs-0.5.2.tgz@/
+  less avfs-0.5.2/README
+
+Some more examples: (these are all shell commands, but of course you
+could use any program: file manager, browser, editor, etc.)
+
+Unpacking an archive:
+
+  cp -a tarfile.tgz@/dir .
+  cp -a zipfile.zip@/* .
+
+  (For the 'preload' method, using '*' means that the shell must be
+   started with AVFS)
+
+Creating an archive:
+
+  mkdir tarfile.tgz@+  
+  cp -a dir tarfile.tgz@+/
+
+
+  Note: The efficiency of this method is not yet the same as the
+  'normal' archive creation method, but it should not be more than 2
+  times slower.
+
+NOTES:
+
+1) ('preload' only) Since tar and gz files now have write support, tgz
+   archives are not safe from stupidity anymore. The insides of these
+   files are just as easy to modify as if they were not arhived at all. I
+   think this is cool, but if you don't, do "chmod a-w archive.tgz"
+   before entering.
+
+2) ('preload' only) Input and output redirection to/from virtual files
+   does not work. This is not a problem with the 'avfscoda' method.
+
+   E.g. you can't do
+           patch -p0 < patchfile.gz@
+           tar tvfz /@a/tarfile.tgz
+
+   only
+           cat patchfile.gz@ | patch -p0
+           tar tvf /@a/tarfile.tgz@ugz
+
+
+If something doesn't work, then check the section 'Common Problems'.
+
+
+Format of an AVFS Path
+----------------------
+
+As you've seen, the '@' magic character makes a virtual file or
+directory from an ordinary file. Actually this is just a shorthand for
+the full specification of an AVFS path:
+
+  'tarfile.tgz@' is the same as 'tarfile.tgz@ugz@utar'
+
+Note, the short version will only work if the file-extension is
+recognized (most are), but you can always tell exactly what should be
+done with the file by using the second method.
+
+There are handlers which do not have a "base" file. The floppy handler
+and the 'avfsstat' handler are like this, and ftp, http, etc. will
+also behave this way. For example the
+
+  /@floppy-a   or   /@a
+
+mean the root directory of the A drive.
+
+For a full explanation of the format see the file FORMAT.
+
+The following "handelers" are available now:
+
+  name of handler    type of operation      notes
+  ---------------    -----------------      -----
+  @ugz               gunzip                 internal, read/write
+  @uz                uncompress             uses gzip
+  @gz                gzip                   uses gzip
+  @ubz2              bunzip2                uses bzip2
+  @bz2               bzip2                  uses bzip2
+  @utar              untar                  internal, read/write
+  @uzip              unzip                  internal
+  @urar              unrar                  internal + uses rar
+  @uar               un-ar                  internal
+  @avfsstat          meta information       internal
+  @floppy            floppy                 uses mtools (mdir, mcopy, ...)
+  @a                 first floppy drive     shorthand for @floppy-a
+
+The following handlers are available through Midnight Commanders
+'extfs'. These were not written by me, and could contain security
+holes. Nonetheless some of them are quite useful.  For documentation
+on these, see the files in /usr/lib/avfs/extfs.
+
+  name of handler    type of operation
+  ---------------    -----------------
+  @uzoo              zoo archives
+  @ulha              lha archives
+  @ucpio             cpio archives
+  @rpm               rpm packages
+  @deb               debian packages
+  @lslR              directory tree listings
+  @ftplist           ?
+  @hp48              ?
+  @patchfs           browse patch files
+  @mailfs            ? 
+  @rpms              List of installed rpms
+  @trpm              Useful inside @rpms
+
+
+Writing new modules
+-------------------
+
+You want to write a handler module for XY? Great! Please contact me,
+and I can give you some advice regarding this.
+
+Credits
+-------
+
+David Hanak (dhanak@inf.bme.hu) has contibuted the "rar" and the
+"archive" modules, and lots of ideas to AVFS.
+
+The VFS in Midnight Commander, written by Jakub Jelinek and Miguel de
+Icaza <miguel@nuclecu.unam.mx>, has greatly helped me write this
+library, and will probably continue to do so in the future.
+
+Pavel Machek, who is the current maintainer of Midnight VFS, and who
+has contributed lots of ideas and the alien module (which
+unfortunately I did not have time to get into shape) to AVFS. (If you
+liked ':gz' better than '@ugz', then you can kill Pavel for that ;)
+The 'avfscoda' solution grew out of Pavels 'podfuk'. Most of it has
+been changed, but the original idea is from Pavel.
+
+Koblinger Egmont <egmont@fazekas.hu> has written the "recursive
+profile" scripts, set up the mailing list, and also sent me many good
+ideas.
+
+The zip and gzip file handler is based on the zlib compression and
+decompression library, written by Jean-loup Gailly and Mark Adler.
+
+The tar file handler is based on the GNU tar source, originally
+written by John Gilmore.
+
+People, who sent me ideas or bug-reports:
+  Jan Niehusmann <jan@gondor.com>
+  Demon of the Known Universe <psycho@dodds.net>
+  Duncan Pierce <cmrdrp@soc.staffs.ac.uk>
+  Scott F. Johnston <scott@fleetingimage.com>
+  Larry Riedel <larry@riedel.org>
+
+The Future
+----------
+
+I hope AVFS will grow up to be a standard virtual file library, for which
+people can write handler modules (or plugins, if you like) for whatever
+they want. Some things are still missing (most notably the network based
+file systems: ftp, http, ...), but the module interface is beggining to
+clear down. 
+
+If you thing AVFS is a good idea, and you have any comments or suggestions,
+please send me an email about them.
+
+Have fun,
+
+Miklos Szeredi <mszeredi@inf.bme.hu>
+

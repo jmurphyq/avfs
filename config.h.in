@@ -1,0 +1,19 @@
+/* config.h.in.  Generated automatically from configure.in by autoheader.  */
+
+/* Define if major, minor, and makedev are declared in <mkdev.h>.  */
+#undef MAJOR_IN_MKDEV
+
+/* Define if major, minor, and makedev are declared in <sysmacros.h>.  */
+#undef MAJOR_IN_SYSMACROS
+
+/* Define if your struct direntry has d_type.  */
+#undef HAVE_D_TYPE
+
+/* Define if you have the strcasecmp function.  */
+#undef HAVE_STRCASECMP
+
+/* Define if you have the strncasecmp function.  */
+#undef HAVE_STRNCASECMP
+
+/* Define if you have the vsnprintf function.  */
+#undef HAVE_VSNPRINTF

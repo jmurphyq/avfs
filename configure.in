@@ -1,0 +1,232 @@
+dnl Process this file with autoconf to produce a configure script.
+
+AC_INIT(include/avfs.h)
+AC_CONFIG_HEADER(include/config.h:config.h.in)
+AC_PREFIX_DEFAULT(/usr)
+
+dnl Check if on the same host if reconfiguring
+
+AC_CANONICAL_HOST
+
+AC_MSG_CHECKING([if configuration is valid])
+AC_CACHE_VAL(szm_cv_host_system, [szm_cv_host_system=$host])
+if test "$host" = "$szm_cv_host_system"; then
+  validstring="valid"
+else
+  validstring="invalid"
+fi
+AC_MSG_RESULT([$validstring])
+if test "$validstring" = invalid; then
+  AC_MSG_ERROR([type 'make realclean' before running configure])
+fi
+
+AC_ARG_ENABLE(debug,
+[  --enable-debug          Compile in debug information
+  --disable-debug         Do not compile in debug information],
+[if test "$enableval" = yes; then debug=yes; else debug=no; fi],
+debug=yes)
+
+dnl Checks for programs.
+cflags="$CFLAGS"
+AC_PROG_CC
+AC_PROG_CPP
+AC_PROG_INSTALL
+
+if test -z "$cflags"; then
+   if test "$GCC" = yes; then
+      if test "$debug" = yes; then
+         CFLAGS="-Wall -g"
+      else 
+         CFLAGS="-Wall -O3"
+      fi
+   else
+      if test "$debug" = yes; then
+         CFLAGS="-g"
+      else
+         CFLAGS="-O"
+      fi
+   fi
+fi
+
+
+AC_CHECK_PROG(LD, ld, [ld -r], [$CC -Wl,-r -nostdlib])
+
+
+AC_CHECK_FUNCS(vsnprintf strncasecmp strcasecmp)
+AC_HEADER_MAJOR
+
+AC_CACHE_CHECK([for d_type in struct dirent], my_cv_struct_d_type,
+[AC_TRY_COMPILE([#include <sys/types.h>
+#include <dirent.h>], [struct dirent d; d.d_type;],
+my_cv_struct_d_type=yes, my_cv_struct_d_type=no)])
+if test $my_cv_struct_d_type = yes; then
+  AC_DEFINE(HAVE_D_TYPE)
+fi
+
+
+moduledir='${libdir}/avfs'
+
+AC_SUBST(moduledir)
+
+os=`uname -s`
+
+if test "$os" = "Linux"; then
+    avfscoda=yes
+else
+    avfscoda=no
+fi
+
+dnl ================================================================
+dnl == Now comes the stuff that is only for avfscoda              ==
+dnl ================================================================
+
+install_scriptcomps=
+avfscoda_all=
+avfscoda_install=
+
+if test "$avfscoda" = yes; then
+	avfscoda_all=avfscoda_all
+	avfscoda_install=avfscoda_install
+
+	kernsrcver=
+	kernrunver=
+
+	origcppflags=$CPPFLAGS
+	AC_MSG_CHECKING([running kernel version])
+	kernrunver=`uname -r`
+	AC_MSG_RESULT([$kernrunver])
+
+	AC_MSG_CHECKING([kernel source directory])
+	kernelsrc=/usr/src/linux
+	majver=`echo $kernrunver | cut -f 1 -d .`
+	minver=`echo $kernrunver | cut -f 2 -d .`
+	buildlink=/lib/modules/${kernrunver}/build 
+	if test $majver -ge 2 && test $minver -ge 4 && test -e $buildlink; then
+	    kernelsrc=`(cd $buildlink; /bin/pwd)`
+	fi
+	AC_MSG_RESULT([$kernelsrc])
+	KERNINCLUDE=${kernelsrc}/include
+	AC_SUBST(KERNINCLUDE)
+	
+	CPPFLAGS="$CPPFLAGS -I$KERNINCLUDE -D__KERNEL__"
+
+	AC_MSG_CHECKING([kernel source version])
+	kernsrcver=`AC_TRY_RUN([
+#include <linux/version.h>
+#include <stdio.h>
+
+int main() {
+printf("%s", UTS_RELEASE);
+	return 0;
+}
+], got_kernsrcver=yes, got_kernsrcver=no)`
+
+	if test "$got_kernsrcver" = no; then
+		AC_MSG_RESULT([Not found])	
+		AC_MSG_WARN([Please install and configure kernel source])
+		kernver=$kernrunver
+	else
+		AC_MSG_RESULT([$kernsrcver])	
+		kernver=$kernsrcver
+
+		if test "$kernsrcver" != "$kernrunver"; then
+			AC_MSG_WARN([Running kernel version does not match kernel source])
+		fi
+	fi
+
+	kmoduledir=
+	AC_MSG_CHECKING([for kernel module directory])
+	kmoduledir=/lib/modules/${kernver}/misc
+	AC_MSG_RESULT([$kmoduledir])
+
+	AC_SUBST(kmoduledir)
+
+	AC_MSG_CHECKING([for new style redir])
+	AC_EGREP_HEADER(lookup_virtual, linux/fs.h, newredir=yes, newredir=no)
+	AC_MSG_RESULT([$newredir])
+
+	CPPFLAGS=$origcppflags
+
+	build_redir=
+	if test "$newredir" = yes; then
+		build_redir=nredir.o
+		install_scriptcomps="$install_scriptcomps install_flushredir"
+	else
+		build_redir=redir.o
+	fi
+	AC_SUBST(build_redir)
+
+	initstyle=
+	AC_MSG_CHECKING([for init-script style])
+	if test -d /sbin/init.d -a -f /etc/rc.config; then
+		initstyle=suse
+	elif test -f /etc/rc.d/init.d/functions; then
+		initstyle=redhat
+	else
+		# Debian, etc. missing
+		initstyle=generic
+	fi;
+	AC_MSG_RESULT([$initstyle])
+
+	rcdir=
+	rcscriptdir=
+	start_levels=
+	stop_levels=
+	start_prio=
+	stop_prio=
+
+	install_scriptcomps="$install_scriptcomps install_initscript"
+
+	if test "$initstyle" = redhat; then
+		install_scriptcomps="$install_scriptcomps install_scriptlinks"
+		rcdir=/etc/rc.d
+		rcscriptdir=init.d/
+		start_levels="2 3 4 5"
+		stop_levels="0 1 6"
+		start_prio=85
+		stop_prio=25
+	elif test "$initstyle" = suse; then
+		install_scriptcomps="$install_scriptcomps install_scriptlinks"
+		rcdir=/sbin/init.d
+		rcscriptdir=
+		start_levels="2 3"
+		stop_levels="2 3"
+		start_prio=20
+		stop_prio=20
+	else
+		rcdir=/etc/rc.d
+		rcscriptdir=
+	fi
+
+	AC_SUBST(initstyle)
+	AC_SUBST(rcdir)
+	AC_SUBST(rcscriptdir)
+	AC_SUBST(start_levels)
+	AC_SUBST(stop_levels)
+	AC_SUBST(start_prio)
+	AC_SUBST(stop_prio)
+
+	profiledir=
+	if test "$newredir" = no; then
+		AC_MSG_CHECKING([for profile directory])
+		if test -d /etc/profile.d; then
+			install_scriptcomps="$install_scriptcomps install_profilescripts"
+			profiledir=/etc/profile.d
+		else 
+			profiledir=none
+		fi
+		AC_MSG_RESULT([$profiledir])
+	fi
+	AC_SUBST(profiledir)
+
+	install_scriptcomps="$install_scriptcomps install_avfscodamisc"
+fi
+
+AC_SUBST(install_scriptcomps)
+AC_SUBST(avfscoda_all)
+AC_SUBST(avfscoda_install)
+
+AC_OUTPUT(lib/Makefile include/Makefile avfscoda/Makefile lib/modules/Makefile lib/zlib/Makefile avfscoda/redir/Makefile extfs/Makefile scripts/Makefile)
+
+
+

@@ -19,7 +19,7 @@ struct archparams {
     void *data;
     int flags;
     int (*parse) (void *data, ventry *ent, struct archive *arch);
-    int (*open) (struct archfile *fil);
+    int (*open) (ventry *ve, struct archfile *fil);
     int (*close) (struct archfile *fil);
     avssize_t (*read)  (vfile *vf, char *buf, avsize_t nbyte);
     void (*release) (struct archive *arch, struct archnode *nod);

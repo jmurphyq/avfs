@@ -27,11 +27,17 @@ struct namespace {
     struct entry *root;
 };
 
+static void namespace_delete(struct namespace *ns)
+{
+    if(ns->root != NULL)
+        ns->root->prevp = NULL;
+}
+
 struct namespace *av_namespace_new()
 {
     struct namespace *ns;
 
-    AV_NEW_OBJ(ns, NULL);
+    AV_NEW_OBJ(ns, namespace_delete);
     ns->root = NULL;
     
     return ns;

@@ -71,9 +71,11 @@ static int new_archive(ventry *ve, struct archive *arch)
 
     arch->avfs = ve->mnt->avfs;
 
-    res = av_getattr(ve->mnt->base, &arch->st, AVA_ALL & ~AVA_SIZE, 0);
-    if(res < 0)
-        return res;
+    if(!(ap->flags & ARF_NOBASE)) {
+        res = av_getattr(ve->mnt->base, &arch->st, AVA_ALL & ~AVA_SIZE, 0);
+        if(res < 0)
+            return res;
+    }
     
     arch->ns = av_namespace_new();
     root = av_namespace_lookup(arch->ns, NULL, "");
@@ -84,11 +86,13 @@ static int new_archive(ventry *ve, struct archive *arch)
     if(res < 0)
         return res;
 
-    /* The size is only requested _after_ the parse, so bzip2 &
-       al. won't suffer. */
-    res = av_getattr(ve->mnt->base, &stbuf, AVA_SIZE, 0);
-    if(res < 0)
-        return res;
+    if(!(ap->flags & ARF_NOBASE)) {
+        /* The size is only requested _after_ the parse, so bzip2 &
+           al. won't suffer. */
+        res = av_getattr(ve->mnt->base, &stbuf, AVA_SIZE, 0);
+        if(res < 0)
+            return res;
+    }
 
     arch->st.size = stbuf.size;
 
@@ -100,9 +104,13 @@ static int new_archive(ventry *ve, struct archive *arch)
 static int check_archive(ventry *ve, struct archive *arch, int *neednew)
 {
     int res;
+    struct archparams *ap = (struct archparams *) ve->mnt->avfs->data;
     struct avstat stbuf;
     int attrmask = AVA_INO | AVA_DEV | AVA_SIZE | AVA_MTIME;
     
+    if((ap->flags & ARF_NOBASE) != 0)
+        return 0;
+
     res = av_getattr(ve->mnt->base, &stbuf, attrmask, 0);
     if(res < 0)
         return res;
@@ -278,17 +286,26 @@ static int arch_getpath(ventry *ve, char **resp)
 
     return 0;
 }
+static int arch_real_open(int flags)
+{
+    if((flags & AVO_DIRECTORY) == 0 && (flags & AVO_ACCMODE) != AVO_NOPERM)
+        return 1;
+    else
+        return 0;
+}
 
-static void arch_do_close(struct archfile *fil)
+static void arch_do_close(struct archfile *fil, int realopen)
 {
     struct archive *arch = fil->arch;
     struct archparams *ap = (struct archparams *) arch->avfs->data;
 
-    if(fil->basefile != NULL) {
-        arch->numread --;
-        if(arch->numread == 0) {
-            av_close(arch->basefile);
-            arch->basefile = NULL;
+    if(realopen) {
+        if(fil->basefile != NULL) {
+            arch->numread --;
+            if(arch->numread == 0) {
+                av_close(arch->basefile);
+                arch->basefile = NULL;
+            }
         }
 
         fil->nod->numopen --;
@@ -311,6 +328,7 @@ static int arch_do_open(ventry *ve, int flags, avmode_t mode, void **resp)
     struct archive *arch = ae->arch;
     struct archparams *ap = (struct archparams *) ve->mnt->avfs->data;
     vfile *basefile = NULL;
+    int realopen;
    
     if(nod == NULL)
         return -ENOENT;
@@ -321,15 +339,17 @@ static int arch_do_open(ventry *ve, int flags, avmode_t mode, void **resp)
     if((flags & AVO_DIRECTORY) != 0 && !AV_ISDIR(nod->st.mode))
         return -ENOTDIR;
     
-    if((flags & AVO_DIRECTORY) == 0 && (flags & AVO_ACCMODE) != AVO_NOPERM) {
-        if(arch->basefile == NULL) {
+    realopen = arch_real_open(flags);
+    if(realopen) {
+        if(!(ap->flags & ARF_NOBASE) && arch->basefile == NULL) {
             res = av_open(ve->mnt->base, AVO_RDONLY, 0, &arch->basefile);
             if(res < 0)
                 return res;
+
+            arch->numread ++;
+            basefile = arch->basefile;
         }
 
-        arch->numread ++;
-        basefile = arch->basefile;
         nod->numopen ++;
     }
     
@@ -348,10 +368,10 @@ static int arch_do_open(ventry *ve, int flags, avmode_t mode, void **resp)
     av_ref_obj(fil->nod);
     av_ref_obj(fil->ent);
 
-    if(fil->basefile != NULL && ap->open != NULL) {
-        res = ap->open(fil);
+    if(realopen && ap->open != NULL) {
+        res = ap->open(ve, fil);
         if(res < 0) {
-            arch_do_close(fil);
+            arch_do_close(fil, realopen);
             return res;
         }
     }
@@ -381,13 +401,14 @@ static int arch_close(vfile *vf)
     struct archfile *fil = arch_vfile_file(vf);
     struct archive *arch = fil->arch;
     struct archparams *ap = (struct archparams *) vf->mnt->avfs->data;
+    int realopen = arch_real_open(vf->flags);
 
     AV_LOCK(arch->lock);
-    if(fil->basefile != NULL && ap->close != NULL)
+    if(realopen && ap->close != NULL)
         res = ap->close(fil);
     else
         res = 0;
-    arch_do_close(fil);
+    arch_do_close(fil, realopen);
     AV_UNLOCK(arch->lock);
 
     return res;

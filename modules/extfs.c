@@ -30,6 +30,11 @@ struct extfsnode {
     char *fullpath;
 };
 
+struct extfsfile {
+    char *tmpfile;
+    int fd;
+};
+
 static void fill_extfs_link(struct archive *arch, struct entry *ent,
                            char *linkname)
 {
@@ -116,7 +121,6 @@ static void parse_extfs_line(struct lscache *lc, char *line,
     res = av_parse_ls(lc, line, &stbuf, &filename, &linkname);
     if(res != 1)
         return;
-
     
     insert_extfs_entry(arch, &stbuf, filename, linkname);
     av_free(filename);
@@ -248,74 +252,66 @@ static int extfs_list(void *data, ventry *ve, struct archive *arch)
     return res;
 }
 
-#if 0
-static int get_extfs_file(ave *v, vpath *path, arch_fdi *di)
+static int get_extfs_file(ventry *ve, struct archfile *fil,
+                          const char *tmpfile)
 {
-    arch_devd *dd = di->arch->dd;
+    int res;
+    struct archparams *ap = (struct archparams *) ve->mnt->avfs->data;
+    struct extfsdata *info = (struct extfsdata *) ap->data;
+    struct extfsnode *enod = (struct extfsnode *) fil->nod->data;
     struct proginfo pri;
     const char *prog[6];
-    real_file *basefile;
-    char *destfile;
-    int res;
-
-    if(di->file.fh != -1) av_close(DUMMYV, di->file.fh);
-    di->offset = 0;
-    di->size = di->ino->st.size;
+    struct realfile *rf;
+    int pipeout[2];
   
-    destfile = av_get_tmpfile(v);
-    if(destfile == NULL) return -1;
-
-    if(!(dd->flags & DEVF_NOFILE)) {
-        basefile = av_get_realfile(v, BASE(path));
-        if(basefile == NULL) {
-            av_del_tmpfile(destfile);
-            return -1;
-        }
+    if(info->needbase) {
+        res = av_get_realfile(ve->mnt->base, &rf);
+        if(res < 0)
+            return res;
     }
-    else basefile = NULL;
+    else 
+        rf = NULL;
   
-    prog[0] = (char *) dd->udata; /* Program name */
+    pipeout[0] = -1;
+    pipeout[1] = -1;
+    pipe(pipeout);
+
+    prog[0] = info->progpath;
     prog[1] = "copyout";
-    prog[2] = basefile == NULL ? "/" : basefile->name;
-    prog[3] = (char *) di->ino->udata; /* The full path */
-    prog[4] = destfile;
+    prog[2] = rf == NULL ? "/" : rf->name;
+    prog[3] = enod->fullpath;
+    prog[4] = tmpfile;
     prog[5] = NULL;
   
     av_init_proginfo(&pri);
-    pri.prog = prog;
-    pri.ifd = av_localopen(DUMMYV, "/dev/null", AVO_RDONLY, 0);
-    pri.ofd = av_get_logfile(v);
-    pri.efd = pri.ofd;
+    pri.prog = (const char **) prog;
+    pri.ifd = open("/dev/null", O_RDONLY);
+    pri.ofd = pipeout[1];
+    pri.efd = pipeout[1];
 
-    res = av_start_prog(v, &pri);
- 
-    av_localclose(DUMMYV, pri.ifd);
-    av_localclose(DUMMYV, pri.ofd);
+    res = av_start_prog(&pri);
+    close(pri.ifd);
+    close(pri.ofd);
 
-    if(res != -1) {
-        res = av_wait_prog(v, &pri, 0, 0);
-        if(res == -1) 
-            av_log(AVLOG_WARNING, "EXTFS: Prog %s returned with an error", 
-                     prog[0]);
-    }
-
-    av_free_realfile(basefile);
-    if(res != -1) {
-        di->file.fh = av_localopen(v, destfile, AVO_RDONLY, 0);
-
-        if(di->file.fh == -1) {
-            av_log(AVLOG_WARNING, "EXTFS: Could not open destination file %s", 
-                     destfile);
-            res = -1;
+    if(res == 0) {
+        struct filebuf *fb = av_filebuf_new(pipeout[0], FILEBUF_NONBLOCK);
+        char *line;
+        
+        while(av_filebuf_getline(fb, &line, -1) == 1 && line != NULL) {
+            av_log(AVLOG_WARNING, "%s: output: %s", ve->mnt->avfs->name, line);
+            av_free(line);
         }
-    }
-    av_del_tmpfile(destfile);
+        av_unref_obj(fb);
 
-    di->file.ptr = 0;
+        res = av_wait_prog(&pri, 0, 0);
+    }
+    else
+        close(pipeout[0]);
+
+    av_unref_obj(rf);
 
     return res;
 }
-#endif
 
 static struct ext_info *create_exts(char *line)
 {
@@ -353,6 +349,70 @@ static struct ext_info *create_exts(char *line)
     return exts;
 }
 
+static avssize_t extfs_read(vfile *vf, char *buf, avsize_t nbyte)
+{
+    avssize_t res;
+    struct archfile *fil = arch_vfile_file(vf);
+    struct extfsfile *efil = (struct extfsfile *) fil->data;
+
+    if(lseek(efil->fd, vf->ptr, SEEK_SET) == -1)
+        return -errno;
+
+    res = read(efil->fd, buf, nbyte);
+    if(res == -1)
+        return -errno;
+
+    vf->ptr += res;
+
+    return res;
+}
+
+static int extfs_open(ventry *ve, struct archfile *fil)
+{
+    int res;
+    struct extfsfile *extfil;
+    char *tmpfile;
+    int fd;
+
+    res = av_get_tmpfile(&tmpfile);
+    if(res < 0)
+        return res;
+
+    res = get_extfs_file(ve, fil, tmpfile);
+    if(res < 0) {
+        av_del_tmpfile(tmpfile);
+        return res;
+    }
+
+    fd = open(tmpfile, O_RDONLY);
+    if(fd == -1) {
+        res = -errno; 
+        av_log(AVLOG_ERROR, "EXTFS: Could not open %s: %s", tmpfile,
+               strerror(errno));
+        av_del_tmpfile(tmpfile);
+        return res;
+    }
+
+    AV_NEW(extfil);
+    extfil->tmpfile = tmpfile;
+    extfil->fd = fd;
+
+    fil->data = extfil;
+    
+    return 0;
+}
+
+static int extfs_close(struct archfile *fil)
+{
+    struct extfsfile *efil = (struct extfsfile *) fil->data;
+
+    close(efil->fd);
+    av_del_tmpfile(efil->tmpfile);
+    av_free(efil);
+    
+    return 0;
+}
+
 static void extfsdata_delete(struct extfsdata *info)
 {
     av_free(info->progpath);
@@ -387,13 +447,13 @@ static int create_extfs_handler(struct vmodule *module, const char *extfs_dir,
 
     ap = (struct archparams *) avfs->data;
 
+    /* FIXME: If there is no basefile then cache the listing forever? */
     AV_NEW_OBJ(info, extfsdata_delete);
     ap->data = info;
     ap->parse = extfs_list;
-#if 0
     ap->read = extfs_read;
-    ap->release = extfs_release;
-#endif
+    ap->open = extfs_open;
+    ap->close = extfs_close;
 
     if(!needbase)
         ap->flags |= ARF_NOBASE;

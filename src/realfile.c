@@ -25,7 +25,7 @@ static int copy_file(ventry *ve, const char *destpath)
     int destfd;
 
     res = av_open(ve, AVO_RDONLY, 0, &vf);
-    if(res == 0)
+    if(res < 0)
         return res;
     
     destfd = open(destpath, O_WRONLY | O_CREAT | O_TRUNC, 0600);
@@ -84,6 +84,8 @@ int av_get_realfile(ventry *ve, struct realfile **resp)
     struct realfile *rf;
 
     AV_NEW_OBJ(rf, realfile_delete);
+    rf->is_tmp = 0;
+    rf->name = NULL;
 
     if(ve->mnt->base == NULL) {
         rf->name = av_strdup((char *) ve->data);
@@ -94,8 +96,10 @@ int av_get_realfile(ventry *ve, struct realfile **resp)
     }
 
     res = av_get_tmpfile(&rf->name);
-    if(res < 0)
+    if(res < 0) {
+        av_unref_obj(rf);
         return res;
+    }
 
     rf->is_tmp = 1;
 

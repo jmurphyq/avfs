@@ -239,11 +239,22 @@ static int st_truncate(vfile *vf, avoff_t length)
     return 0;
 }
 
+static unsigned int st_paramhash(const char *param)
+{
+    unsigned long hash = 0;
+
+    for(; *param; param++) {
+        unsigned long c = *(const unsigned char *) param;
+        hash = (hash + (c << 4) + (c >> 4)) * 11;
+    }
+    return hash;
+}
 
 static int st_readdir(vfile *vf, struct avdirent *buf)
 {
     struct stfile *sf = st_vfile_stfile(vf);
     struct namespace *ns = st_vfile_namespace(vf);
+    struct statefile *stf;
     struct entry *ent;
     int n;
 
@@ -258,11 +269,12 @@ static int st_readdir(vfile *vf, struct avdirent *buf)
         return 0;
     
     buf->name = av_namespace_name(ent);
-    av_unref_obj(ent);
+    stf = av_namespace_get(ent);
 
     /* FIXME: Make ino be some hash function of param and entry */
-    buf->ino = 0;
+    buf->ino = (int) stf + st_paramhash(sf->stent->param);
     buf->type = 0;
+    av_unref_obj(ent);
     
     vf->ptr ++;
     
@@ -280,9 +292,9 @@ static int st_getattr(vfile *vf, struct avstat *buf, int attrmask)
         stf = NULL;
 
     av_default_stat(buf);
-    /* FIXME: Make ino be some hash function of param and entry */
-    buf->ino = 0;
-    buf->dev = 0;
+    /* This isn't perfect, but... */
+    buf->ino = (int) stf + st_paramhash(sf->stent->param);
+    buf->dev = vf->mnt->avfs->dev;
     if(stf != NULL) {
         if(stf->set != NULL)
             buf->mode = AV_IFREG | 0644;

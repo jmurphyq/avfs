@@ -417,7 +417,7 @@ static int zip_close(struct archfile *fil)
     return 0;
 }
 
-static int zip_open(struct archfile *fil)
+static int zip_open(ventry *ve, struct archfile *fil)
 {
     int res;
     char buf[LDIRENT_SIZE];

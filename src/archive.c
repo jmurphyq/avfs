@@ -43,10 +43,13 @@ static void arch_delete(struct archive *arch)
 {
     struct entry *root;
 
-    root = av_namespace_subdir(arch->ns, NULL);
-    arch_free_tree(root);
-    av_unref_obj(root);
-    av_unref_obj(arch->ns);
+    if(arch->ns != NULL) {
+        root = av_namespace_subdir(arch->ns, NULL);
+        arch_free_tree(root);
+        av_unref_obj(root);
+        av_unref_obj(arch->ns);
+    }
+
     AV_FREELOCK(arch->lock);
 }
 
@@ -68,17 +71,17 @@ static int new_archive(ventry *ve, struct archive *arch)
     struct entry *root;
     struct avstat stbuf;
 
-    arch->ns = av_namespace_new();
     arch->avfs = ve->mnt->avfs;
-
-    root = av_namespace_lookup(arch->ns, NULL, "");
-    av_arch_default_dir(arch, root);
-    av_unref_obj(root);
 
     res = av_getattr(ve->mnt->base, &arch->st, AVA_ALL & ~AVA_SIZE, 0);
     if(res < 0)
         return res;
     
+    arch->ns = av_namespace_new();
+    root = av_namespace_lookup(arch->ns, NULL, "");
+    av_arch_default_dir(arch, root);
+    av_unref_obj(root);
+
     res = ap->parse(ap->data, ve, arch);
     if(res < 0)
         return res;
@@ -122,6 +125,8 @@ static struct archive *find_archive(const char *key)
         AV_NEW_OBJ(arch, arch_delete);
         AV_INITLOCK(arch->lock);
         arch->flags = 0;
+        arch->ns = NULL;
+        arch->numread = 0;
         av_filecache_set(key, arch);
     }
     AV_UNLOCK(archlock);

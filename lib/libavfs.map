@@ -1,7 +1,0 @@
-LIBAVFS {
-  global:
-    virt_*;
-  local:
-    *;
-};
-

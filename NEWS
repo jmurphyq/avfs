@@ -1,4 +1,4 @@
-Changes from 0.5.2 to 0.9.1
+Changes from 0.5.2 to 0.9.0
   - Major rewrite touching almost all interfaces and code
   - Magic char changed from '@' to '#'. I hope this is the last such
     change ;)

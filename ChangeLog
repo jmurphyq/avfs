@@ -1,0 +1,23 @@
+Changes from 0.9.0 to 0.9.1
+
+	* Removed buggy 'mkdir' from redir.c
+
+	* Added execve (only for ix86) to redir.c
+
+	* Fixed deadlock in bzip2 handling
+
+	* Utar (and archive) now correctly handle open/read/close for
+	auto-directories
+
+	* Preload is now working on Solaris 2.5 (thanks to Richard Curnow)
+
+	* Fix bug in archive, for multiple opens on same file
+
+	* Archive now handles gracefully the case when file type is
+	symlink, but linkname is not filled in by handler. TODO: Handle
+	symlinks in zipfiles
+
+	* Handle archives which have '.' or '..' in their internal paths.
+
+	
+	

@@ -770,7 +770,7 @@ asmlinkage long virt_lstat64(char * filename, struct stat64 * statbuf, long flag
 	else 
 		ret = 0;
 
-	newfilename = resolve_name(filename, 1, 1);
+	newfilename = resolve_name(filename, 1, 0);
 	if(!newfilename) {
 		if(ret)
 			return ret;

@@ -56,7 +56,8 @@ static struct entry *lookup_name(struct entry **basep, struct entry *prev,
     struct entry *ent = NULL;
 
     for(entp = basep; *entp != NULL; entp = &(*entp)->next)
-	if(strncmp(name, (*entp)->name, namelen) == 0) {
+	if(strlen((*entp)->name) == namelen &&
+           strncmp(name, (*entp)->name, namelen) == 0) {
 	    ent = *entp;
 	    av_ref_obj(ent);
             break;

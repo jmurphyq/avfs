@@ -453,6 +453,7 @@ static void fill_node(struct archive *arch, struct entry *ent,
 
     if(tn->type == SYMTYPE) {
         nod->linkname = tinf->linkname;
+        nod->st.size = strlen(nod->linkname);
         tinf->linkname = NULL;
     }
 }

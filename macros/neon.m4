@@ -283,7 +283,7 @@ AC_DEFUN([NEON_REPLACE_SNPRINTF], [
 dnl Check for snprintf
 AC_CHECK_FUNC(snprintf,,
 	AC_DEFINE(HAVE_SNPRINTF_H, 1, [Define if need to include snprintf.h])
-	LIBOBJS="$LIBOBJS lib/snprintf.o" )
+	AC_LIBOBJ([lib/snprintf.o])
 
 ])
 

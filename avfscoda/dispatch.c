@@ -537,9 +537,9 @@ static void open_file(union inputArgs *req, struct openfile *of)
             rep.coda_open.dev = stbuf.st_dev;
             rep.coda_open.inode = stbuf.st_ino;
             
-            log("dev: %lli, ino: %li\n", rep.coda_open.dev,
+            log("dev: %lli, ino: %lli\n", rep.coda_open.dev,
                 rep.coda_open.inode);
-            log("size: %li\n", stbuf.st_size);
+            log("size: %lli\n", stbuf.st_size);
             of->use ++;
             if((req->coda_open.flags & (C_O_WRITE | C_O_TRUNC)) != 0)
                 of->wuse ++;

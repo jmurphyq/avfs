@@ -252,6 +252,7 @@ static struct fuse_operations avfsd_oper = {
     open:	avfsd_open,
     read:	avfsd_read,
     write:	avfsd_write,
+    statfs:     NULL,
 };
 
 int main(int argc, char *argv[])

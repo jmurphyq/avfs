@@ -537,12 +537,14 @@ int av_init_module_uzip(struct vmodule *module)
 {
     int res;
     struct avfs *avfs;
-    struct ext_info zipexts[3];
+    struct ext_info zipexts[5];
     struct archparams *ap;
 
     zipexts[0].from = ".zip",   zipexts[0].to = NULL;
     zipexts[1].from = ".jar",   zipexts[1].to = NULL;
-    zipexts[2].from = NULL;
+    zipexts[2].from = ".ear",   zipexts[2].to = NULL;
+    zipexts[3].from = ".war",   zipexts[3].to = NULL;
+    zipexts[4].from = NULL;
 
     res = av_archive_init("uzip", zipexts, AV_VER, module, &avfs);
     if(res < 0)

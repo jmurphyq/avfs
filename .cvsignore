@@ -2,5 +2,6 @@ aclocal.m4
 configure
 config.h.in
 config.log
-config.cache
 config.status
+*.cache
+

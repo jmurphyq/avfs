@@ -66,6 +66,15 @@ AC_PROG_CC
 AC_PROG_CPP
 AC_PROG_INSTALL
 AC_PROG_RANLIB
+AC_SYS_LARGEFILE
+
+
+if test "$ac_cv_sys_file_offset_bits" != no; then
+  CPPFLAGS="$CPPFLAGS -D_FILE_OFFSET_BITS=$ac_cv_sys_file_offset_bits"
+fi
+if test "$ac_cv_sys_large_files" != no; then
+  CPPFLAGS="$CPPFLAGS -D_LARGE_FILES=$ac_cv_sys_large_files"
+fi
 
 if test -z "$cflags"; then
    if test "$GCC" = yes; then
@@ -107,7 +116,7 @@ AC_CACHE_CHECK([for d_type in struct dirent], my_cv_struct_d_type,
 #include <dirent.h>], [struct dirent d; d.d_type;],
 my_cv_struct_d_type=yes, my_cv_struct_d_type=no)])
 if test $my_cv_struct_d_type = yes; then
-  AC_DEFINE(HAVE_D_TYPE)
+  AC_DEFINE(HAVE_D_TYPE, 1, [Define if your struct direntry has d_type])
 fi
 
 AC_SEARCH_LIBS(nanosleep, posix4)

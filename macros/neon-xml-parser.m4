@@ -13,7 +13,7 @@
 # This file is part of the neon HTTP/WebDAV client library.
 # See http://www.webdav.org/neon/ for the latest version. 
 # Please send any feedback to <neon@webdav.org>
-# $Id: neon-xml-parser.m4,v 1.1 2001/03/13 09:47:51 mszeredi Exp $
+# $Id: neon-xml-parser.m4,v 1.2 2002/12/03 18:51:31 mszeredi Exp $
 
 # Check for XML parser.
 # Supports:
@@ -101,9 +101,9 @@ if test "$neon_found_parser" = "expat"; then
 	# right file by ifdef'ing is best
 	AC_CHECK_HEADER(xmlparse.h,
 	[neon_expat_incs="" neon_found_expatincs="yes"],
-	AC_CHECK_HEADER(xmltok/xmlparse.h,
+	[AC_CHECK_HEADER(xmltok/xmlparse.h,
 	[neon_expat_incs="-I/usr/include/xmltok" neon_found_expatincs="yes"],
-	))
+	)])
 	if test "$neon_found_expatincs" = "yes"; then
 		AC_DEFINE(HAVE_EXPAT, 1, [Define if you have expat])
 		if test "$neon_expat_incs"; then
@@ -120,7 +120,7 @@ if test "$neon_found_parser" = "no" ; then
 
     if test "x$1" != "x"; then
 	# Use the bundled expat sources
-	LIBOBJS="$LIBOBJS $1/xmltok/xmltok.o $1/xmltok/xmlrole.o $1/xmlparse/xmlparse.o $1/xmlparse/hashtable.o"
+	AC_LIBOBJ([$1/xmltok/xmltok.o $1/xmltok/xmlrole.o $1/xmlparse/xmlparse.o $1/xmlparse/hashtable.o])
 	CFLAGS="$CFLAGS -DXML_DTD -I$1/xmlparse -I$1/xmltok"
 	AC_MSG_RESULT(using supplied expat XML parser)	
 	AC_DEFINE(HAVE_EXPAT, 1, [Define if you have expat] )

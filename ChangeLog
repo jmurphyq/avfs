@@ -1,3 +1,11 @@
+2002-12-03  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Upgraded to zlib 1.1.4
+	
+	* Added .ear and .war extensions to the uzip handler
+
+	* Check for large-file support
+	
 2002-11-18  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Fixed bug in runprog, which leaked file descriptors in extfs.

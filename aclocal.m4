@@ -403,7 +403,7 @@ NEON_COMMON_BUILD($#, $*)
 # This file is part of the neon HTTP/WebDAV client library.
 # See http://www.webdav.org/neon/ for the latest version. 
 # Please send any feedback to <neon@webdav.org>
-# $Id: aclocal.m4,v 1.1 2001/03/13 09:47:51 mszeredi Exp $
+# $Id: aclocal.m4,v 1.2 2001/03/14 17:22:24 mszeredi Exp $
 
 # Check for XML parser.
 # Supports:
@@ -540,7 +540,7 @@ fi
 # This file is part of the neon HTTP/WebDAV client library.
 # See http://www.webdav.org/neon/ for the latest version. 
 # Please send any feedback to <neon@webdav.org>
-# $Id: aclocal.m4,v 1.1 2001/03/13 09:47:51 mszeredi Exp $
+# $Id: aclocal.m4,v 1.2 2001/03/14 17:22:24 mszeredi Exp $
 
 # $1 specifies the location of the bundled neon "src" directory, or
 # is empty if none is bundled. $1 specifies the location of the bundled

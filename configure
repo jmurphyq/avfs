@@ -2479,13 +2479,15 @@ if test $avfscoda_build = yes; then
 	kernrunver=
 
 	origcppflags=$CPPFLAGS
+	origlibs=$LIBS
+
 	echo $ac_n "checking running kernel version""... $ac_c" 1>&6
-echo "configure:2484: checking running kernel version" >&5
+echo "configure:2486: checking running kernel version" >&5
 	kernrunver=`uname -r`
 	echo "$ac_t""$kernrunver" 1>&6
 
 	echo $ac_n "checking kernel source directory""... $ac_c" 1>&6
-echo "configure:2489: checking kernel source directory" >&5
+echo "configure:2491: checking kernel source directory" >&5
 	kernelsrc=/usr/src/linux
 	majver=`echo $kernrunver | cut -f 1 -d .`
 	minver=`echo $kernrunver | cut -f 2 -d .`
@@ -2498,14 +2500,15 @@ echo "configure:2489: checking kernel source directory" >&5
 	
 	
 	CPPFLAGS="$CPPFLAGS -I$KERNINCLUDE -D__KERNEL__"
+	LIBS=""
 
 	echo $ac_n "checking kernel source version""... $ac_c" 1>&6
-echo "configure:2504: checking kernel source version" >&5
+echo "configure:2507: checking kernel source version" >&5
 	kernsrcver=`if test "$cross_compiling" = yes; then
     { echo "configure: error: can not run test program while cross compiling" 1>&2; exit 1; }
 else
   cat > conftest.$ac_ext <<EOF
-#line 2509 "configure"
+#line 2512 "configure"
 #include "confdefs.h"
 
 #include <linux/version.h>
@@ -2517,7 +2520,7 @@ printf("%s", UTS_RELEASE);
 }
 
 EOF
-if { (eval echo configure:2521: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; } && test -s conftest${ac_exeext} && (./conftest; exit) 2>/dev/null
+if { (eval echo configure:2524: \"$ac_link\") 1>&5; (eval $ac_link) 2>&5; } && test -s conftest${ac_exeext} && (./conftest; exit) 2>/dev/null
 then
   got_kernsrcver=yes
 else
@@ -2545,16 +2548,16 @@ fi
 
 	kmoduledir=
 	echo $ac_n "checking for kernel module directory""... $ac_c" 1>&6
-echo "configure:2549: checking for kernel module directory" >&5
+echo "configure:2552: checking for kernel module directory" >&5
 	kmoduledir=/lib/modules/${kernver}/misc
 	echo "$ac_t""$kmoduledir" 1>&6
 
 	
 
 	echo $ac_n "checking for new style redir""... $ac_c" 1>&6
-echo "configure:2556: checking for new style redir" >&5
+echo "configure:2559: checking for new style redir" >&5
 	cat > conftest.$ac_ext <<EOF
-#line 2558 "configure"
+#line 2561 "configure"
 #include "confdefs.h"
 #include <linux/fs.h>
 EOF
@@ -2571,6 +2574,7 @@ rm -f conftest*
 	echo "$ac_t""$newredir" 1>&6
 
 	CPPFLAGS=$origcppflags
+	LIBS=$origlibs
 
 	build_redir=
 	if test "$newredir" = yes; then
@@ -2583,7 +2587,7 @@ rm -f conftest*
 
 	initstyle=
 	echo $ac_n "checking for init-script style""... $ac_c" 1>&6
-echo "configure:2587: checking for init-script style" >&5
+echo "configure:2591: checking for init-script style" >&5
 	if test -d /sbin/init.d -a -f /etc/rc.config; then
 		initstyle=suse
 	elif test -f /etc/rc.d/init.d/functions; then
@@ -2635,7 +2639,7 @@ echo "configure:2587: checking for init-script style" >&5
 	profiledir=
 	if test "$newredir" = no; then
 		echo $ac_n "checking for profile directory""... $ac_c" 1>&6
-echo "configure:2639: checking for profile directory" >&5
+echo "configure:2643: checking for profile directory" >&5
 		if test -d /etc/profile.d; then
 			install_scriptcomps="$install_scriptcomps install_profilescripts"
 			profiledir=/etc/profile.d

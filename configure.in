@@ -104,6 +104,8 @@ if test $avfscoda_build = yes; then
 	kernrunver=
 
 	origcppflags=$CPPFLAGS
+	origlibs=$LIBS
+
 	AC_MSG_CHECKING([running kernel version])
 	kernrunver=`uname -r`
 	AC_MSG_RESULT([$kernrunver])
@@ -121,6 +123,7 @@ if test $avfscoda_build = yes; then
 	AC_SUBST(KERNINCLUDE)
 	
 	CPPFLAGS="$CPPFLAGS -I$KERNINCLUDE -D__KERNEL__"
+	LIBS=""
 
 	AC_MSG_CHECKING([kernel source version])
 	kernsrcver=`AC_TRY_RUN([
@@ -158,6 +161,7 @@ printf("%s", UTS_RELEASE);
 	AC_MSG_RESULT([$newredir])
 
 	CPPFLAGS=$origcppflags
+	LIBS=$origlibs
 
 	build_redir=
 	if test "$newredir" = yes; then

@@ -1,9 +1,9 @@
 if [ -f ~/.avfs ]; then
-	if [ ! -f /#avfs-on ]; then 
+	if [ ! -f '/#avfs-on' ]; then 
 		true
 	fi
 else 
-	if [ ! -f /#avfs-off ]; then
+	if [ ! -f '/#avfs-off' ]; then
 		true
 	fi
 fi

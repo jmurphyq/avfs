@@ -42,6 +42,13 @@ static readlink_func orig_readlink;
 static getcwd_func   orig_getcwd;
 static mkdir_func    orig_mkdir;
 
+#if NEWVFS
+typedef asmlinkage long (*stat64_func)   (const char *, struct stat64 *, long);
+
+static stat64_func   orig_stat64;
+static stat64_func   orig_lstat64;
+#endif 
+
 #define AVFS_MAGIC_CHAR '#'
 #define OVERLAY_DIR "/overlay"
 #define OVERLAY_DIR_LEN 8
@@ -495,6 +502,7 @@ asmlinkage int virt_lstat(const char *filename, struct stat *statbuf)
 	return ret;
 }
 
+
 asmlinkage int virt_access(const char *filename, int mode)
 {
 	int ret;
@@ -696,6 +704,94 @@ asmlinkage int virt_mkdir(const char *filename, int mode)
 	return ret;
 }
 
+#if NEWVFS
+static long do_orig_stat64(stat64_func sfunc, const char *filename,
+			  struct stat64 * statbuf, long flags)
+{
+	long ret;
+	mm_segment_t old_fs;
+	struct stat64 locbuf;
+
+	old_fs = get_fs();
+	set_fs(get_ds());
+	ret =  (*sfunc)(filename, &locbuf, flags);
+	set_fs(old_fs);
+
+	if(ret == 0)
+		ret = (copy_to_user(statbuf, &locbuf, sizeof(locbuf)) ? 
+		       -EFAULT : 0);
+
+	return ret;
+}
+
+asmlinkage long virt_stat64(char * filename, struct stat64 * statbuf, long flags)
+{
+	long ret;
+	char *newfilename;
+
+	if(!cwd_virtual()) {
+		ret = (*orig_stat64)(filename, statbuf, flags);
+		if(ret != -ENOENT) 
+			return ret;
+	}
+	else 
+		ret = 0;
+
+	newfilename = resolve_name(filename, 1, 1);
+	if(!newfilename) {
+		if(ret)
+			return ret;
+		else
+			return (*orig_stat64)(filename, statbuf, flags);
+	}
+	if(IS_ERR(newfilename))
+			return PTR_ERR(newfilename);
+
+	DEB((KERN_INFO "STAT64: trying '%s'\n", newfilename));
+
+	ret = do_orig_stat64(orig_stat64, newfilename, statbuf, flags);
+	kfree(newfilename);
+
+	DEB((KERN_INFO "STAT64: result %i\n", ret));
+
+	return ret;
+}
+
+asmlinkage long virt_lstat64(char * filename, struct stat64 * statbuf, long flags)
+{
+	long ret;
+	char *newfilename;
+
+	if(!cwd_virtual()) {
+		ret = (*orig_lstat64)(filename, statbuf, flags);
+		if(ret != -ENOENT) 
+			return ret;
+	}
+	else 
+		ret = 0;
+
+	newfilename = resolve_name(filename, 1, 1);
+	if(!newfilename) {
+		if(ret)
+			return ret;
+		else
+			return (*orig_lstat64)(filename, statbuf, flags);
+	}
+	if(IS_ERR(newfilename))
+			return PTR_ERR(newfilename);
+
+	DEB((KERN_INFO "LSTAT64: trying '%s'\n", newfilename));
+
+	ret = do_orig_stat64(orig_lstat64, newfilename, statbuf, flags);
+	kfree(newfilename);
+
+	DEB((KERN_INFO "LSTAT64: result %i\n", ret));
+
+	return ret;
+}
+
+#endif /* NEWVFS */
+
 void *replace_syscall(int index, void *new_syscall)
 {
 	void *orig_syscall = sys_call_table[index];
@@ -720,6 +816,11 @@ int init_module(void)
     orig_getcwd   = replace_syscall(__NR_getcwd,   virt_getcwd);
     orig_mkdir    = replace_syscall(__NR_mkdir,    virt_mkdir);
 
+#if NEWVFS
+    orig_stat64   = replace_syscall(__NR_stat64,   virt_stat64);
+    orig_lstat64  = replace_syscall(__NR_lstat64,  virt_lstat64);
+#endif
+
     return 0;
 }
 
@@ -736,4 +837,10 @@ void cleanup_module(void)
     replace_syscall(__NR_readlink, orig_readlink);
     replace_syscall(__NR_getcwd,   orig_getcwd);
     replace_syscall(__NR_mkdir,    orig_mkdir);
+
+#if NEWVFS
+    replace_syscall(__NR_stat64,   orig_stat64);
+    replace_syscall(__NR_lstat64,  orig_lstat64);
+#endif
+
 }

@@ -250,7 +250,4 @@ AC_SUBST(install_scriptcomps)
 AC_SUBST(avfscoda_build)
 AC_SUBST(preload_build)
 
-AC_OUTPUT(src/Makefile modules/Makefile zlib/Makefile lib/Makefile include/Makefile avfscoda/Makefile avfscoda/redir/Makefile preload/Makefile libneon/Makefile extfs/Makefile scripts/Makefile test/Makefile)
-
-
-
+AC_OUTPUT(src/Makefile modules/Makefile zlib/Makefile bzlib/Makefile lib/Makefile include/Makefile avfscoda/Makefile avfscoda/redir/Makefile preload/Makefile libneon/Makefile extfs/Makefile scripts/Makefile test/Makefile)

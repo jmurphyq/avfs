@@ -2,6 +2,7 @@ all:
 	$(MAKE) -C src all
 	$(MAKE) -C modules all
 	$(MAKE) -C zlib all
+	$(MAKE) -C bzlib all
 	$(MAKE) -C lib all
 	$(MAKE) -C libneon all
 	$(MAKE) -C avfscoda all
@@ -29,6 +30,7 @@ depend:
 	$(MAKE) -C src depend
 	$(MAKE) -C modules depend
 	$(MAKE) -C zlib depend
+	$(MAKE) -C bzlib depend
 	$(MAKE) -C avfscoda depend
 	$(MAKE) -C preload depend
 

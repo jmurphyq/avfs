@@ -211,13 +211,21 @@ static avmode_t dos2unix_attr(avuint da, avmode_t archmode)
     return mode;
 }
 
-static avmode_t zip_get_mode(struct cdirentry *cent, avmode_t origmode)
+static avmode_t zip_get_mode(struct cdirentry *cent, const char *path,
+                             avmode_t origmode)
 {
+    avmode_t mode;
+
     /* FIXME: Handle other architectures */
     if((cent->version & 0xFF00) >> 8 == OS_UNIX) 
-	return (cent->attr >> 16) & 0xFFFF;
+	mode = (cent->attr >> 16) & 0xFFFF;
     else
-	return dos2unix_attr(cent->attr & 0xFF, origmode);
+	mode = dos2unix_attr(cent->attr & 0xFF, origmode);
+
+    if(path[0] && path[strlen(path)-1] == '/')
+        mode = (mode & 07777) | AV_IFDIR;
+
+    return mode;
 }
 
 static void zipnode_delete(struct zipnode *nod)
@@ -225,16 +233,17 @@ static void zipnode_delete(struct zipnode *nod)
     av_unref_obj(nod->cache);
 }
 
-static void fill_zipentry(struct archive *arch, struct entry *ent,
-                         struct cdirentry *cent, struct ecrec *ecrec)
+static void fill_zipentry(struct archive *arch, const char *path, 
+                          struct entry *ent, struct cdirentry *cent,
+                          struct ecrec *ecrec)
 {
     struct archnode *nod;
     struct zipnode *info;
-    int isdir = AV_ISDIR(zip_get_mode(cent, 0));
+    int isdir = AV_ISDIR(zip_get_mode(cent, path, 0));
 
     nod = av_arch_new_node(arch, ent, isdir);
     
-    nod->st.mode = zip_get_mode(cent, nod->st.mode);
+    nod->st.mode = zip_get_mode(cent, path, nod->st.mode);
     nod->st.size = cent->file_size;
     nod->st.blocks = AV_BLOCKS(cent->comp_size);
     nod->st.blksize = 4096;
@@ -286,7 +295,7 @@ static void insert_zipentry(struct archive *arch, char *path,
     if(ent == NULL)
         return;
 
-    fill_zipentry(arch, ent, cent, ecrec);
+    fill_zipentry(arch, path, ent, cent, ecrec);
     av_unref_obj(ent);
 }
 

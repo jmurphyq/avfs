@@ -283,8 +283,8 @@ int main(int argc, char *argv[])
 
     root.sub = NULL;
     tg = test_new(&root, "filetest");
-    add_filetest(tg, "ugz", test_file("t.gz#"));
-    add_filetest(tg, "ubz2", test_file("t.bz2#"));
+    add_filetest(tg, "ugzip", test_file("t.gz#ugzip"));
+    add_filetest(tg, "ubzip2", test_file("t.bz2#ubzip2"));
     add_filetest(tg, "volatile", "/#volatile/testfile");
     
     res = test_run(tg);

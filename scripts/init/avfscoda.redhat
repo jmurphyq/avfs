@@ -1,6 +1,12 @@
 #!/bin/bash
-# avfscoda
-# init script for RedHat
+#
+#	/etc/rc.d/init.d/avfscoda
+#
+# Starts the AVFS coda support
+#
+# chkconfig: 345 85 25
+# description: Starts the AVFS coda support module.
+# processname: avfscoda
 
 # Source function library.
 . /etc/rc.d/init.d/functions
@@ -45,3 +51,4 @@ status)
 esac
 
 exit 0
+

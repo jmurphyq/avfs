@@ -187,14 +187,9 @@ int av_program_log_output(struct program *pr)
     return 1;
 }
 
-int av_run_program(const char **prog)
+static int av_process_program(struct program *pr)
 {
     int res;
-    struct program *pr;
-
-    res = av_start_program(prog, &pr);
-    if(res < 0)
-        return res;
 
     while(!av_filebuf_eof(pr->fbs[0]) || !av_filebuf_eof(pr->fbs[1])) {
         res = av_filebuf_check(pr->fbs, 2, 0);
@@ -216,4 +211,20 @@ int av_run_program(const char **prog)
         return res;
 
     return 0;
+}
+
+int av_run_program(const char **prog)
+{
+    int res;
+    struct program *pr;
+
+    res = av_start_program(prog, &pr);
+    if(res < 0)
+        return res;
+
+
+    res = av_process_program(pr);
+    av_unref_obj(pr);
+
+    return res;
 }

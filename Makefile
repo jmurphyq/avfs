@@ -8,7 +8,7 @@ all:
 	$(MAKE) -C avfscoda all
 	$(MAKE) -C preload all
 
-install:
+install: all
 	$(MAKE) -C avfscoda install
 	$(MAKE) -C preload install
 	$(MAKE) -C extfs install

@@ -7,6 +7,7 @@
 */
 
 #include "internal.h"
+#include "config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -72,9 +73,44 @@ void av_delete_tmpdir()
     AV_UNLOCK(tmplock);
 }
 
+#ifdef HAVE_MKDTEMP
+
+static int make_tmp_dir(char *path)
+{
+    char *res;
+
+    res = mkdtemp(path);
+    if(res == NULL) {
+        av_log(AVLOG_ERROR, "mkdtemp failed: %s", strerror(errno));
+        return -EIO;
+    }
+    return 0;
+}
+
+#else /* HAVE_MKDTEMP */
+
+static int make_tmp_dir(char *path)
+{
+    int res;
+
+    mktemp(path);
+    if(path[0] == '\0') {
+        av_log(AVLOG_ERROR, "mktemp failed for temporary directory");
+        return -EIO;
+    }
+    res = mkdir(path, 0700);
+    if(res == -1) {
+        av_log(AVLOG_ERROR, "mkdir(%s) failed: %s", path, strerror(errno));
+        return -EIO;
+    }
+    return 0;
+}
+
+#endif /* HAVE_MKDTEMP */
+
 int av_get_tmpfile(char **retp)
 {
-    int ret = 0;
+    int res = 0;
     char buf[64];
   
     AV_LOCK(tmplock);
@@ -82,17 +118,10 @@ int av_get_tmpfile(char **retp)
         char *path;
 
         path = av_strdup("/tmp/.avfs_tmp_XXXXXX");
-        mktemp(path);
-        if(path[0] == '\0') {
-	    ret = -EIO;
-	    av_log(AVLOG_ERROR, "mktemp failed for temporary directory");
-	}
-	else if(mkdir(path, 0700) == -1) {
-	    ret = -EIO;
-	    av_log(AVLOG_ERROR, "mkdir(%s) failed: %s", path,
-		     strerror(errno));
-	}
-	else {
+        res = make_tmp_dir(path);
+        if(res < 0)
+            av_free(path);
+        else {
 	    AV_NEW(tmpdir);
 	    tmpdir->path = path;
 	    tmpdir->ctr = 0;
@@ -104,9 +133,8 @@ int av_get_tmpfile(char **retp)
     }
     AV_UNLOCK(tmplock);
 
-    return ret;
+    return res;
 }
-
 
 void av_del_tmpfile(char *tmpf)
 {
@@ -116,24 +144,6 @@ void av_del_tmpfile(char *tmpf)
 	
 	av_free(tmpf);
     }
-}
-
-
-int av_get_tmpfd()
-{
-    char *tmpf;
-    int res;
-
-    res = av_get_tmpfile(&tmpf);
-    if(res < 0)
-        return res;
-  
-    res = open(tmpf, O_RDWR | O_CREAT | O_EXCL, 0600);
-    if(res == -1)
-        res = -errno;
-    av_del_tmpfile(tmpf);
-  
-    return res;
 }
 
 avoff_t av_tmp_free()

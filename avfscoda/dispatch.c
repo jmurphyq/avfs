@@ -1086,15 +1086,19 @@ static void process_kernel_req()
         }
         else {
             char tmpname[64];
+            int fd;
 			
             strcpy(tmpname, "/tmp/.avfs_coda_XXXXXX");
-            mktemp(tmpname);
+            fd = mkstemp(tmpname);
 			
-            if(tmpname[0] == '\0') {
-                log("Could not make temporary file\n");
+            if(fd == -1) {
+                log("Could not make temporary file: %s\n", strerror(errno));
                 reply(req, ENFILE);
             }
             else {
+                fchown(fd, req->ih.cred.cr_fsuid, req->ih.cred.cr_fsgid);
+                close(fd);
+
                 of = malloc(sizeof(struct openfile));
                 if(of == NULL) {
                     reply(req, ENOMEM);

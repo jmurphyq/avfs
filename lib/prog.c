@@ -104,8 +104,8 @@ int av_wait_prog(struct proginfo *pi, int tokill, int check)
                  val);
     }
     else if(WIFSIGNALED(retv))
-        av_log(AVLOG_ERROR, "program %s was killed by signal %s",
-                 pi->prog[0],  strsignal(WTERMSIG(retv)));
+        av_log(AVLOG_ERROR, "program %s: %s", pi->prog[0],
+               strsignal(WTERMSIG(retv)));
     else
         av_log(AVLOG_ERROR, "program %s killed with unknown reason",
                  pi->prog[0]);

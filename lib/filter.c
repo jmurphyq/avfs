@@ -35,6 +35,7 @@ struct filtnode {
 
 struct filtfile {
     struct filtnode *nod;
+    struct cacheobj *cobj;
     int iswrite;
 };
 
@@ -131,12 +132,11 @@ static void filt_mod_set(struct filtmod *mod, struct avstat *stbuf)
 }
 
 
-static struct filtnode *filt_newnode(ventry *ve, vfile *vf, const char *key,
-                                     struct avstat *buf)
+static void filt_newnode(struct filtfile *ff, ventry *ve, vfile *vf,
+                         const char *key, struct avstat *buf)
 {
     struct filtnode *nod;
     struct filtdata *filtdat = (struct filtdata *) ve->mnt->avfs->data;
-    struct cacheobj *cobj;
 
     AV_NEW_OBJ(nod, filtnode_free);
     AV_INITLOCK(nod->lock);
@@ -149,11 +149,9 @@ static struct filtnode *filt_newnode(ventry *ve, vfile *vf, const char *key,
 
     AV_LOCK(nod->lock);
 
-    cobj = av_cacheobj_new(nod, key);
-    av_filecache_set(key, cobj);
-    av_unref_obj(cobj);
-
-    return nod;
+    ff->cobj = av_cacheobj_new(nod, key);
+    ff->nod = nod;
+    av_filecache_set(key, ff->cobj);
 }
 
 static int filt_validate_file(struct filtnode *nod, ventry *ve, vfile *vf,
@@ -191,8 +189,6 @@ static int filt_getfile(struct filtfile *ff, ventry *ve, vfile *vf,
                         const char *key)
 {
     int res;
-    struct filtnode *nod;
-    struct cacheobj *cobj;
     struct avstat buf;
     int attrmask = AVA_INO | AVA_DEV | AVA_SIZE | AVA_MTIME;
 
@@ -200,27 +196,26 @@ static int filt_getfile(struct filtfile *ff, ventry *ve, vfile *vf,
     if(res < 0)
         return res;
 
-    cobj = (struct cacheobj *) av_filecache_get(key);
-    if(cobj == NULL)
-        nod = NULL;
-    else {
-        nod = (struct filtnode *) av_cacheobj_get(cobj);
-        av_unref_obj(cobj);
-    }
+    ff->cobj = (struct cacheobj *) av_filecache_get(key);
+    if(ff->cobj != NULL)
+        ff->nod = (struct filtnode *) av_cacheobj_get(ff->cobj);
 
-    if(nod == NULL || !filt_same_file(&nod->id, &buf)) {
-        ff->nod = filt_newnode(ve, vf, key, &buf);
+    if(ff->nod == NULL || !filt_same_file(&ff->nod->id, &buf)) {
+        av_unref_obj(ff->nod);
+        av_unref_obj(ff->cobj);
+        filt_newnode(ff, ve, vf, key, &buf);
         return 0;
     }
 
-    AV_LOCK(nod->lock);
-    res = filt_validate_file(nod, ve, vf, &buf, ff->iswrite);
+    AV_LOCK(ff->nod->lock);
+    res = filt_validate_file(ff->nod, ve, vf, &buf, ff->iswrite);
     if(res < 0) {
-        AV_UNLOCK(nod->lock);
+        AV_UNLOCK(ff->nod->lock);
+        av_unref_obj(ff->nod);
+        av_unref_obj(ff->cobj);
         return res;
     }
 
-    ff->nod = nod;
     return 0;
 }
 
@@ -332,6 +327,7 @@ static int filt_open(ventry *ve, int flags, avmode_t mode, void **resp)
 
     AV_NEW(ff);
     ff->nod = NULL;
+    ff->cobj = NULL;
     ff->iswrite = 0;
 
     res = filt_open_file(ff, ve, flags, mode);
@@ -435,6 +431,7 @@ static int filt_close(vfile *vf)
     int res = 0;
     struct filtfile *ff = (struct filtfile *) vf->data;
     struct filtnode *nod = ff->nod;
+    avoff_t du;
 
     AV_LOCK(nod->lock);
     if(ff->iswrite) {
@@ -445,9 +442,13 @@ static int filt_close(vfile *vf)
             filt_afterflush(vf, nod);
         }
     }
+    du = av_sfile_diskusage(nod->sf);
+    if(du >= 0)
+        av_cacheobj_setsize(ff->cobj, du);
     AV_UNLOCK(nod->lock);
 
     av_unref_obj(nod);
+    av_unref_obj(ff->cobj);
     av_free(ff);
 
     return res;

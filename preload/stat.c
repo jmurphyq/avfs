@@ -1,5 +1,6 @@
 #include "utils.h"
 #include <sys/stat.h>
+#include <sys/acl.h>
 
 static int real_stat64(const char *path, struct stat64 *buf, int deref,
                        int undersc)
@@ -131,8 +132,31 @@ static int real_fstat(int fd, struct stat *buf, int undersc)
     }
 }
 
-static int cmd_stat(const char *path, struct avstat *buf, int deref,
-                    char *pathbuf)
+static int real_acl(const char *path, int cmd, int nent, aclent_t *aclbuf,
+                    int undersc)
+{
+    if(undersc == 0) {
+        static int (*prev)(const char *, int, int, aclent_t *);
+        
+        if(!prev)
+            prev = (int (*)(const char *, int, int, aclent_t *)) 
+                __av_get_real("acl");
+        
+        return prev(path, cmd, nent, aclbuf);
+    }
+    else {
+        static int (*prev)(const char *, int, int, aclent_t *);
+        
+        if(!prev)
+            prev = (int (*)(const char *, int, int, aclent_t *)) 
+                __av_get_real("_acl");
+        
+        return prev(path, cmd, nent, aclbuf);
+    }
+}
+
+static int cmd_getattr(const char *path, struct avstat *buf, int deref,
+                       char *pathbuf, int attrmask)
 {
     int res;
     struct avfs_out_message outmsg;
@@ -150,7 +174,7 @@ static int cmd_stat(const char *path, struct avstat *buf, int deref,
         cmd.u.getattr.flags = 0;
     else
         cmd.u.getattr.flags = AVO_NOFOLLOW;
-    cmd.u.getattr.attrmask = AVA_ALL;
+    cmd.u.getattr.attrmask = attrmask;
     
     outmsg.num = 2;
     outmsg.seg[0].len = sizeof(cmd);
@@ -252,7 +276,7 @@ static int virt_stat64(const char *path, struct stat64 *buf, int deref,
         char pathbuf[PATHBUF_LEN];
 
         errnosave = errno;
-        res = cmd_stat(path, &vbuf, deref, pathbuf);
+        res = cmd_getattr(path, &vbuf, deref, pathbuf, AVA_ALL);
         errno = errnosave;
         if(pathbuf[0])
             res = real_stat64(pathbuf, buf, deref, undersc);
@@ -304,7 +328,7 @@ static int virt_stat(const char *path, struct stat *buf, int deref,
         char pathbuf[PATHBUF_LEN];
 
         errnosave = errno;
-        res = cmd_stat(path, &vbuf, deref, pathbuf);
+        res = cmd_getattr(path, &vbuf, deref, pathbuf, AVA_ALL);
         errno = errnosave;
         if(pathbuf[0])
             res = real_stat(pathbuf, buf, deref, undersc);
@@ -338,6 +362,87 @@ static int virt_fstat(int fd, struct stat *buf, int undersc)
     return res;
 }
 
+static int convert_acl(struct avstat *vbuf, int cmd, int nent,
+                       aclent_t *aclbuf)
+{
+    int res;
+
+    switch(cmd) {
+    case GETACLCNT:
+        res = 4;
+        break;
+        
+    case SETACL:
+        errno = ENOSYS;
+        res = -1;
+        break;
+
+    case GETACL:
+        if(nent > 0) {
+            aclbuf[0].a_type = USER_OBJ;
+            aclbuf[0].a_id   = vbuf->uid;
+            aclbuf[0].a_perm = (vbuf->mode & 0700) >> 6;
+            res = 1;
+        }
+        if(nent > 1) {
+            aclbuf[1].a_type = GROUP_OBJ;
+            aclbuf[1].a_id   = vbuf->gid;
+            aclbuf[1].a_perm = (vbuf->mode & 0070) >> 3;
+            res = 2;
+        }
+        if(nent > 2) {
+            aclbuf[2].a_type = CLASS_OBJ;
+            aclbuf[2].a_id   = -1;
+            aclbuf[2].a_perm = 0777;
+            res = 3;
+        }
+        if(nent > 3) {
+            aclbuf[3].a_type = OTHER_OBJ;
+            aclbuf[3].a_id   = -1;
+            aclbuf[3].a_perm = (vbuf->mode & 0007);
+            res = 4;
+        }
+        break;
+
+        default:
+            errno = EINVAL;
+            res = -1;
+            break;
+    }
+
+    return res;
+}
+
+static int virt_acl(const char *path, int cmd, int nent, aclent_t *aclbuf,
+                    int undersc)
+{
+    int res = 0;
+    int local = 0;
+
+    if(__av_maybe_local(path)) {
+        res = real_acl(path, cmd, nent, aclbuf, undersc);
+        local = __av_is_local(res, path);
+    }
+    
+    if(!local) {
+        int errnosave;
+        struct avstat vbuf;
+        char pathbuf[PATHBUF_LEN];
+        int attrmask = AVA_UID | AVA_GID | AVA_MODE;
+
+        errnosave = errno;
+        res = cmd_getattr(path, &vbuf, 1, pathbuf, attrmask);
+        errno = errnosave;
+        if(pathbuf[0])
+            res = real_acl(pathbuf, cmd, nent, aclbuf, undersc);
+        else if(res < 0)
+            errno = -res, res = -1;
+        else
+            res = convert_acl(&vbuf, cmd, nent, aclbuf);
+    }
+
+    return res;
+}
 
 int lstat64(const char *path, struct stat64 *buf)
 {
@@ -397,4 +502,14 @@ int fstat(int fd, struct stat *buf)
 int _fstat(int fd, struct stat *buf)
 {
     return virt_fstat(fd, buf, 1);
+}
+
+int acl(const char *path, int cmd, int nent, aclent_t *aclbuf)
+{
+    return virt_acl(path, cmd, nent, aclbuf, 0);
+}
+
+int _acl(const char *path, int cmd, int nent, aclent_t *aclbuf)
+{
+    return virt_acl(path, cmd, nent, aclbuf, 1);
 }

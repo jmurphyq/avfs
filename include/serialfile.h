@@ -30,3 +30,4 @@ int av_sfile_truncate(struct sfile *fil, avoff_t length);
 int av_sfile_startget(struct sfile *fil);
 int av_sfile_flush(struct sfile *fil);
 void *av_sfile_getdata(struct sfile *fil);
+avoff_t av_sfile_diskusage(struct sfile *fil);

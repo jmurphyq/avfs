@@ -9,6 +9,9 @@
 /* Define if your struct direntry has d_type.  */
 #undef HAVE_D_TYPE
 
+/* Define if you have the mkdtemp function.  */
+#undef HAVE_MKDTEMP
+
 /* Define if you have the strcasecmp function.  */
 #undef HAVE_STRCASECMP
 

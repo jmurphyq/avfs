@@ -35,6 +35,25 @@ static avoff_t disk_cache_limit = 100 * MBYTE;
 static avoff_t disk_keep_free = 10 * MBYTE;
 static avoff_t disk_usage = 0;
 
+static int cache_clear();
+
+static int cache_getfunc(struct entry *ent, const char *param, char **retp)
+{
+    *retp = av_strdup("");
+    return 0;
+}
+
+static int cache_setfunc(struct entry *ent, const char *param, const char *val)
+{
+    struct statefile *sf = (struct statefile *) av_namespace_get(ent);
+    int (*func)() = (int (*)()) sf->data;
+    
+    if(strlen(val) > 0)
+        return func();
+
+    return 0;
+}
+
 static int cache_getoff(struct entry *ent, const char *param, char **retp)
 {
     char buf[64];
@@ -92,6 +111,11 @@ void av_init_cache()
     statf.set = NULL;
     statf.data = &disk_usage;
     av_avfsstat_register("cache/usage", &statf);
+
+    statf.set = cache_setfunc;
+    statf.get = cache_getfunc;
+    statf.data = cache_clear;
+    av_avfsstat_register("cache/clear", &statf);
 }
 
 static void cacheobj_remove(struct cacheobj *cobj)
@@ -179,6 +203,15 @@ static int cache_free_one()
     return 1;
 }
 
+static int cache_clear()
+{
+    AV_LOCK(cachelock);
+    while(cache_free_one());
+    AV_UNLOCK(cachelock);
+    
+    return 0;
+}
+
 static void cache_checkspace(int full)
 {
     avoff_t tmpfree;
@@ -202,6 +235,7 @@ static void cache_checkspace(int full)
         if(!cache_free_one())
             break;        
 }
+
 
 void av_cache_checkspace()
 {

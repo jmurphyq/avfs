@@ -11,6 +11,7 @@
 
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 struct sfile {
     struct sfilefuncs *func;
@@ -455,4 +456,22 @@ int av_sfile_flush(struct sfile *fil)
 void *av_sfile_getdata(struct sfile *fil)
 {
     return fil->data;
+}
+
+avoff_t av_sfile_diskusage(struct sfile *fil)
+{
+    int res;
+    struct stat buf;
+
+    if(fil->fd == -1)
+        return 0;
+    
+    res = fstat(fil->fd, &buf);
+    if(res == -1) {
+        av_log(AVLOG_ERROR, "Error in fstat() for %s: %s", fil->localfile,
+               strerror(errno));
+        return -EIO;
+    }
+    
+    return buf.st_blocks * 512;
 }

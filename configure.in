@@ -52,7 +52,7 @@ fi
 AC_CHECK_PROG(LD, ld, [ld -r], [$CC -Wl,-r -nostdlib])
 
 
-AC_CHECK_FUNCS(vsnprintf strncasecmp strcasecmp)
+AC_CHECK_FUNCS(vsnprintf strncasecmp strcasecmp mkdtemp)
 AC_HEADER_MAJOR
 
 AC_CACHE_CHECK([for d_type in struct dirent], my_cv_struct_d_type,

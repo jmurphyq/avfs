@@ -187,6 +187,26 @@ static int file_create(struct filetest *ft)
     return 1;
 }
 
+static int flush_cache()
+{
+    int res;
+    int fd;
+
+    fd = virt_open("/#avfsstat/cache/clear", O_WRONLY, 0);
+    if(fd == -1)
+        return -1;
+
+    res = virt_write(fd, "1", 1);
+    if(res == -1)
+        return -1;
+
+    res = virt_close(fd);
+    if(res == -1)
+        return -1;
+
+    return 0;
+}
+
 static int file_contents(struct filetest *ft)
 {
     int res;
@@ -195,7 +215,9 @@ static int file_contents(struct filetest *ft)
     size_t size;
     char buf[TESTFILESIZE / 2];
 
-    /* FIXME: flush cache (not in case of volatile) */
+    res = flush_cache();
+    if(res == -1)
+        return 0;
 
     res = virt_open(ft->filename, O_RDONLY, 0);
     if(res == -1)

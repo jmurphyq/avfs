@@ -124,7 +124,7 @@ static void create_empty_dir(const char *tmpname)
 {
     int outfd;
 
-    outfd = open(tmpname, O_CREAT | O_WRONLY | O_EXCL, 0600);
+    outfd = open(tmpname, O_WRONLY | O_TRUNC);
     if(outfd == -1) {
         fprintf(stderr, "creat(%s) failed (%s)\n", tmpname, 
                 strerror(errno));
@@ -149,7 +149,7 @@ static void copy_dir(const char *path, const char *tmpname)
         return;
     }
 	
-    outfd = open(tmpname, O_CREAT | O_WRONLY | O_EXCL, 0600);
+    outfd = open(tmpname, O_WRONLY | O_TRUNC);
     if(outfd == -1) {
         fprintf(stderr, "creat(%s) failed (%s)\n", tmpname, 
                 strerror(errno));
@@ -196,7 +196,7 @@ static void copy_file(const char *name, const char *tmpname)
         return;
     }
 	
-    outfd = open(tmpname, O_CREAT | O_WRONLY | O_EXCL, 0600);
+    outfd = open(tmpname, O_WRONLY | O_TRUNC);
     if(outfd == -1) {
         fprintf(stderr, "creat(%s) failed (%s)\n", tmpname,
                 strerror(errno));
@@ -280,7 +280,7 @@ static void create_empty_file(const char *tmpname)
 
     fprintf(stderr, "create_empty_file: %s\n", tmpname);
 
-    fd = open(tmpname, O_CREAT | O_WRONLY | O_EXCL, 0600);
+    fd = open(tmpname, O_WRONLY | O_TRUNC);
     if(fd == -1)
         fprintf(stderr, "creat(%s) failed (%s)\n", tmpname, strerror(errno));
 

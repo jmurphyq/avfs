@@ -308,7 +308,6 @@ avtime_t   av_mktime(struct avtm *tp);
 void       av_localtime(avtime_t t, struct avtm *tp);
 int        av_get_tmpfile(char **retp);
 void       av_del_tmpfile(char *tmpfile);
-int        av_get_tmpfd();
 avoff_t    av_tmp_free();
 
 #endif /* _AVFS_H */

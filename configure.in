@@ -39,7 +39,7 @@ AC_ARG_ENABLE(shared,
 [  --enable-shared         Compile avfs as shared library],
 [if test "$enableval" = yes; then shared=yes; else shared=no; fi])
 
-if test ! "$preload" = yes -a ! "$avfscoda" = yes -a ! "$shared" = yes; then
+if test -z "$preload" -a -z "$avfscoda" -a -z "$shared"; then
    if test "$os" = "Linux"; then
       avfscoda=yes
    else

@@ -47,6 +47,12 @@ static stat64_func   orig_stat64;
 static stat64_func   orig_lstat64;
 #endif 
 
+#ifdef __i386__
+typedef asmlinkage int (*execve_func) (struct pt_regs);
+
+static execve_func orig_execve;
+#endif
+
 #define AVFS_MAGIC_CHAR '#'
 #define OVERLAY_DIR "/overlay"
 #define OVERLAY_DIR_LEN 8
@@ -725,7 +731,7 @@ asmlinkage long virt_stat64(char * filename, struct stat64 * statbuf, long flags
 	ret = do_orig_stat64(orig_stat64, newfilename, statbuf, flags);
 	kfree(newfilename);
 
-	DEB((KERN_INFO "STAT64: result %i\n", ret));
+	DEB((KERN_INFO "STAT64: result %li\n", ret));
 
 	return ret;
 }
@@ -758,12 +764,76 @@ asmlinkage long virt_lstat64(char * filename, struct stat64 * statbuf, long flag
 	ret = do_orig_stat64(orig_lstat64, newfilename, statbuf, flags);
 	kfree(newfilename);
 
-	DEB((KERN_INFO "LSTAT64: result %i\n", ret));
+	DEB((KERN_INFO "LSTAT64: result %li\n", ret));
 
 	return ret;
 }
 
 #endif /* NEWVFS */
+
+#ifdef __i386__
+
+asmlinkage int real_execve(struct pt_regs *regs)
+{
+	int error;
+	char * filename;
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
+        lock_kernel();
+#endif
+	filename = getname((char *) regs->ebx);
+	error = PTR_ERR(filename);
+	if (IS_ERR(filename))
+		goto out;
+	error = do_execve(filename, (char **) regs->ecx, (char **) regs->edx, regs);
+	if (error == 0)
+		current->ptrace &= ~PT_DTRACE;
+	putname(filename);
+
+out:
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
+        unlock_kernel();
+#endif
+	return error;
+}
+
+asmlinkage int virt_execve(struct pt_regs regs)
+{
+	int ret;
+	char *newfilename;
+	char *filename = (char *) regs.ebx;
+
+	if(!cwd_virtual()) {
+		ret = real_execve(&regs);
+		if(ret != -ENOENT) 
+			return ret;
+	}
+	else 
+		ret = 0;
+
+	newfilename = resolve_name(filename, 1, 1);
+	if(!newfilename) {
+		if(ret)
+			return ret;
+		else
+			return real_execve(&regs);
+	}
+	if(IS_ERR(newfilename))
+			return PTR_ERR(newfilename);
+
+	DEB((KERN_INFO "EXECVE: trying '%s'\n", newfilename));
+
+	ret = do_execve(newfilename, (char **) regs.ecx, (char **) regs.edx,
+			&regs);
+	if (ret == 0)
+		current->ptrace &= ~PT_DTRACE;
+	kfree(newfilename);
+
+	DEB((KERN_INFO "EXECVE: result %i\n", ret));
+
+	return ret;
+}
+#endif /* __i386__ */
 
 void *replace_syscall(int index, void *new_syscall)
 {
@@ -793,6 +863,10 @@ int init_module(void)
     orig_lstat64  = replace_syscall(__NR_lstat64,  virt_lstat64);
 #endif
 
+#ifdef __i386__
+    orig_execve   = replace_syscall(__NR_execve,   virt_execve);
+#endif
+
     return 0;
 }
 
@@ -812,6 +886,10 @@ void cleanup_module(void)
 #if NEWVFS
     replace_syscall(__NR_stat64,   orig_stat64);
     replace_syscall(__NR_lstat64,  orig_lstat64);
+#endif
+
+#ifdef __i386__
+    replace_syscall(__NR_execve,   orig_execve);
 #endif
 
 }

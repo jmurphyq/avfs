@@ -1,10 +1,12 @@
 Changes from 0.9.1 to 0.9.3
 
+	* Fixed PT_DTRACE bug in redir.c
+	
 	* Removed nredir cruft
 
 	* Configure now accepts kernel source directory argument
 
-	* Redir now includes modversions.h
+	* redir.c now includes modversions.h
 
 	* Fix bug in virt_readdir
 

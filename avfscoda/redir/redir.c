@@ -1,5 +1,8 @@
 #include <linux/version.h>
+#include <linux/config.h>
+#ifdef CONFIG_MODVERSIONS
 #include <linux/modversions.h>
+#endif
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/unistd.h>
@@ -19,7 +22,7 @@ MODULE_LICENSE("GPL");
 #define DEB(X)
 #endif
 
-#define REDIR_VERSION "0.3"
+#define REDIR_VERSION "0.93"
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
 #define NEWVFS 1
@@ -68,83 +71,83 @@ static execve_func orig_execve;
 #if NEWVFS
 static char *path_pwd(char *page)
 {
-        return d_path(current->fs->pwd, current->fs->pwdmnt, page, PAGE_SIZE);
+	return d_path(current->fs->pwd, current->fs->pwdmnt, page, PAGE_SIZE);
 }
 
 static int a_path_walk(const char *pathname, int flags, struct nameidata *nd)
 {
-        int error;
+	int error;
 
-        error = 0;
-        if (path_init(pathname, flags, nd))
-                error = path_walk(pathname, nd);
+	error = 0;
+	if (path_init(pathname, flags, nd))
+		error = path_walk(pathname, nd);
 
-        return error;
+	return error;
 }
 
 static void a_path_release(struct nameidata *nd)
 {
-        dput(nd->dentry);
-        mntput(nd->mnt);
+	dput(nd->dentry);
+	mntput(nd->mnt);
 }
 
 static char *resolv_virt(const char *pathname, int must_exist, int flags)
 {
-        struct nameidata root;
+	struct nameidata root;
 	struct nameidata nd;
-        struct dentry *origroot;
-        struct vfsmount *origrootmnt;
+	struct dentry *origroot;
+	struct vfsmount *origrootmnt;
 	char *newpathname = NULL;
 	char *page = NULL;
 	char *path = NULL;
 	int pathlen = 0;
-        int error;
-        int newflags;
+	int error;
+	int newflags;
 
 	lock_kernel();
 
 	DEB((KERN_INFO "resolve_virt pathname: '%s'\n", 
-	       pathname ? pathname : "(null)"));
+	     pathname ? pathname : "(null)"));
 
-        error = a_path_walk(OVERLAY_DIR, LOOKUP_POSITIVE|LOOKUP_FOLLOW, &root);
-        if(error)
-            goto out;
+	error = a_path_walk(OVERLAY_DIR, LOOKUP_POSITIVE|LOOKUP_FOLLOW, &root);
+	if(error)
+		goto out;
 
 	origroot = current->fs->root;
-        origrootmnt = current->fs->rootmnt;
+	origrootmnt = current->fs->rootmnt;
 
 	current->fs->root = root.dentry;
-        current->fs->rootmnt = root.mnt;
+	current->fs->rootmnt = root.mnt;
 	
-        newflags = flags;
-        if(must_exist)
-                newflags |= LOOKUP_POSITIVE;
+	newflags = flags;
+	if(must_exist)
+		newflags |= LOOKUP_POSITIVE;
 
-        error  = a_path_walk(pathname, newflags, &nd);
+	error  = a_path_walk(pathname, newflags, &nd);
 	if(!error) {
 		if(path_ok(nd.dentry)) {
 			page = (char *) __get_free_page(GFP_USER);
 			if(page) {
 				path = d_path(nd.dentry, nd.mnt, page,
-                                              PAGE_SIZE);
+					      PAGE_SIZE);
 				DEB((KERN_INFO "resolve_virt path = '%s'\n",
 				     path));
 				pathlen = (unsigned int) page + PAGE_SIZE - 
 					(unsigned int) path;
 			}
 		}
-                a_path_release(&nd);
+		a_path_release(&nd);
 	}
 
 	current->fs->root = origroot;
-        current->fs->rootmnt = origrootmnt;
+	current->fs->rootmnt = origrootmnt;
 
-        a_path_release(&root);
+	a_path_release(&root);
 
 	if(path) {
 		int isvirtual;
 
-                error  = a_path_walk(path, flags, &nd);
+		error  = a_path_walk(path, flags, &nd);
 		if(!error) {
 			if(nd.dentry->d_inode)
 				isvirtual = 0;
@@ -155,7 +158,7 @@ static char *resolv_virt(const char *pathname, int must_exist, int flags)
 			else 
 				isvirtual = 0;
 
-                        a_path_release(&nd);
+			a_path_release(&nd);
 		}
 		else {
 			isvirtual = 1;
@@ -184,7 +187,7 @@ static char *resolv_virt(const char *pathname, int must_exist, int flags)
 	DEB((KERN_INFO "resolve_virt newpathname: '%s'\n", 
 	     newpathname ? newpathname : "(null)"));
 
-  out:
+ out:
 	unlock_kernel();
 	return newpathname;
 }
@@ -193,7 +196,7 @@ static char *resolv_virt(const char *pathname, int must_exist, int flags)
 
 static char *path_pwd(char *page)
 {
-        return d_path(current->fs->pwd, page, PAGE_SIZE);
+	return d_path(current->fs->pwd, page, PAGE_SIZE);
 }
 
 
@@ -209,7 +212,7 @@ static char *resolv_virt(const char *pathname, int must_exist, int flags)
 	lock_kernel();
 
 	DEB((KERN_INFO "resolve_virt pathname: '%s'\n", 
-	       pathname ? pathname : "(null)"));
+	     pathname ? pathname : "(null)"));
 
 	root = lookup_dentry(OVERLAY_DIR, NULL, 1);
 	if(IS_ERR(root))
@@ -303,14 +306,14 @@ static char *get_abs_path(const char *filename)
 	char *abspath, *s;
 	char *page;
 
-        if(!path_ok(current->fs->pwd))
-                return NULL;
+	if(!path_ok(current->fs->pwd))
+		return NULL;
 
-        page = (char *) __get_free_page(GFP_USER);
+	page = (char *) __get_free_page(GFP_USER);
 	if(!page)
 		return NULL;
 
-        cwd = path_pwd(page);
+	cwd = path_pwd(page);
 	cwdlen = (unsigned int) page + PAGE_SIZE - (unsigned int) cwd - 1;
 	if(cwd_virtual() && cwdlen > OVERLAY_DIR_LEN) {
 		cwd += OVERLAY_DIR_LEN;
@@ -409,7 +412,7 @@ asmlinkage int virt_chdir(const char *filename)
 			return (*orig_chdir)(filename);
 	}
 	if(IS_ERR(newfilename))
-			return PTR_ERR(newfilename);
+		return PTR_ERR(newfilename);
 
 
 	DEB((KERN_INFO "CHDIR: trying '%s'\n", newfilename));
@@ -465,7 +468,7 @@ asmlinkage int virt_stat(const char *filename, struct stat *statbuf)
 			return (*orig_stat)(filename, statbuf);
 	}
 	if(IS_ERR(newfilename))
-			return PTR_ERR(newfilename);
+		return PTR_ERR(newfilename);
 
 	DEB((KERN_INFO "STAT: trying '%s'\n", newfilename));
 
@@ -498,7 +501,7 @@ asmlinkage int virt_lstat(const char *filename, struct stat *statbuf)
 			return (*orig_lstat)(filename, statbuf);
 	}
 	if(IS_ERR(newfilename))
-			return PTR_ERR(newfilename);
+		return PTR_ERR(newfilename);
 
 	DEB((KERN_INFO "LSTAT: trying '%s'\n", newfilename));
 
@@ -533,7 +536,7 @@ asmlinkage int virt_access(const char *filename, int mode)
 			return (*orig_access)(filename, mode);
 	}
 	if(IS_ERR(newfilename))
-			return PTR_ERR(newfilename);
+		return PTR_ERR(newfilename);
 
 	DEB((KERN_INFO "ACCESS: trying '%s'\n", newfilename));
 		
@@ -570,7 +573,7 @@ asmlinkage int virt_open(const char *filename, int flags, int mode)
 			return (*orig_open)(filename, flags, mode);
 	}
 	if(IS_ERR(newfilename))
-			return PTR_ERR(newfilename);
+		return PTR_ERR(newfilename);
 
 	DEB((KERN_INFO "OPEN: trying '%s'\n", newfilename));
 		
@@ -609,7 +612,7 @@ asmlinkage int virt_readlink(const char *filename, char *buf, int bufsiz)
 			return (*orig_readlink)(filename, buf, bufsiz);
 	}
 	if(IS_ERR(newfilename))
-			return PTR_ERR(newfilename);
+		return PTR_ERR(newfilename);
 
 	DEB((KERN_INFO "READLINK: trying '%s'\n", newfilename));
 
@@ -660,7 +663,7 @@ asmlinkage int virt_getcwd(char *buf, unsigned long size)
 	if(!page)
 		return -ENOMEM;
 	
-        cwd = path_pwd(page);
+	cwd = path_pwd(page);
 	cwdlen = PAGE_SIZE + (page - cwd) - 1;
 	
 	if(cwdlen >= OVERLAY_DIR_LEN && 
@@ -689,7 +692,7 @@ asmlinkage int virt_getcwd(char *buf, unsigned long size)
 
 #if NEWVFS
 static long do_orig_stat64(stat64_func sfunc, const char *filename,
-			  struct stat64 * statbuf, long flags)
+                           struct stat64 * statbuf, long flags)
 {
 	long ret;
 	mm_segment_t old_fs;
@@ -728,7 +731,7 @@ asmlinkage long virt_stat64(char * filename, struct stat64 * statbuf, long flags
 			return (*orig_stat64)(filename, statbuf, flags);
 	}
 	if(IS_ERR(newfilename))
-			return PTR_ERR(newfilename);
+		return PTR_ERR(newfilename);
 
 	DEB((KERN_INFO "STAT64: trying '%s'\n", newfilename));
 
@@ -761,7 +764,7 @@ asmlinkage long virt_lstat64(char * filename, struct stat64 * statbuf, long flag
 			return (*orig_lstat64)(filename, statbuf, flags);
 	}
 	if(IS_ERR(newfilename))
-			return PTR_ERR(newfilename);
+		return PTR_ERR(newfilename);
 
 	DEB((KERN_INFO "LSTAT64: trying '%s'\n", newfilename));
 
@@ -783,22 +786,23 @@ asmlinkage int real_execve(struct pt_regs *regs)
 	char * filename;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
-        lock_kernel();
+	lock_kernel();
 #endif
 	filename = getname((char *) regs->ebx);
 	error = PTR_ERR(filename);
 	if (IS_ERR(filename))
 		goto out;
 	error = do_execve(filename, (char **) regs->ecx, (char **) regs->edx, regs);
-	if (error == 0)
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
-		current->flags &= ~PF_DTRACE;
-#else
+	if (error == 0) {
+#ifdef PT_DTRACE
 		current->ptrace &= ~PT_DTRACE;
+#else
+		current->flags &= ~PF_DTRACE;
 #endif
+	}
 	putname(filename);
 
-out:
+ out:
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
         unlock_kernel();
 #endif
@@ -827,18 +831,19 @@ asmlinkage int virt_execve(struct pt_regs regs)
 			return real_execve(&regs);
 	}
 	if(IS_ERR(newfilename))
-			return PTR_ERR(newfilename);
+                return PTR_ERR(newfilename);
 
 	DEB((KERN_INFO "EXECVE: trying '%s'\n", newfilename));
 
 	ret = do_execve(newfilename, (char **) regs.ecx, (char **) regs.edx,
 			&regs);
-	if (ret == 0)
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
-		current->flags &= ~PF_DTRACE;
+	if (ret == 0) {
+#ifdef PT_DTRACE
+                current->ptrace &= ~PT_DTRACE;
 #else
-		current->ptrace &= ~PT_DTRACE;
+                current->flags &= ~PF_DTRACE;
 #endif
+	}
 	kfree(newfilename);
 
 	DEB((KERN_INFO "EXECVE: result %i\n", ret));
@@ -860,48 +865,56 @@ void *replace_syscall(int index, void *new_syscall)
 
 int init_module(void)
 {
-    printk(KERN_INFO "redir init (version %s)\n", REDIR_VERSION);
+	printk(KERN_INFO "redir init (version %s)\n", REDIR_VERSION);
 
-    orig_chdir    = replace_syscall(__NR_chdir,    virt_chdir);
-    orig_stat     = replace_syscall(__NR_stat,     virt_stat);
-    orig_lstat    = replace_syscall(__NR_lstat,    virt_lstat);
-    orig_access   = replace_syscall(__NR_access,   virt_access);
-    orig_open     = replace_syscall(__NR_open,     virt_open);
-    orig_readlink = replace_syscall(__NR_readlink, virt_readlink);
-    orig_getcwd   = replace_syscall(__NR_getcwd,   virt_getcwd);
+	orig_chdir    = replace_syscall(__NR_chdir,    virt_chdir);
+	orig_stat     = replace_syscall(__NR_stat,     virt_stat);
+	orig_lstat    = replace_syscall(__NR_lstat,    virt_lstat);
+	orig_access   = replace_syscall(__NR_access,   virt_access);
+	orig_open     = replace_syscall(__NR_open,     virt_open);
+	orig_readlink = replace_syscall(__NR_readlink, virt_readlink);
+	orig_getcwd   = replace_syscall(__NR_getcwd,   virt_getcwd);
 
 #if NEWVFS
-    orig_stat64   = replace_syscall(__NR_stat64,   virt_stat64);
-    orig_lstat64  = replace_syscall(__NR_lstat64,  virt_lstat64);
+	orig_stat64   = replace_syscall(__NR_stat64,   virt_stat64);
+	orig_lstat64  = replace_syscall(__NR_lstat64,  virt_lstat64);
 #endif
 
 #ifdef __i386__
-    orig_execve   = replace_syscall(__NR_execve,   virt_execve);
+	orig_execve   = replace_syscall(__NR_execve,   virt_execve);
 #endif
 
-    return 0;
+	return 0;
 }
 
 
 void cleanup_module(void)
 {
-    printk(KERN_INFO "redir cleanup\n");
+	printk(KERN_INFO "redir cleanup\n");
    
-    replace_syscall(__NR_chdir,    orig_chdir);
-    replace_syscall(__NR_stat,     orig_stat);
-    replace_syscall(__NR_lstat,    orig_lstat);
-    replace_syscall(__NR_access,   orig_access);
-    replace_syscall(__NR_open,     orig_open);
-    replace_syscall(__NR_readlink, orig_readlink);
-    replace_syscall(__NR_getcwd,   orig_getcwd);
+	replace_syscall(__NR_chdir,    orig_chdir);
+	replace_syscall(__NR_stat,     orig_stat);
+	replace_syscall(__NR_lstat,    orig_lstat);
+	replace_syscall(__NR_access,   orig_access);
+	replace_syscall(__NR_open,     orig_open);
+	replace_syscall(__NR_readlink, orig_readlink);
+	replace_syscall(__NR_getcwd,   orig_getcwd);
 
 #if NEWVFS
-    replace_syscall(__NR_stat64,   orig_stat64);
-    replace_syscall(__NR_lstat64,  orig_lstat64);
+	replace_syscall(__NR_stat64,   orig_stat64);
+	replace_syscall(__NR_lstat64,  orig_lstat64);
 #endif
 
 #ifdef __i386__
-    replace_syscall(__NR_execve,   orig_execve);
+	replace_syscall(__NR_execve,   orig_execve);
 #endif
 
 }
+
+
+/* 
+ * Local Variables:
+ * indent-tabs-mode: t
+ * c-basic-offset: 8
+ * End:
+ */

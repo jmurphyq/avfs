@@ -126,6 +126,7 @@ static int is_avfs(const unsigned char *name, unsigned int len)
 	return 0;
 }
 
+#if 0
 static void print_path(struct dentry *dentry, struct nameidata *nd)
 {
 	char *page;
@@ -139,55 +140,50 @@ static void print_path(struct dentry *dentry, struct nameidata *nd)
 		free_page((unsigned long) page);
 	}
 }
-#if 0
-static struct dentry *lookup_avfs(struct dentry *dentry, struct nameidata *nd)
+#endif
+
+static int lookup_avfs(struct dentry *dentry, struct nameidata *nd,
+		       struct base_entry *be)
 {
-	struct dentry *avfsdentry = NULL;
+	int err;
 	char *page;
 	char *path;
 	
+	err = -ENOMEM;
 	page = (char *) __get_free_page(GFP_KERNEL);
 	if (page) {
 		int err;
 		struct nameidata avfsnd;
 		unsigned int offset = PAGE_SIZE - dentry->d_name.len - 1;
-		strncpy(page + offset, dentry->d_name.name, dentry->d_name.len);
-		page[PAGE_SIZE - 1] = '\0';
-		strcpy(page + PAGE_SIZE - dentry->d_name.len);
 		path = d_path(nd->dentry,nd->mnt, page, offset);
+		err = -ENAMETOOLONG;
 		if(!IS_ERR(path) && page + OVERLAY_DIR_LEN < path) {
 			path -= OVERLAY_DIR_LEN;
+			memcpy(page + strlen(path), dentry->d_name.name,
+			       dentry->d_name.len);
+			page[PAGE_SIZE - 1] = '\0';
 			memcpy(path, OVERLAY_DIR, OVERLAY_DIR_LEN);
-			
+
+			printk("lookup_avfs: '%s'\n", path);
+
 			err = path_lookup(path, 0, &avfsnd);
 			if(!err) {
-				/* FIXME: check that mnt is really
-				   AVFS, and that we hold a reference
-				   to it somewhere else */
-				mntput(nd->mnt);
-				avfsdentry = nd->dentry;
-			}
-		}
-
-		err = path_lookup("/overlay", 0, &avfsnd);
-		if(!err) {
-			err = path_walk(path, &avfsnd);
-			if(!err) {
-				err = path_walk(
+				/* FIXME: check that mnt is really AVFS */
+				be->mnt = nd->mnt;
+				be->dentry = nd->dentry;
 			}
 		}
 		free_page((unsigned long) page);
 	}
-	return avfsdentry;
+	return err;
 }
-#endif
 
 static struct dentry *glassfs_lookup(struct inode *dir, struct dentry *dentry,
 				    struct nameidata *nd)
 {
 	struct base_entry *be = dir->u.generic_ip;
 	struct dentry *ndentry;
-	struct vfsmount *nmnt = be->mnt;
+	struct vfsmount *nmnt = mntget(be->mnt);
 	struct inode *inode = NULL;
 
 //	printk("glassfs_lookup\n");
@@ -196,18 +192,23 @@ static struct dentry *glassfs_lookup(struct inode *dir, struct dentry *dentry,
 	up(&be->dentry->d_inode->i_sem);
 	if(nd && !ndentry->d_inode &&
 	   is_avfs(dentry->d_name.name, dentry->d_name.len)) {
-		print_path(dentry, nd);
-#if 0
-		struct dentry *avfsdentry;
+//		print_path(dentry, nd);
+		struct base_entry avfsbe;
+		int err;
 		int total_link_count_save = current->total_link_count;
-		avfsdentry = lookup_avfs(dentry, nd);
+		err = lookup_avfs(dentry, nd, &avfsbe);
 		current->total_link_count = total_link_count_save;
-		if(avfsdentry && avfsdentry->d_inode) {
-			dput(ndentry);
-			ndentry = avfsdentry;
-		} else
-			dput(avfsdentry);
-#endif
+		if(!err) {
+			if(avfsbe.dentry->d_inode) {
+				dput(ndentry);
+				mntput(nmnt);
+				ndentry = avfsbe.dentry;
+				nmnt = avfsbe.mnt;
+			} else {
+				dput(avfsbe.dentry);
+				mntput(avfsbe.mnt);
+			}
+		}
 	}
 
 	if(ndentry->d_inode) {
@@ -216,11 +217,13 @@ static struct dentry *glassfs_lookup(struct inode *dir, struct dentry *dentry,
 					  ninode->i_rdev, ndentry, nmnt);
 		if(!inode) {
 			dput(ndentry);
+			mntput(nmnt);
 			return ERR_PTR(-ENOMEM);
 		}
 	}
 	dentry->d_fsdata = ndentry;
 	dentry->d_op = &glassfs_dentry_operations;
+	mntput(nmnt);
 	
 	return d_splice_alias(inode, dentry);
 }

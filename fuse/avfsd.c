@@ -280,60 +280,10 @@ static struct fuse_operations avfsd_oper = {
     statfs:     NULL,
 };
 
-static void exit_handler()
-{
-    fuse_exit(fuse);
-}
-
-static void set_signal_handlers()
-{
-    struct sigaction sa;
-
-    sa.sa_handler = exit_handler;
-    sigemptyset(&(sa.sa_mask));
-    sa.sa_flags = 0;
-
-    if (sigaction(SIGHUP, &sa, NULL) == -1 || 
-	sigaction(SIGINT, &sa, NULL) == -1 || 
-	sigaction(SIGTERM, &sa, NULL) == -1) {
-	
-	perror("Cannot set exit signal handlers");
-        exit(1);
-    }
-
-    sa.sa_handler = SIG_IGN;
-    
-    if(sigaction(SIGPIPE, &sa, NULL) == -1) {
-	perror("Cannot set ignored signals");
-        exit(1);
-    }
-}
-
 int main(int argc, char *argv[])
 {
-    int flags = 0;
-    int fd;
-    char *mountpoint;
-
-    mountpoint = argv[1];
-    fd = fuse_mount(mountpoint, NULL);
-    if(fd == -1)
-        exit(1);
-
-    set_signal_handlers();
-
-    if(argc > 2 && strcmp(argv[2], "-d") == 0)
-        flags |= FUSE_DEBUG;
-
-    fuse = fuse_new(fd, flags, &avfsd_oper);
-    fuse_loop(fuse);
-
-    close(fd);
-    fuse_unmount(mountpoint);
-    
-    fuse_destroy(fuse);
+    fuse_main(argc, argv, &avfsd_oper);
     pathcache_close();
-
     return 0;
 }
 

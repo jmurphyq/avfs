@@ -1,8 +1,12 @@
 obj-m := glassfs.o
 
-KERNDIR := /usr/src/kernel-headers-2.6.3-1-686
 #KERNDIR := /store/linux/uml/linux-2.6.4
 #EXTRA := ARCH=um
+ifeq ($(KERNELDIR),)
+  KERNDIR := $(shell cd /lib/modules/`uname -r`/build; /bin/pwd)
+else
+  KERNDIR := ${KERNELDIR}
+endif
 
 all:
 	$(MAKE) -C $(KERNDIR) SUBDIRS=$(PWD) $(EXTRA) modules

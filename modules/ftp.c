@@ -757,27 +757,12 @@ static int ftp_list(struct remote *rem, struct dirlist *dl)
     int res;
     struct ftpdata *ftd = (struct ftpdata *) rem->data;
     struct ftpconn *conn;
-    char *dir;
 
     res = ftp_get_conn(ftd, dl->hostpath.host, &conn);
     if(res < 0)
         return res;
 
-    dir = av_strdup(dl->hostpath.path);
-    if((dl->flags & REM_LIST_SINGLE) != 0) {
-        if(strcmp(dir, "/") == 0)
-            dl->flags = 0;
-        else {
-            char *s;
-            s = strrchr(dir, '/');
-            if(s == dir)
-                s++;
-            *s = '\0';
-            dl->flags = REM_LIST_PARENT;
-        }
-    }
-    res = ftp_do_list(conn, dir, dl);
-    av_free(dir);
+    res = ftp_do_list(conn, dl->hostpath.path, dl);
 
     ftp_release_conn(conn);
 
@@ -1135,6 +1120,7 @@ int av_init_module_ftp(struct vmodule *module)
     AV_NEW(rem);
 
     rem->data    = ftd;
+    rem->flags   = REM_DIR_ONLY;
     rem->name    = av_strdup("ftp");
     rem->list    = ftp_list;
     rem->get     = ftp_get;

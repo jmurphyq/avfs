@@ -185,12 +185,20 @@ char *av_get_config(const char *param)
 
 void av_default_stat(struct avstat *stbuf)
 {
+    static avuid_t myuid = -1;
+    static avuid_t mygid = -1;
+
+    if(myuid == -1) {
+        myuid = getuid();
+        mygid = getgid();
+    }
+
     stbuf->dev = 0;
     stbuf->ino = 0;
     stbuf->mode = 0;
     stbuf->nlink = 0;
-    stbuf->uid = getuid();
-    stbuf->gid = getgid();
+    stbuf->uid = myuid;
+    stbuf->gid = mygid;
     stbuf->rdev = 0;
     stbuf->size = 0;
     stbuf->blksize = 512;

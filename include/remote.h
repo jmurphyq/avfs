@@ -34,10 +34,13 @@ struct getparam {
     void *data;
 };
 
+#define REM_DIR_ONLY (1 << 0)
+#define REM_NOCASE   (1 << 1)
 
 struct remote {
     void *data;
     char *name;
+    int flags;
 
     int (*list) (struct remote *rem, struct dirlist *dl);
     int (*get) (struct remote *rem, struct getparam *gp);

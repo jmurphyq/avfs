@@ -446,8 +446,8 @@ static int dav_res_stat_to_avstat (struct av_dav_resource *res,
 /* ---------------------------------------------------------------------- */
 
 static int
-populate_av_tree_from_reslist (struct dirlist *dl, char *grepfor,
-                struct av_dav_conn *conn, struct av_dav_resource *reslist)
+populate_av_tree_from_reslist (struct dirlist *dl, struct av_dav_conn *conn,
+                               struct av_dav_resource *reslist)
 {
   struct av_dav_resource *current, *next;
   char *shortname, *endchar;
@@ -475,23 +475,12 @@ populate_av_tree_from_reslist (struct dirlist *dl, char *grepfor,
       endchar = shortname + (strlen(shortname)-1);
       if (*endchar == '/') { *endchar = '\0'; }
 
-      /* are we trying to look at only 1 file? */
-      if (grepfor != NULL && strcmp (grepfor, shortname)) {
-          av_log(AVLOG_DEBUG, "DAV: skipping '%s': %s, only want %s",
-                  current->uri, shortname, grepfor);
-          goto skip;
-      }
-
       {
           struct avstat stbuf;
           char *linkname = NULL;
           char *remname;
 
-          if (grepfor == NULL) {
-              remname = shortname;
-          } else {
-              remname = dl->hostpath.path;
-          }
+          remname = dl->hostpath.path;
 
           if (dav_res_stat_to_avstat (current, &stbuf) < 0) {
               av_log (AVLOG_WARNING,
@@ -518,8 +507,7 @@ static int dav_list(struct remote *rem, struct dirlist *dl)
     char urlbuf[512];
     int res;
     struct davdata *davdat = (struct davdata *) rem->data;
-    char *url, *lastslash;
-    char *grepfor = NULL;
+    char *url;
     struct av_dav_conn *conn;
     struct av_dav_resource *reslist = NULL;
     const char *err;
@@ -530,15 +518,6 @@ static int dav_list(struct remote *rem, struct dirlist *dl)
 
     conn = new_dav_conn (davdat);
     if (conn == NULL) { return -1; }
-
-    if((dl->flags & REM_LIST_SINGLE) != 0)
-    {
-        lastslash = strrchr (url, '/');
-        if (lastslash != NULL && lastslash[1] != '\0') {
-            *lastslash = '\0';
-            grepfor = lastslash + 1;
-        }
-    }
 
     if (uri_parse (url, &(conn->uri), &av_dav_uri_defaults) != 0
       || conn->uri.path == NULL
@@ -561,7 +540,7 @@ static int dav_list(struct remote *rem, struct dirlist *dl)
         res = -1; goto error;
     }
 
-    if (populate_av_tree_from_reslist (dl, grepfor, conn, reslist) < 0) {
+    if (populate_av_tree_from_reslist (dl, conn, reslist) < 0) {
         res = -1; goto error;
     }
 
@@ -690,6 +669,7 @@ int av_init_module_dav(struct vmodule *module)
     AV_NEW(rem);
 
     rem->data    = davdat;
+    rem->flags   = REM_DIR_ONLY;
     rem->name    = av_strdup("dav");
     rem->list    = dav_list;
     rem->get     = dav_get;

@@ -107,12 +107,12 @@ static char *http_split_header(char *line)
 {
     char *s;
 
-    for(s = line; *s && !isspace((int) *s); s++);
+    for(s = line; *s && !isspace((unsigned char) *s); s++);
     if(*s) {
         do {
             *s = '\0';
             s++;
-        } while(isspace((int) *s));
+        } while(isspace((unsigned char) *s));
     }
     
     return s;
@@ -128,7 +128,7 @@ static void http_process_header_line(struct localfile *lf, char *line)
         char *end;
         avoff_t size;
         size = strtol(s, &end, 10);
-        while(*end && isspace((int) *end))
+        while(*end && isspace((unsigned char) *end))
             end++;
         
         if(!*end)
@@ -184,8 +184,10 @@ static int http_process_status_line(struct localfile *lf, char *line)
 
     for(s = line; *s && *s != ' '; s++);
 
-    if(s[0] != ' ' || !isdigit((int) s[1]) || !isdigit((int) s[2]) || 
-       !isdigit((int) s[3])) {
+    if(s[0] != ' ' || 
+       !isdigit((unsigned char) s[1]) || 
+       !isdigit((unsigned char) s[2]) || 
+       !isdigit((unsigned char) s[3])) {
         av_log(AVLOG_ERROR, "HTTP: bad status code: %s", s);
         return -EIO;
     }

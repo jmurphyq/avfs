@@ -139,6 +139,8 @@ static struct node *rem_get_node(struct filesys *fs, struct entry *ent)
         nod = rem_new_node(fs);
         nod->ent = ent;
         av_namespace_set(ent, nod);
+        if((fs->rem->flags & REM_NOCASE) != 0)
+            av_namespace_setflags(ent, NSF_NOCASE, 0);
         av_ref_obj(ent);
     }
     rem_insert_node(fs, nod);
@@ -354,6 +356,23 @@ static void rem_get_hostpath(struct entry *ent, struct hostpath *hp)
     av_free(hostpath);
 }
 
+static void rem_dir_only(struct dirlist *dl)
+{
+    if((dl->flags & REM_LIST_SINGLE) != 0) {
+        char *dir = dl->hostpath.path;
+        if(strcmp(dir, "/") == 0)
+            dl->flags = 0;
+        else {
+            char *s;
+            s = strrchr(dir, '/');
+            if(s == dir)
+                s++;
+            *s = '\0';
+            dl->flags = REM_LIST_PARENT;
+        }
+    }
+}
+
 static int rem_get_attr(struct filesys *fs, struct node *nod,
                         struct node *parent)
 {
@@ -365,7 +384,9 @@ static int rem_get_attr(struct filesys *fs, struct node *nod,
     dl.num = 0;
     dl.ents = NULL;
     rem_get_hostpath(nod->ent, &dl.hostpath);
-    
+    if((rem->flags & REM_DIR_ONLY) != 0)
+        rem_dir_only(&dl);
+
     res = rem->list(rem, &dl);
     if(res == 0) {
         if((dl.flags & REM_LIST_SINGLE) != 0)
@@ -736,7 +757,10 @@ static int rem_get_file(struct filesys *fs, struct node *nod,
     objname = av_stradd(NULL, rem->name, ":", gp.hostpath.host,
                           gp.hostpath.path, NULL);
     
-    res = rem->get(rem, &gp);
+    if(rem->get != NULL) 
+        res = rem->get(rem, &gp);
+    else
+        res = -EPERM;
     av_free(gp.hostpath.host);
     av_free(gp.hostpath.path);
 

@@ -215,14 +215,14 @@ static struct ext_info *create_exts(char *line)
     char *elist, *newelist;
     int i, n;
   
-    while(*line && !isspace((int) *line)) line++;
+    while(*line && !isspace((unsigned char) *line)) line++;
     if(*line) *line++ = '\0';
-    while(isspace((int) *line)) line++;
+    while(isspace((unsigned char) *line)) line++;
     elist = line;
 
     for(n = 0; *line && *line != '#'; n++) {
-        while(*line && !isspace((int) *line)) line++;
-        while(isspace((int) *line)) line++;
+        while(*line && !isspace((unsigned char) *line)) line++;
+        while(isspace((unsigned char) *line)) line++;
     }
     if(!n) return NULL;  /* No extensions */
   
@@ -234,9 +234,9 @@ static struct ext_info *create_exts(char *line)
     for(i = 0; i < n; i++) {
         exts[i].from = newelist;
         exts[i].to   = NULL;
-        while(*newelist && !isspace((int) *newelist)) newelist++;
+        while(*newelist && !isspace((unsigned char) *newelist)) newelist++;
         if(*newelist) *newelist++ = '\0';
-        while(isspace((int) *newelist)) newelist++;
+        while(isspace((unsigned char) *newelist)) newelist++;
 
     }
     exts[n].from = NULL;

@@ -8,6 +8,6 @@
 
 #include "avfs.h"
 
-int av_init_filt(struct vmodule *module, const char *name,
+int av_init_filt(struct vmodule *module, int version, const char *name,
                  const char *prog[], const char *revprog[],
                  struct ext_info *exts, struct avfs **resp);

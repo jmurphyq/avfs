@@ -9,6 +9,8 @@
 #include "namespace.h"
 #include "avfs.h"
 
+/* FIXME: hash table */
+
 static AV_LOCK_DECL(namespace_lock);
 
 struct entry {
@@ -210,4 +212,16 @@ struct entry *av_namespace_subdir(struct namespace *ns, struct entry *ent)
     AV_UNLOCK(namespace_lock);
 
     return rent;
+}
+
+struct entry *av_namespace_parent(struct entry *ent)
+{
+    struct entry *parent;
+
+    AV_LOCK(namespace_lock);
+    parent = ent->parent;
+    av_ref_obj(parent);
+    AV_UNLOCK(namespace_lock);
+
+    return parent;
 }

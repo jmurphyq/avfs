@@ -39,7 +39,7 @@ static int x(void *p)
         return 0;
 #endif
 
-//    __av_log(AVLOG_DEBUG, "p: 0x%08x", i);
+//    av_log(AVLOG_DEBUG, "p: 0x%08x", i);
     
     return 1;
 }
@@ -51,7 +51,7 @@ static void* register_alloc (size_t size) {
     new_size += size;
     
     if (!p) { // We should really throw some sort of exception or call the new_handler
-        __av_log(AVLOG_ERROR, "LeakTracer: out of memory");
+        av_log(AVLOG_ERROR, "LeakTracer: out of memory");
         _exit (1);
     }
     
@@ -86,7 +86,7 @@ static void* register_alloc (size_t size) {
         new_leaks_count = leaks_count == 0 ? 16 : leaks_count * 2;
         leaks = (Leak*)realloc(leaks, sizeof(*leaks) * new_leaks_count);
         if (!leaks) {
-            __av_log(AVLOG_ERROR, "LeakTracer: out of memory");
+            av_log(AVLOG_ERROR, "LeakTracer: out of memory");
             _exit(1);
         }
         memset(leaks+leaks_count, 0, sizeof(*leaks) * (new_leaks_count-leaks_count));
@@ -108,7 +108,7 @@ static void *register_realloc (void *p, size_t size)
             return p1;
         }
     
-    __av_log(AVLOG_ERROR, "LeakTracer: realloc on an already deleted value");
+    av_log(AVLOG_ERROR, "LeakTracer: realloc on an already deleted value");
     abort();
 }
 
@@ -130,11 +130,11 @@ static void register_free (void *p)
             return;
         }
 
-    __av_log(AVLOG_ERROR, "LeakTracer: free on an already deleted value");
+    av_log(AVLOG_ERROR, "LeakTracer: free on an already deleted value");
     abort();
 }
 
-void *__av_malloc(size_t size)
+void *av_malloc(size_t size)
 {
     void *res;
 
@@ -145,7 +145,7 @@ void *__av_malloc(size_t size)
     return res;
 }
 
-void *__av_calloc(size_t size)
+void *av_calloc(size_t size)
 {
     void *res;
     
@@ -157,7 +157,7 @@ void *__av_calloc(size_t size)
     return res;
 }
 
-void *__av_realloc(void *p, size_t size)
+void *av_realloc(void *p, size_t size)
 {
     void *res;
 
@@ -175,7 +175,7 @@ void *__av_realloc(void *p, size_t size)
     return res;
 }
 
-void __av_free(void *p)
+void av_free(void *p)
 {
     AV_LOCK(lock);
     register_free(p);
@@ -183,15 +183,15 @@ void __av_free(void *p)
 }
 
 
-void __av_check_malloc()
+void av_check_malloc()
  {
     const char *filename = "/tmp/leak.out";
     FILE *fp;
 
-    __av_log(AVLOG_DEBUG, "leak_count: %i (%i)", new_count, leaks_count);
+    av_log(AVLOG_DEBUG, "leak_count: %i (%i)", new_count, leaks_count);
     
     if (!(fp = fopen(filename, "w")))
-        __av_log(AVLOG_ERROR, "LeakTracer: Could not open %s: %s\n", filename,
+        av_log(AVLOG_ERROR, "LeakTracer: Could not open %s: %s\n", filename,
                  strerror(errno));
     else {
         int i;
@@ -224,7 +224,7 @@ void __av_check_malloc()
         AV_UNLOCK(lock);
 
         fclose(fp);
-        __av_log(AVLOG_WARNING, "number of unfreed pointers: %i", numunfreed);
+        av_log(AVLOG_WARNING, "number of unfreed pointers: %i", numunfreed);
     }
 }
 

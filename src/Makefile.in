@@ -29,6 +29,7 @@ core_objs = \
 	modload.o    \
 	remote.o     \
 	archive.o    \
+	archutil.o   \
 	namespace.o  \
 	state.o      \
 	serialfile.o \

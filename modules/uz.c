@@ -10,6 +10,7 @@
 */
 
 #include "filter.h"
+#include "version.h"
 
 int av_init_module_uz(struct vmodule *module)
 {
@@ -27,5 +28,5 @@ int av_init_module_uz(struct vmodule *module)
     uz_args[1] = "-d";
     uz_args[2] = NULL;
 
-    return av_init_filt(module, "uz", uz_args, NULL, uz_exts, &avfs);
+    return av_init_filt(module, AV_VER, "uz", uz_args, NULL, uz_exts, &avfs);
 }

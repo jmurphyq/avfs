@@ -9,6 +9,7 @@
 */
 
 #include "filter.h"
+#include "version.h"
 
 extern int av_init_module_ubz2(struct vmodule *module);
 
@@ -32,6 +33,6 @@ int av_init_module_ubz2(struct vmodule *module)
     bz2_args[0] = "bzip2";
     bz2_args[1] = NULL;
 
-    return av_init_filt(module, "ubz2", ubz2_args, bz2_args, ubz2_exts,
+    return av_init_filt(module, AV_VER, "ubz2", ubz2_args, bz2_args, ubz2_exts,
                           &avfs);
 }

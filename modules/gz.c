@@ -9,6 +9,7 @@
 */
 
 #include "filter.h"
+#include "version.h"
 
 extern int av_init_module_gz(struct vmodule *module);
 
@@ -25,5 +26,5 @@ int av_init_module_gz(struct vmodule *module)
     gz_args[0] = "gzip";
     gz_args[1] = NULL;
 
-    return av_init_filt(module, "gz", gz_args, ugz_args, NULL, &avfs);
+    return av_init_filt(module, AV_VER, "gz", gz_args, ugz_args, NULL, &avfs);
 }

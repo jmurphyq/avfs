@@ -20,11 +20,11 @@ modules = \
 	uz.o         \
 	gz.o         \
 	ubz2.o       \
-	bz2.o
+	bz2.o        \
+	uar.o
 
 #	utar.o       \
 #	urar.o       \
-#	uar.o        \
 #	uzip.o       \
 #	floppy.o     \
 #	extfs.o 

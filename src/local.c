@@ -107,6 +107,8 @@ static avssize_t local_read(vfile *vf, char *buf, avsize_t nbyte)
     if(res == -1)
         return -errno;
 
+    vf->ptr += res;
+    
     return res;
 }
 
@@ -118,6 +120,9 @@ static avssize_t local_write(vfile *vf, const char *buf, avsize_t nbyte)
     res = write(fi->fd, buf, nbyte);
     if(res == -1)
         return -errno;
+
+    /* NOTE: ptr will go astray if file is opened with O_APPEND */
+    vf->ptr += res;
 
     return res;
 }
@@ -131,6 +136,8 @@ static avoff_t local_lseek(vfile *vf, avoff_t offset, int whence)
     if(res == -1)
         return -errno;
     
+    vf->ptr = res;
+
     return res;
 }
 

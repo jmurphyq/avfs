@@ -21,4 +21,4 @@ void *av_namespace_get(struct entry *ent);
 char *av_namespace_name(struct entry *ent);
 struct entry *av_namespace_next(struct entry *ent);
 struct entry *av_namespace_subdir(struct namespace *ns, struct entry *ent);
-
+struct entry *av_namespace_parent(struct entry *ent);

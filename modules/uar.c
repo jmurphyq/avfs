@@ -7,8 +7,10 @@
 
     AR module
 */
-#if 0
-#include "archives.h"
+
+#include "archive.h"
+#include "oper.h"
+#include "version.h"
 
 #define ARMAGIC     "!<arch>\n"
 #define ARMAGICLEN  8
@@ -33,68 +35,59 @@ struct ar_values {
     avoff_t offset;
 };
 
-static avssize_t read_file(ave *v, arch_file *file, char *buf, avsize_t nbyte)
-{
-    avssize_t res;
-  
-    res = av_read(v, file->fh, buf, nbyte);
-    if(res == -1) return -1;
-    file->ptr += res;
+struct ar_nametab {
+    char *names;
+    avsize_t size;
+};
 
-    return res;
+static void fill_arentry(struct archive *arch, struct entry *ent,
+                         struct ar_values *arv)
+{
+    struct archnode *nod;
+
+    nod = av_namespace_get(ent);
+    if(nod != NULL) {
+        av_log(AVLOG_WARNING, "AR: duplicate names");
+        return;
+    }
+
+    nod = av_arch_new_node(arch, ent);
+    
+    nod->offset = arv->offset;
+    nod->realsize = arv->size;
+
+    nod->st.mode       = arv->mode;
+    nod->st.uid        = arv->uid;
+    nod->st.gid        = arv->gid;
+    nod->st.blocks     = AV_BLOCKS(arv->size);
+    nod->st.blksize    = 1024;
+    nod->st.mtime.sec  = arv->mtime;
+    nod->st.mtime.nsec = 0;
+    nod->st.atime      = nod->st.mtime;
+    nod->st.ctime      = nod->st.mtime;
+    nod->st.size       = arv->size;
 }
 
-static int fill_arentry(ave *v, arch_entry *ent, struct ar_values *arv)
+static void insert_arentry(struct archive *arch, struct ar_values *arv,
+                           const char *name)
 {
-    int res;
-    struct avstat filestat;
+    struct entry *ent;
 
-    if(ent->ino != AVNULL)
-        return 0;
+    if(!name[0]) {
+        av_log(AVLOG_WARNING, "AR: Empty name");
+        return;
+    }
+    if((arv->mode & AV_IFMT) == 0) {
+        av_log(AVLOG_WARNING, "AR: Illegal type");
+        return;
+    }
+        
+    ent = av_arch_get_entry(arch, name);
+    if(ent == NULL)
+        return;
 
-    av_default_stat(&filestat);
-
-    filestat.mode    = arv->mode;
-    filestat.uid     = arv->uid;
-    filestat.gid     = arv->gid;
-    filestat.blocks  = AV_DIV(arv->size, 512);
-    filestat.blksize = VBLOCKSIZE;
-    filestat.dev     = ent->arch->dev;
-    filestat.ino     = ent->arch->inoctr++;
-    filestat.mtime   = arv->mtime;
-    filestat.atime   = filestat.mtime;
-    filestat.ctime   = filestat.mtime;
-    filestat.size    = arv->size;
-
-    res = av_new_inode(v, ent, &filestat);
-    if(res == -1)
-        return -1;
-  
-    ent->ino->offset = arv->offset;
-    ent->ino->realsize = arv->size;
-
-    return 0;
-}
-
-static int insert_arentry(ave *v, archive *arch, struct ar_values *arv, 
-			  const char *name)
-{
-    int res;
-    arch_entry *ent;
-
-    if(!name[0]) 
-        return 0; /* Broken header: empty name */
-    if((arv->mode & AV_IFMT) == 0)
-        return 0; /* Broken header: illegal type */
-
-    ent = av_find_entry(v, arch->root, name, FIND_CREATE, 0);
-    if(ent == AVNULL)
-        return -1;
-  
-    res = fill_arentry(v, ent, arv);
-    av_unref_entry(ent);
-
-    return res;
+    fill_arentry(arch, ent, arv);
+    av_unref_obj(ent);
 }
 
 static avulong getnum(const char *s, int len, int base)
@@ -113,7 +106,8 @@ static avulong getnum(const char *s, int len, int base)
 
 static int interpret_header(struct ar_header *hbuf, struct ar_values *arv)
 {
-    if(av_strncmp(hbuf->endmagic, ENDMAGIC, 2) != 0) return -1;
+    if(strncmp(hbuf->endmagic, ENDMAGIC, 2) != 0)
+        return -1;
 
     arv->mtime = getnum(hbuf->date, 12, 10);
     arv->uid   = getnum(hbuf->uid,  6,  10);
@@ -124,167 +118,246 @@ static int interpret_header(struct ar_header *hbuf, struct ar_values *arv)
     return 0;
 }
 
-static int read_arfile(ave *v, arch_file *file, archive *arch)
+static int read_longnames(vfile *vf, struct ar_values *arv,
+                          struct ar_nametab *nt)
 {
-    char magic[ARMAGICLEN];
-    struct ar_header hbuf;
-    struct ar_values arv;
     avssize_t rres;
-    avoff_t sres, noff;
-    char *longnames = AVNULL;
-    int longnameslen = 0;
-    int ret = -1;
-    int i;
-  
-    rres = read_file(v, file, magic, ARMAGICLEN);
-    if(rres == -1) return -1;
-    if(rres != ARMAGICLEN || av_strncmp(magic, ARMAGIC, ARMAGICLEN) != 0) {
-        v->errn = EIO;
-        return -1;
-    }
-  
-    while(1) {
-        rres = read_file(v, file, (char *) &hbuf, sizeof(hbuf));
-        if(rres == -1) goto end;                       /* Error */
-        if(rres == 0) break;
-        if(rres != sizeof(hbuf)) break;                /* Broken archive */
-        if(interpret_header(&hbuf, &arv) == -1) break; /* Broken archive */
-        arv.offset = file->ptr;
-
-        if((av_strncmp(hbuf.name, "//              ", 16) == 0 ||
-            av_strncmp(hbuf.name, "ARFILENAMES/    ", 16) == 0)) {
-            /* Long name table */
-
-            if(longnames == AVNULL && arv.size > 0 && arv.size < (1 << 22)) {
-                longnameslen = arv.size;
-                longnames = av_malloc(v, longnameslen);
-                if(longnames != AVNULL) {
-                    rres = read_file(v, file, longnames, longnameslen);
-                    if(rres == -1) goto end;               /* Error */
-                    if(rres != longnameslen) break;        /* Broken archive */
-	  
-                    for(i = 0; i < longnameslen; i++) {
-                        if(longnames[i] == '/' || longnames[i] == '\\' ||
-                           longnames[i] == '\n') longnames[i] = '\0';
-                    }
-                    longnames[longnameslen-1] = '\0';
-                }
-            }
-        }
-        else if((hbuf.name[0] == '/' || hbuf.name[0] == ' ') &&
-                hbuf.name[1] >= '0' && hbuf.name[1] <= '9') {
-            /* Long name */
-
-            if(longnames != AVNULL) {
-                int nameoffs;
-	
-                nameoffs = getnum(hbuf.name + 1, 15, 10);
-                if(nameoffs >= 0 && nameoffs  < longnameslen) {
-                    if(insert_arentry(v, arch, &arv, longnames+nameoffs) == -1) 
-                        goto end;                            /* Error */
-                }
-            }
-        }
-        else if(hbuf.name[0] == '#' && hbuf.name[1] == '1' &&
-                hbuf.name[2] == '/' && hbuf.name[3] >= '0' &&
-                hbuf.name[3] <= '9') {
-            /* BSD4.4-style long filename */
-
-            int namelen;
-      
-            namelen = getnum(hbuf.name + 3, 13, 10);
-            arv.size -= namelen;
-            arv.offset += namelen;
-
-            if(longnames != AVNULL) av_free(longnames);
-            longnames = av_malloc(v, namelen+1);
-            if(longnames != AVNULL) {
-                rres = read_file(v, file, longnames, namelen);
-                if(rres == -1) goto end;                      /* Error */
-                if(rres != namelen) break;                    /* Broken archive */
-	
-                longnames[namelen] = '\0';
-                if(insert_arentry(v, arch, &arv, longnames) == -1) 
-                    goto end;                                   /* Error */
-
-                av_free(longnames);
-                longnames = AVNULL;
-            }
-        }
-        else if(hbuf.name[0] != '/' && 
-                av_strncmp(hbuf.name, "__.SYMDEF       ", 16) != 0) {
-            /* Short name */
-
-            for(i = 0; i < 16; i++) 
-                if(hbuf.name[i] == '/') {
-                    hbuf.name[i] = '\0';
-                    break;
-                }
-
-            /* If no slash was found, strip spaces from end */
-            if(i == 16) 
-                for(i = 15; i >= 0 && hbuf.name[i] == ' '; i--) hbuf.name[i] = '\0';
-      
-            if(insert_arentry(v, arch, &arv, hbuf.name) == -1) 
-                goto end;                                  /* Error */
-        }
+    avsize_t i;
     
-        noff = arv.offset + arv.size;
-        if((noff & 1) != 0) noff++;
+    if(nt->names != NULL) {
+        av_log(AVLOG_WARNING, "AR: Multiple name tables");
+        return 1;
+    }
+    
+    if(arv->size == 0)
+        return 1;
 
-        sres = av_lseek(v, file->fh, noff, AVSEEK_SET);
-
-        if(sres == -1) goto end;                       /* Error */
-        file->ptr = sres;
+    if(arv->size >= (1 << 22)) {
+        av_log(AVLOG_WARNING, "AR: name table too long");
+        return 1;
     }
 
-    ret = 0;
+    nt->size = arv->size;
+    nt->names = av_malloc(nt->size);
+    
+    rres = av_read(vf, nt->names, nt->size);
+    if(rres < 0)
+        return rres;
+        
+    if(rres != nt->size) {
+        av_log(AVLOG_WARNING, "AR: Broken archive");
+        return 0;
+    }
 
-  end:
-    av_free(longnames);
-    return ret;
+    for(i = 0; i < nt->size; i++)
+        if(nt->names[i] == '/' || nt->names[i] == '\\' || nt->names[i] == '\n')
+            nt->names[i] = '\0';
+
+    nt->names[nt->size - 1] = '\0';
+    
+    return 1;
+}
+                         
+static int read_bsd_longname(vfile *vf, struct archive *arch,
+                             struct ar_values *arv, char *shortname)
+{
+    avssize_t rres;
+    avsize_t namelen;
+    char *name;
+    
+    namelen = getnum(shortname + 3, 13, 10);
+
+    name = av_malloc(namelen + 1);
+    rres = av_read(vf, name, namelen);
+    if(rres == namelen) {
+        arv->size -= namelen;
+        arv->offset += namelen;
+
+        insert_arentry(arch, arv, name);
+        av_free(name);
+        return 1;
+    }
+
+    av_free(name);
+    
+    if(rres < 0)
+        return rres;
+
+    av_log(AVLOG_WARNING, "AR: Broken archive");
+    return 0;
 }
 
-static int parse_arfile(ave *v, vpath *path, archive *arch)
+static void insert_longname(struct archive *arch, struct ar_values *arv,
+                            char *shortname, struct ar_nametab *nt)
 {
-    int res;
-    arch_file file;
+    if(nt->names != NULL) {
+        avsize_t nameoffs;
+	
+        nameoffs = getnum(shortname + 1, 15, 10);
+        if(nameoffs < nt->size)
+            insert_arentry(arch, arv, nt->names + nameoffs);
+        else
+            av_log(AVLOG_WARNING, "AR: Bad filename table");            
+    }
+    else
+        av_log(AVLOG_WARNING, "AR: Missing filename table");
+}
 
-    if(PARAM(path)[0]) {
-        v->errn = ENOENT;
-        return -1;
+static void insert_shortname(struct archive *arch, struct ar_values *arv,
+                             char *name)
+{
+    int i;
+
+    for(i = 0; i < 16; i++) 
+        if(name[i] == '/') {
+            name[i] = '\0';
+            break;
+        }
+
+    /* If no slash was found, strip spaces from end */
+    if(i == 16) 
+        for(i = 15; i >= 0 && name[i] == ' '; i--) name[i] = '\0';
+    
+    insert_arentry(arch, arv, name);
+}
+
+static int process_name(vfile *vf, struct archive *arch, struct ar_values *arv,
+                        char *name, struct ar_nametab *nt)
+{
+    if((strncmp(name, "//              ", 16) == 0 ||
+        strncmp(name, "ARFILENAMES/    ", 16) == 0))
+        return read_longnames(vf, arv, nt);
+
+    if(name[0] == '#' && name[1] == '1' && name[2] == '/' &&
+       name[3] >= '0' && name[3] <= '9') 
+        return read_bsd_longname(vf, arch, arv, name);
+
+    if((name[0] == '/' || name[0] == ' ') &&
+       name[1] >= '0' && name[1] <= '9') {
+        insert_longname(arch, arv, name, nt);
+        return 1;
     }
 
-    file.fh = av_open(v, BASE(path), AVO_RDONLY, 0);
-    if(file.fh == -1) return -1;
-    file.ptr = 0;
+    if(name[0] == '/' || strncmp(name, "__.SYMDEF       ", 16) == 0)
+        return 1;
 
-    res = read_arfile(v, &file, arch);
+    insert_shortname(arch, arv, name);
+    return 1;
+}
+
+
+static int read_entry(vfile *vf, struct archive *arch, struct ar_nametab *nt)
+{
+    int res;
+    avssize_t rres;
+    struct ar_header hbuf;
+    struct ar_values arv;
+    avoff_t sres, noff;
+    
+    rres = av_read(vf, (char *) &hbuf, sizeof(hbuf));
+    if(rres <= 0) 
+        return rres;
+    
+    if(rres != sizeof(hbuf)) {
+        av_log(AVLOG_WARNING, "AR: Broken archive");
+        return 0;
+    }
+
+    if(interpret_header(&hbuf, &arv) == -1) {
+        av_log(AVLOG_WARNING, "AR: Broken archive");
+        return 0;
+    }
+
+    arv.offset = vf->ptr;
+
+    res = process_name(vf, arch, &arv, hbuf.name, nt);
+    if(res <= 0)
+        return res;
+
+    noff = arv.offset + arv.size;
+    if((noff & 1) != 0) noff++;
+    
+    sres = av_lseek(vf, noff, AVSEEK_SET);
+    if(sres < 0)
+        return sres;
+    
+    return 1;
+}
+
+
+static int read_arfile(vfile *vf, struct archive *arch)
+{
+    int res;
+    char magic[ARMAGICLEN];
+    avssize_t rres;
+    struct ar_nametab nt;
   
-    av_close(DUMMYV, file.fh);
+    rres = av_read(vf, magic, ARMAGICLEN);
+    if(rres < 0) 
+        return rres;
+    if(rres != ARMAGICLEN || strncmp(magic, ARMAGIC, ARMAGICLEN) != 0)
+        return -EIO;
+  
+    nt.names = NULL;
+    nt.size = 0;
+    do res = read_entry(vf, arch, &nt);
+    while(res == 1);
+
+    av_free(nt.names);
+
+    return res;
+}
+
+static int parse_arfile(void *data, ventry *ent, struct archive *arch)
+{
+    int res;
+    vfile *vf;
+
+    res = av_open(ent->mnt->base, AVO_RDONLY, 0, &vf);
+    if(res < 0)
+        return res;
+
+    res = read_arfile(vf, arch);
+    av_close(vf);
     
     return res;  
 }
 
-
-extern int av_init_module_uar(ave *v);
-
-int av_init_module_uar(ave *v)
+static void ar_destroy(struct avfs *avfs)
 {
-    struct ext_info arexts[3];
-    struct vdev_info *vdev;
-    arch_devd *dd;
+    struct archparams *ap = (struct archparams *) avfs->data;
 
-    INIT_EXT(arexts[0], ".a",   AVNULL);
-    INIT_EXT(arexts[1], ".deb", AVNULL);
-    INIT_EXT(arexts[2], AVNULL, AVNULL);
-
-    vdev = av_init_arch(v, "uar", arexts, AV_VER);
-    if(vdev == AVNULL) return -1;
-  
-    dd = (arch_devd *) vdev->devdata;
-    dd->parsefunc = parse_arfile;
-
-    return av_add_vdev(v, vdev);
+    av_free(ap);
 }
-#endif
+
+extern int av_init_module_uar(struct vmodule *module);
+
+int av_init_module_uar(struct vmodule *module)
+{
+    int res;
+    struct avfs *avfs;
+    struct ext_info arexts[3];
+    struct archparams *ap;
+    
+    arexts[0].from = ".a",   arexts[0].to = NULL;
+    arexts[1].from = ".deb", arexts[1].to = NULL;
+    arexts[2].from = NULL;
+
+    res = av_new_avfs("uar", arexts, AV_VER, /* flags */ 0, module, &avfs);
+    if(res < 0)
+        return res;
+  
+    AV_NEW(ap);
+    ap->data = NULL;
+    ap->parse = parse_arfile;
+
+    avfs->data = ap;
+    avfs->destroy = ar_destroy;
+    
+    av_archive_init(avfs);
+
+    av_add_avfs(avfs);
+
+    return 0;
+}
+

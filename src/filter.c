@@ -531,7 +531,7 @@ static void filt_destroy(struct avfs *avfs)
     av_free(filtdat);
 }
 
-int av_init_filt(struct vmodule *module, const char *name,
+int av_init_filt(struct vmodule *module, int version, const char *name,
                  const char *prog[], const char *revprog[],
                  struct ext_info *exts, struct avfs **resp)
 {
@@ -539,8 +539,7 @@ int av_init_filt(struct vmodule *module, const char *name,
     struct avfs *avfs;
     struct filtdata *filtdat;
     
-
-    res = av_new_avfs(name, exts, AV_VER, AVF_NOLOCK, module, &avfs);
+    res = av_new_avfs(name, exts, version, AVF_NOLOCK, module, &avfs);
     if(res < 0)
         return res;
 

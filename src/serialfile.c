@@ -6,6 +6,11 @@
     the GNU GPL. See the file COPYING.LIB and COPYING. 
 */
 
+#ifdef linux
+/* For pread()/pwrite() */
+#define _XOPEN_SOURCE 500
+#endif
+
 #include "serialfile.h"
 #include "cache.h"
 

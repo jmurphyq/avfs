@@ -30,7 +30,7 @@ all-yes: avfs_server avfs_preload.so
 #leak=leak.o
 
 ifeq (@shared_build@,yes)
-  lib = ../lib/avfs.so.0.0.0
+  lib = ../lib/libavfs.so.0.0.0
 else
   lib = ../lib/avfs.o
 endif

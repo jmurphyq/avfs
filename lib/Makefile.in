@@ -28,20 +28,22 @@ depend-no:
 	sed '/^# DO NOT REMOVE THIS LINE/q' < Makefile.old > Makefile
 	gcc -MM $(CFLAGS) *.c >> Makefile
 
-all-yes: avfs.so
+all-yes: libavfs.so.0.0.0
 
 avfs_objs = ../src/core.o ../modules/modules.o ../zlib/zlib.o ../bzlib/libbz.o
 
-avfs.so: $(avfs_objs)
-	$(CC) -shared -o avfs.so.0.0.0 -Wl,-soname -Wl,libavfs.so.0 $(avfs_objs) $(LDFLAGS)
+libavfs.so.0.0.0: $(avfs_objs)
+	$(CC) -shared -o libavfs.so.0.0.0 -Wl,-soname -Wl,libavfs.so.0 $(avfs_objs) $(LDFLAGS)
 
 avfs.o: $(avfs_objs)
 	$(LD) -o avfs.o $(avfs_objs)
 
 install-yes:
 	@../mkinstalldirs $(i_libdir)
-	$(INSTALL) -m 755 avfs.so.0.0.0 $(i_libdir)/libavfs.so.0.0.0
+	$(INSTALL) -m 755 libavfs.so.0.0.0 $(i_libdir)/libavfs.so.0.0.0
+	rm -f $(i_libdir)/libavfs.so
 	ln -s libavfs.so.0.0.0 $(i_libdir)/libavfs.so
+	rm -f $(i_libdir)/libavfs.so.0
 	ln -s libavfs.so.0.0.0 $(i_libdir)/libavfs.so.0
 
 depend-yes:

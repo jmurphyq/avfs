@@ -24,6 +24,7 @@ clean:
 	rm -f avfscoda/avfscoda
 	rm -f preload/avfs_server
 	rm -f test/runtest
+	rm -f lib/libavfs.so.0.0.0
 	rm -f `find . \( -name "*.o" -o -name "*.so" -o -name "*.a" \
         -o -name ".*~" -o -name "*~" -o -name "*.s" -o -name "*.orig" \
         -o -name t -o  -name core -o -name gmon.out \) -print`

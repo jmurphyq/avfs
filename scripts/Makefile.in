@@ -39,13 +39,13 @@ install_scriptlinks:
 	  ../mkinstalldirs $(i_rcdir)/rc$$i.d; \
 	  echo Creating start link for runlevel $$i; \
 	  rm -f $(i_rcdir)/rc$$i.d/$(startname); \
-	  ln -s ../$(rcscriptdir)avfscoda $(i_rcdir)/rc$$i.d/$(startname); \
+	  ln -s ../$(rcscriptdir)/avfscoda $(i_rcdir)/rc$$i.d/$(startname); \
 	done
 	@for i in $(stop_levels); do \
 	  ../mkinstalldirs $(i_rcdir)/rc$$i.d; \
 	  echo Creating stop link for runlevel $$i; \
 	  rm -f $(i_rcdir)/rc$$i.d/$(stopname); \
-	  ln -s ../$(rcscriptdir)avfscoda $(i_rcdir)/rc$$i.d/$(stopname); \
+	  ln -s ../$(rcscriptdir)/avfscoda $(i_rcdir)/rc$$i.d/$(stopname); \
 	done
 
 install_profilescripts:

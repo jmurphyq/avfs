@@ -527,7 +527,7 @@ static void process_readlink(struct cmdinfo *ci)
 
     av_log(AVLOG_SYSCALL, "   readlink(\"%s\", \"%.*s\", %i) = %i (%s)",
              path, 
-             result.result < 0 ? 0 : result.result, buf,
+             result.result < 0 ? 0 : result.result, buf == NULL ? "" : buf,
              bufsize, result.result, 
              outmsg.seg[1].len ? (char *) ve->data : "");
 

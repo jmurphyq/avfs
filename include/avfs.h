@@ -263,6 +263,7 @@ typedef struct {
 #define AVLOG_ERROR     001
 #define AVLOG_WARNING   002
 #define AVLOG_DEBUG     004
+#define AVLOG_SYSCALL   010
 
 
 #define AVF_NEEDSLASH  (1 << 0)

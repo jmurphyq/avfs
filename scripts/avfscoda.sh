@@ -10,4 +10,4 @@ fi
 
 alias avfs-on='if [ ! -f /#avfs-on ]; then echo "avfs turned on"; fi'
 alias avfs-off='if [ ! -f /#avfs-off ]; then echo "avfs turned off"; fi'
-alias avfs-stat='if [ -f /#avfsstat ]; then cat /#avfsstat; fi'
+alias avfs-stat='if [ -e /#avfsstat ]; then cat /#avfsstat/copyright; fi'

@@ -24,12 +24,10 @@ all-yes: avfs_server avfs_preload.so
 #leak=leak.o
 
 avfs_server_objs = \
-	avfs_server.o          \
-	server.o               \
-	send.o                 \
-	../src/libavfs.a        \
-	../modules/libmodules.a \
-	../src/libavfs.a        \
+	avfs_server.o       \
+	server.o            \
+	send.o              \
+	../lib/avfs.o       \
 	$(leak)
 
 avfs_server: $(avfs_server_objs)

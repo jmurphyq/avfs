@@ -10,4 +10,4 @@ endif
 
 alias avfs-on 'if ( ! -f  /#avfs-on ) echo "avfs turned on"'
 alias avfs-off 'if ( ! -f  /#avfs-off ) echo "avfs turned off"'
-alias avfs-stat 'if ( -f /#avfsstat ) cat /#avfsstat'
+alias avfs-stat 'if ( -e /#avfsstat ) cat /#avfsstat/copyright'

@@ -27,13 +27,11 @@ all-yes: avfscoda
 #leak=leak.o
 
 avfscoda_objs = \
-	avfscoda.o              \
-	mount.o                 \
-	dispatch.o              \
-	child.o                 \
-	../src/libavfs.a        \
-	../modules/libmodules.a \
-	../src/libavfs.a        \
+	avfscoda.o           \
+	mount.o              \
+	dispatch.o           \
+	child.o              \
+	../lib/avfs.o        \
 	$(leak)
 
 avfscoda: $(avfscoda_objs)

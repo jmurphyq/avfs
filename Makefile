@@ -1,6 +1,7 @@
 all:
 	$(MAKE) -C src all
 	$(MAKE) -C modules all
+	$(MAKE) -C lib all
 	$(MAKE) -C libneon all
 	$(MAKE) -C avfscoda all
 	$(MAKE) -C preload all

@@ -7,6 +7,7 @@ moduledir = @moduledir@
 top_srcdir = @top_srcdir@
 
 CC = @CC@
+LD = @LD@
 CFLAGS = -I$(top_srcdir)/include @CFLAGS@ @CPPFLAGS@ 
 
 modules = \
@@ -33,10 +34,10 @@ modules_objs = \
 	mod_static.o \
 	dav_ls.o
 
-all: libmodules.a
+all: modules.o
 
-libmodules.a: $(modules_objs)
-	$(AR) cr libmodules.a $(modules_objs)
+modules.o: $(modules_objs)
+	$(LD) -o modules.o $(modules_objs)
 
 mod_static.c: make_initmod
 	./make_initmod $(modules) > mod_static.c

@@ -1,18 +1,18 @@
 SHELL = /bin/sh
 
-DAV_LIBS = -lneon -lxml -lz
+top_srcdir = @top_srcdir@
 
 CC = @CC@
-CFLAGS = @CFLAGS@
-CPPFLAGS = @CPPFLAGS@ -I../include -D_REENTRANT -D_POSIX_PTHREAD_SEMANTICS
-LDFLAGS = -Wl,-E -ldl -lpthread $(DAV_LIBS)
+CFLAGS = -I$(top_srcdir)/include @CFLAGS@ @CPPFLAGS@
+LDFLAGS = @LDFLAGS@ @LIBS@
 
-runtest_objs = runtest.c ../lib/libavfs.a
+runtest_objs = runtest.o ../lib/avfs.o
 runtest: $(runtest_objs)
+	$(CC) -o runtest $(runtest_objs) $(LDFLAGS)
 
-depend: info.h
+depend:
 	cp -f Makefile Makefile.old
 	sed '/^# DO NOT REMOVE THIS LINE/q' < Makefile.old > Makefile
-	gcc -MM $(CPPFLAGS) *.c >> Makefile
+	gcc -MM $(CFLAGS) *.c >> Makefile
 
 # DO NOT REMOVE THIS LINE, OR "make depend" WILL NOT WORK

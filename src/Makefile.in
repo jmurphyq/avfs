@@ -7,9 +7,10 @@ moduledir = @moduledir@
 top_srcdir = @top_srcdir@
 
 CC = @CC@
+LD = @LD@
 CFLAGS = -I$(top_srcdir)/include @CFLAGS@ @CPPFLAGS@
 
-avfs_objs = \
+core_objs = \
 	utils.o      \
 	sysdeps.o    \
 	tmpfile.o    \
@@ -36,10 +37,10 @@ avfs_objs = \
 	socket.o     \
 	passwords.o
 
-all: libavfs.a
+all: core.o
 
-libavfs.a: $(avfs_objs)
-	$(AR) cr libavfs.a $(avfs_objs)
+core.o: $(core_objs)
+	$(LD) -o core.o $(core_objs)
 
 utils.o: info.h
 

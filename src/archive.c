@@ -12,8 +12,6 @@
 #include "internal.h"
 #include "oper.h"
 
-static AV_LOCK_DECL(archlock);
-
 static struct archent *arch_ventry_entry(ventry *ve)
 {
     return (struct archent *) ve->data;
@@ -118,8 +116,9 @@ static int check_archive(ventry *ve, struct archive *arch, int *neednew)
 static struct archive *find_archive(const char *key)
 {
     struct archive *arch;
+    static AV_LOCK_DECL(lock);
 
-    AV_LOCK(archlock);
+    AV_LOCK(lock);
     arch = (struct archive *) av_filecache_get(key);
     if(arch == NULL) {
         AV_NEW_OBJ(arch, arch_delete);
@@ -129,7 +128,7 @@ static struct archive *find_archive(const char *key)
         arch->numread = 0;
         av_filecache_set(key, arch);
     }
-    AV_UNLOCK(archlock);
+    AV_UNLOCK(lock);
 
     return arch;
 }

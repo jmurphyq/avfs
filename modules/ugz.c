@@ -16,6 +16,8 @@
 #include "version.h"
 
 struct gznode {
+    avmutex lock;
+    int ready;
     struct avstat sig;
     struct cacheobj *cache;
     avino_t ino;
@@ -107,7 +109,6 @@ static int gzbuf_read(struct gzbuf *gb, char *buf, avsize_t nbyte)
     return 0;
 }
 
-
 static int gz_read_header(vfile *vf, struct gznode *nod)
 {
     int res;
@@ -188,34 +189,29 @@ static int gz_read_header(vfile *vf, struct gznode *nod)
 
     nod->crc = QBYTE(buf);
     nod->size = QBYTE(buf + 4);
-
+    nod->ready = 1;
+    
     return 0;
 }
 
 static void gznode_destroy(struct gznode *nod)
 {
     av_unref_obj(nod->cache);
+    AV_FREELOCK(nod->lock);
 }
 
-static int gz_new_node(ventry *ve, vfile *base, struct avstat *stbuf,
-                       struct gznode **resp)
+static struct gznode *gz_new_node(ventry *ve, struct avstat *stbuf)
 {
-    int res;
     struct gznode *nod;
 
     AV_NEW_OBJ(nod, gznode_destroy);
+    AV_INITLOCK(nod->lock);
+    nod->ready = 0;
     nod->sig = *stbuf;
     nod->cache = NULL;
     nod->ino = av_new_ino(ve->mnt->avfs);
     
-    res = gz_read_header(base, nod);
-    if(res < 0) {
-        av_unref_obj(nod);
-        return res;
-    }
-
-    *resp = nod;    
-    return 0;
+    return nod;
 }
 
 static int gz_same(struct gznode *nod, struct avstat *stbuf)
@@ -227,6 +223,30 @@ static int gz_same(struct gznode *nod, struct avstat *stbuf)
         return 1;
     else
         return 0;
+}
+
+static struct gznode *gz_findnode(ventry *ve, const char *key,
+                                  struct avstat *stbuf)
+{
+    struct gznode *nod;
+    static AV_LOCK_DECL(lock);
+
+    AV_LOCK(lock);
+    nod = (struct gznode *) av_filecache_get(key);
+    if(nod != NULL) {
+        if(!gz_same(nod, stbuf)) {
+            av_unref_obj(nod);
+            nod = NULL;
+        }
+    }
+    
+    if(nod == NULL) {
+        nod = gz_new_node(ve, stbuf);
+        av_filecache_set(key, nod);
+    }
+    AV_UNLOCK(lock);
+
+    return nod;
 }
 
 static int gz_getnode(ventry *ve, vfile *base, struct gznode **resp)
@@ -245,28 +265,26 @@ static int gz_getnode(ventry *ve, vfile *base, struct gznode **resp)
     if(res < 0)
         return res;
     
-    AV_LOCK(ve->mnt->avfs->lock);
-    nod = (struct gznode *) av_filecache_get(key);
-    if(nod != NULL) {
-        if(!gz_same(nod, &stbuf)) {
-            av_unref_obj(nod);
-            nod = NULL;
-        }
-    }
-    
-    if(nod == NULL) {
-        res = gz_new_node(ve, base, &stbuf, &nod);
-        if(res == 0)
-            av_filecache_set(key, nod);
+    nod = gz_findnode(ve, key, &stbuf);
+
+    AV_LOCK(nod->lock);
+    if(!nod->ready) {
+        res = gz_read_header(base, nod);
+        if(res < 0)
+            av_filecache_set(key, NULL);
     }
     else
         res = 0;
-    AV_UNLOCK(ve->mnt->avfs->lock);
-
+    AV_UNLOCK(nod->lock);
     av_free(key);
 
+    if(res < 0) {
+        av_unref_obj(nod);
+        return res;
+    }
+
     *resp = nod;
-    return res;
+    return 0;
 }
 
 static struct zcache *gz_getcache(ventry *base, struct gznode *nod)
@@ -376,11 +394,11 @@ static avssize_t gz_read(vfile *vf, char *buf, avsize_t nbyte)
     struct zcache *zc;
     struct cacheobj *cobj;
 
-    AV_LOCK(vf->mnt->avfs->lock);
+    AV_LOCK(fil->node->lock);
     zc = gz_getcache(vf->mnt->base, fil->node);
     cobj = fil->node->cache;
     av_ref_obj(cobj);
-    AV_UNLOCK(vf->mnt->avfs->lock);
+    AV_UNLOCK(fil->node->lock);
 
     res = av_zfile_pread(fil->zfil, zc, buf, nbyte, vf->ptr);
     if(res >= 0) {
@@ -390,10 +408,10 @@ static avssize_t gz_read(vfile *vf, char *buf, avsize_t nbyte)
         av_cacheobj_setsize(cobj, av_zcache_size(zc));
     }
     else {
-        AV_LOCK(vf->mnt->avfs->lock);
+        AV_LOCK(fil->node->lock);
         av_unref_obj(fil->node->cache);
         fil->node->cache = NULL;
-        AV_UNLOCK(vf->mnt->avfs->lock);
+        AV_UNLOCK(fil->node->lock);
     }
 
     av_unref_obj(zc);

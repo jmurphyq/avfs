@@ -56,6 +56,30 @@ static int bz_same(struct bznode *nod, struct avstat *stbuf)
         return 0;
 }
 
+static struct bznode *bz_do_get_node(ventry *ve, const char *key,
+                                     struct avstat *stbuf)
+{
+    static AV_LOCK_DECL(lock);
+    struct bznode *nod;
+
+    AV_LOCK(lock);
+    nod = (struct bznode *) av_filecache_get(key);
+    if(nod != NULL) {
+        if(!bz_same(nod, stbuf)) {
+            av_unref_obj(nod);
+            nod = NULL;
+        }
+    }
+    
+    if(nod == NULL) {
+        nod =  bz_new_node(ve, stbuf);
+        av_filecache_set(key, nod);
+    }
+    AV_UNLOCK(lock);
+
+    return nod;
+}
+
 static int bz_getnode(ventry *ve, vfile *base, struct bznode **resp)
 {
     int res;
@@ -71,21 +95,8 @@ static int bz_getnode(ventry *ve, vfile *base, struct bznode **resp)
     res = av_filecache_getkey(ve, &key);
     if(res < 0)
         return res;
-    
-    AV_LOCK(ve->mnt->avfs->lock);
-    nod = (struct bznode *) av_filecache_get(key);
-    if(nod != NULL) {
-        if(!bz_same(nod, &stbuf)) {
-            av_unref_obj(nod);
-            nod = NULL;
-        }
-    }
-    
-    if(nod == NULL) {
-        nod =  bz_new_node(ve, &stbuf);
-        av_filecache_set(key, nod);
-    }
-    AV_UNLOCK(ve->mnt->avfs->lock);
+
+    nod = bz_do_get_node(ve, key, &stbuf);
 
     av_free(key);
 

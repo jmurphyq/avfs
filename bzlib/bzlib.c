@@ -1,3 +1,11 @@
+/* IMPORTANT NOTE: This is not the original bzip2 distribution.
+
+   The modifications are copyright (C) 2001 Miklos Szeredi
+   (mszeredi@inf.bme.hu)
+
+   The modified software can be distributed under the same licence as
+   the original software (see bellow).
+*/
 
 /*-------------------------------------------------------------*/
 /*--- Library top-level functions.                          ---*/
@@ -539,9 +547,42 @@ int BZ_API(BZ2_bzDecompressInit)
    s->tt                    = NULL;
    s->currBlockNo           = 0;
    s->verbosity             = verbosity;
+   s->blockEndHandler       = NULL;
+   s->blockEndHandlerData   = NULL;
 
    return BZ_OK;
 }
+
+void BZ_API(BZ2_bzSetBlockEndHandler) 
+    (
+        bz_stream *strm,
+        void (*func) (void *data, bz_stream *strm, unsigned int bitsrem,
+                      unsigned int crc, unsigned int blocksize),
+        void *data
+        )
+{
+    DState* s;
+
+    s = strm->state;
+    s->blockEndHandler = func;
+    s->blockEndHandlerData = data;
+}
+
+void BZ_API(BZ2_bzRestoreBlockEnd) 
+    (
+        bz_stream *strm,
+        unsigned int bitsrem,
+        unsigned int crc )
+{
+    DState* s;
+
+    AssertH((bitsrem > 0 && bitsrem <= 8), 2828);
+    s = strm->state;
+    s->bsBuff = 'B' >> (8 - bitsrem);
+    s->bsLive = bitsrem;
+    s->calculatedCombinedCRC = crc;
+}
+
 
 
 /*---------------------------------------------------*/
@@ -818,13 +859,6 @@ int BZ_API(BZ2_bzDecompress) ( bz_stream *strm )
             if (s->verbosity >= 3) {
                VPrintf2 ( " {0x%x, 0x%x}", s->storedBlockCRC, 
                           s->calculatedBlockCRC );
-               VPrintf3 ( " in:%u/%u/%u",
-                          strm->total_in_hi32,
-                          strm->total_in_lo32,
-                          s->bsLive );
-               VPrintf2 ( "out:%u/%u", 
-                          strm->total_out_hi32,
-                          strm->total_out_lo32 );
             }
             if (s->verbosity >= 2) VPrintf0 ( "]" );
             if (s->calculatedBlockCRC != s->storedBlockCRC)
@@ -833,6 +867,9 @@ int BZ_API(BZ2_bzDecompress) ( bz_stream *strm )
                = (s->calculatedCombinedCRC << 1) | 
                     (s->calculatedCombinedCRC >> 31);
             s->calculatedCombinedCRC ^= s->calculatedBlockCRC;
+            if(s->blockEndHandler != NULL)
+                s->blockEndHandler(s->blockEndHandlerData, strm, s->bsLive,
+                                   s->calculatedCombinedCRC, s->blockSize100k);
             s->state = BZ_X_BLKHDR_1;
          } else {
             return BZ_OK;

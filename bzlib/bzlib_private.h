@@ -1,3 +1,11 @@
+/* IMPORTANT NOTE: This is not the original bzip2 distribution.
+
+   The modifications are copyright (C) 2001 Miklos Szeredi
+   (mszeredi@inf.bme.hu)
+
+   The modified software can be distributed under the same licence as
+   the original software (see bellow).
+*/
 
 /*-------------------------------------------------------------*/
 /*--- Private header file for the library.                  ---*/
@@ -434,6 +442,11 @@ typedef
       Int32    base   [BZ_N_GROUPS][BZ_MAX_ALPHA_SIZE];
       Int32    perm   [BZ_N_GROUPS][BZ_MAX_ALPHA_SIZE];
       Int32    minLens[BZ_N_GROUPS];
+
+      /* block end handler */
+      void (*blockEndHandler) (void *, bz_stream *, unsigned int, unsigned int,
+                               unsigned int);
+      void *   blockEndHandlerData;
 
       /* save area for scalars in the main decompress code */
       Int32    save_i;

@@ -34,6 +34,7 @@ struct bzindex {
     avoff_t offset;          /* The number of output bytes */
     avoff_t inbits;          /* The number of input bits */
     avuint crc;              /* The cumulative CRC up to this point */
+    avuint blocksize;        /* the blocksize in 100k (1 .. 9) */
 };
 
 struct bzcache {
@@ -72,11 +73,13 @@ static void bz_delete_stream(bz_stream *s)
 {
     int res;
 
-    res = BZ2_bzDecompressEnd(s);
-    if(res != BZ_OK)
-        av_log(AVLOG_ERROR, "BZFILE: decompress end error: %i", res);
-    
-    av_free(s);
+    if(s != NULL) {
+        res = BZ2_bzDecompressEnd(s);
+        if(res != BZ_OK)
+            av_log(AVLOG_ERROR, "BZFILE: decompress end error: %i", res);
+        
+        av_free(s);
+    }
 }
 
 static int bz_new_stream(bz_stream **resp)
@@ -88,6 +91,7 @@ static int bz_new_stream(bz_stream **resp)
     memset(s, 0, sizeof(*s));
     res = BZ2_bzDecompressInit(s, 0, 0);
     if(res != BZ_OK) {
+        *resp = NULL;
         av_log(AVLOG_ERROR, "BZFILE: decompress init error: %i", res);
         return -EIO;
     }
@@ -109,13 +113,12 @@ static void bzfile_scache_delete()
 static void bzfile_scache_save(int id, bz_stream *s)
 {
     static int regdestroy = 0;
-    
     if(!regdestroy) {
         regdestroy = 1;
         av_add_exithandler(bzfile_scache_delete);
     }
 
-    if(id == 0) {
+    if(id == 0 || s == NULL) {
         bz_delete_stream(s);
         return;
     }
@@ -137,7 +140,47 @@ static int bzfile_reset(struct bzfile *fil)
 
 static int bzfile_seek_index(struct bzfile *fil, struct bzindex *zi)
 {
-    /* FIXME: */
+    int res;
+    unsigned int bitsrem;
+    avoff_t total_in;
+    unsigned int val;
+    
+    /* FIXME: Is it a good idea to save the previous state or not? */
+    bzfile_scache_save(fil->id, fil->s);
+    res = bz_new_stream(&fil->s);
+    if(res < 0)
+        return res;
+
+    total_in = zi->inbits >> 8;
+    bitsrem = 8 - (zi->inbits & 0x7);
+    res = av_pread(fil->infile, fil->inbuf + 3, INBUFSIZE - 3, total_in);
+    if(res < 0)
+        return res;
+    
+    fil->s->next_in = fil->inbuf;
+    fil->s->avail_in = res + 3;
+
+    total_in -= 3;
+    fil->s->total_in_lo32 = total_in & 0xFFFFFFFF;
+    fil->s->total_in_hi32 = (total_in >> 32) & 0xFFFFFFFF;
+    fil->s->total_out_lo32 = zi->offset & 0xFFFFFFFF;
+    fil->s->total_out_hi32 = (zi->offset >> 32) & 0xFFFFFFFF;
+    
+    val = ('B' << 24) + ('Z' << 16) + ('h' << 8) + (zi->blocksize + '0');
+    val <<= bitsrem;
+    val |= fil->inbuf[3] & ((1 << bitsrem) - 1);
+
+    fil->inbuf[0] = (val >> 24) & 0xFF;
+    fil->inbuf[1] = (val >> 16) & 0xFF;
+    fil->inbuf[2] = (val >> 8) & 0xFF;
+    fil->inbuf[3] = val & 0xFF;
+
+    av_log(AVLOG_DEBUG, "BZREAD: restore: %lli %lli/%i %08x %i",
+           bz_total_out(fil->s), bz_total_in(fil->s), bitsrem ,
+           zi->crc, zi->blocksize);
+        
+    BZ2_bzRestoreBlockEnd(fil->s, bitsrem, zi->crc);
+
     return 0;
 }
 
@@ -170,6 +213,33 @@ static int bzfile_fill_inbuf(struct bzfile *fil)
     return 0;
 }
 
+static void bz_block_end(void *data, bz_stream *s, unsigned int bitsrem,
+                         unsigned int crc, unsigned int blocksize)
+{
+    struct bzcache *zc = (struct bzcache *) data;
+    struct bzindex *zi;
+    avoff_t offset = bz_total_out(s);
+    int i;
+
+    for(i = 0; i < zc->numindex; i++) {
+        if(zc->indexes[i].offset >= offset)
+            return;
+    }
+
+    zc->numindex ++;
+    zc->indexes = (struct bzindex *)
+        av_realloc(zc->indexes, sizeof(*zc->indexes) * zc->numindex);
+    
+    zi = &zc->indexes[i];
+    zi->offset = offset;
+    zi->inbits = (bz_total_in(s) << 8) - bitsrem;
+    zi->crc = crc;
+    zi->blocksize = blocksize;
+
+    av_log(AVLOG_DEBUG, "BZREAD: new block end: %lli %lli/%i %08x %i",
+           zi->offset, bz_total_in(s), bitsrem , zi->crc, zi->blocksize);
+}
+
 static int bzfile_decompress(struct bzfile *fil, struct bzcache *zc)
 {
     int res;
@@ -182,6 +252,7 @@ static int bzfile_decompress(struct bzfile *fil, struct bzcache *zc)
     }
     
     start = fil->s->next_out;
+    BZ2_bzSetBlockEndHandler(fil->s, bz_block_end, zc);
     res = BZ2_bzDecompress(fil->s);
     if(res == BZ_STREAM_END) {
         fil->iseof = 1;

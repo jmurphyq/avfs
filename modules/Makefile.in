@@ -15,12 +15,14 @@ modules = \
 	rsh.o        \
 	http.o       \
 	ftp.o        \
-	ugz.o        \
 	dav.o        \
-	uz.o         \
-	gz.o         \
+	ugz.o        \
 	ubz2.o       \
+	ugzip.o      \
+	ubzip2.o     \
+	gz.o         \
 	bz2.o        \
+	uz.o         \
 	uar.o        \
 	utar.o       \
 	urar.o       \

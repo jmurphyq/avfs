@@ -1,3 +1,11 @@
+/* IMPORTANT NOTE: This is not the original bzip2 distribution.
+
+   The modifications are copyright (C) 2001 Miklos Szeredi
+   (mszeredi@inf.bme.hu)
+
+   The modified software can be distributed under the same licence as
+   the original software (see bellow).
+*/
 
 /*-------------------------------------------------------------*/
 /*--- Public header file for the library.                   ---*/
@@ -163,7 +171,18 @@ BZ_EXTERN int BZ_API(BZ2_bzDecompressEnd) (
       bz_stream *strm 
    );
 
+BZ_EXTERN void BZ_API(BZ2_bzSetBlockEndHandler) (
+      bz_stream *strm,
+      void (*func) (void *data, bz_stream *strm, unsigned int bitsrem,
+                    unsigned int crc, unsigned int blocksize),
+      void *data
+   );
 
+BZ_EXTERN void BZ_API(BZ2_bzRestoreBlockEnd) (
+      bz_stream *strm,
+      unsigned int bitsrem,
+      unsigned int crc
+   );
 
 /*-- High(er) level library functions --*/
 

@@ -95,8 +95,10 @@ Creating an archive:
 
 NOTES:
 
-2) ('preload' only) Input and output redirection to/from virtual files
-   does not work. This is not a problem with the 'avfscoda' method.
+1) ('preload' only) Input and output redirection to/from virtual files
+   does not work, since, in the 'preload' method, virtual file
+   descriptors cannot be kept open over exec(). This is not a problem
+   with the 'avfscoda' method. 
 
    E.g. you can't do
            patch -p0 < patchfile.gz#
@@ -246,7 +248,7 @@ I hope AVFS will grow up to be a standard virtual file library, for which
 people can write handler modules (or plugins, if you like) for whatever
 they want. 
 
-If you thing AVFS is a good idea, and you have any comments or suggestions,
+If you think AVFS is a good idea, and you have any comments or suggestions,
 please send me an email about them.
 
 Have fun,

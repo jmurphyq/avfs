@@ -5,6 +5,11 @@
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
 */
+/* filebuf.c
+   
+   Implements buffered i/o with avfs fs functions. Includes facilities
+   for i/o multiplexing as well.
+*/
 
 #include "filebuf.h"
 

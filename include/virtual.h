@@ -14,6 +14,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+/*
+  some fs functions which still need virtual equivalents:
+  fchdir, statfs, sync
+*/
+
 int            virt_stat      (const char *path, struct stat *buf);
 int            virt_lstat     (const char *path, struct stat *buf);
 int            virt_access    (const char *path, int amode);

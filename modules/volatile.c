@@ -9,6 +9,8 @@
 #include "avfs.h"
 #include "version.h"
 
+/* a generic information node */
+/* analogous to the "on-disk inode" in a disk filesystem */
 struct volnode {
     struct avstat st;
     struct volentry *subdir;  /* only dir */
@@ -16,6 +18,8 @@ struct volnode {
     char *content;            /* only regular & symlink */
 };
 
+/* our ventry.data handle */
+/* represents a named reference to a volnode */
 struct volentry {
     char *name;
     struct volnode *node;
@@ -24,11 +28,13 @@ struct volentry {
     struct volentry *parent;
 };
 
+/* our vmount.data handle */
 struct volfs {
     struct volentry *root;
     struct avfs *avfs;
 };
 
+/* av_obj.destr for volentry */
 static void vol_unlink_entry(struct volentry *ent)
 {
     if(ent->prevp != NULL)
@@ -44,6 +50,7 @@ static void vol_unlink_entry(struct volentry *ent)
     ent->name = NULL;
 }
 
+/* constructor for volentry */
 static struct volentry *vol_new_entry(const char *name)
 {
     struct volentry *ent;
@@ -59,11 +66,13 @@ static struct volentry *vol_new_entry(const char *name)
     return ent;
 }
 
+/* av_obj.destr for volnode */
 static void vol_free_node(struct volnode *nod)
 {
     av_free(nod->content);
 }
 
+/* constructor for volnode */
 static struct volnode *vol_new_node(struct avstat *initstat)
 {
     struct volnode *nod;
@@ -78,6 +87,7 @@ static struct volnode *vol_new_node(struct avstat *initstat)
     return nod;
 }
 
+/* link ent to nod */
 static void vol_link_node(struct volentry *ent, struct volnode *nod)
 {
     av_ref_obj(ent);
@@ -121,6 +131,7 @@ static void vol_unlink_node(struct volentry *ent)
     av_unref_obj(ent);
 }
 
+/* called by vol_destroy */
 static void vol_free_tree(struct volentry *ent)
 {
     struct volnode *nod = ent->node;
@@ -171,6 +182,10 @@ static struct volfs *vol_ventry_volfs(ventry *ve)
     return (struct volfs *) ve->mnt->avfs->data;
 }
 
+/****************************************************************/
+/* start of avfs ops                                            */
+
+/* called by vol_do_lookup */
 static struct volentry *vol_get_entry(struct volentry *parent,
                                       const char *name)
 {
@@ -194,6 +209,9 @@ static struct volentry *vol_get_entry(struct volentry *parent,
 	    return ent;
 	}
 
+    /* lookup failed, so create a new entry and add it to the
+       directory list temporarily */
+ 
     ent = vol_new_entry(name);
     
     *entp = ent;
@@ -204,6 +222,7 @@ static struct volentry *vol_get_entry(struct volentry *parent,
     return ent;
 }
 
+/* called by vol_lookup */
 static int vol_do_lookup(struct volentry *parent, const char *name,
                          struct volentry **entp)
 {
@@ -224,6 +243,7 @@ static int vol_do_lookup(struct volentry *parent, const char *name,
     return 0;
 }
 
+/* called by vol_lookup */
 static struct volentry *vol_get_root(ventry *ve)
 {
     struct volfs *fs = vol_ventry_volfs(ve);
@@ -262,6 +282,7 @@ static int vol_lookup(ventry *ve, const char *name, void **newp)
         return 0;
 }
 
+/* called by vol_getpath */
 static char *vol_create_path(struct volentry *ent)
 {
     char *path;
@@ -301,6 +322,7 @@ static int vol_copyent(ventry *ve, void **resp)
     return 0;
 }
 
+/* called by vol_open and vol_truncate */
 static void vol_truncate_node(struct volnode *nod, avoff_t length)
 {
     nod->st.size = length;
@@ -308,6 +330,7 @@ static void vol_truncate_node(struct volnode *nod, avoff_t length)
     av_curr_time(&nod->st.mtime);
 }
 
+/* called by vol_open_check_type */
 static int vol_need_write(int flags)
 {
     if((flags & AVO_ACCMODE) == AVO_WRONLY ||
@@ -318,6 +341,7 @@ static int vol_need_write(int flags)
     return 0;
 }
 
+/* called by vol_open_check */
 static int vol_open_check_type(avmode_t mode, int flags)
 {
     if((flags & AVO_DIRECTORY) != 0 && !AV_ISDIR(mode))
@@ -345,6 +369,7 @@ static int vol_open_check_type(avmode_t mode, int flags)
     }
 }
 
+/* called by vol_open */
 static int vol_open_check(struct volnode *nod, int flags)
 {
     if(nod == NULL) {
@@ -365,10 +390,12 @@ static int vol_open(ventry *ve, int flags, avmode_t mode, void **resp)
     struct volfs *fs = vol_ventry_volfs(ve);
     struct volentry *ent = vol_ventry_volentry(ve);
     
+    /* check permissions */
     res = vol_open_check(ent->node, flags);
     if(res < 0)
         return res;
 
+    /* create the file if it doesn't exist yet */
     if(ent->node == NULL) {
         res = vol_make_node(fs, ent, mode | AV_IFREG);
         if(res < 0)
@@ -447,6 +474,7 @@ static int vol_truncate(vfile *vf, avoff_t length)
     return 0;
 }
 
+/* called by vol_nth_entry */
 static struct volnode *vol_special_entry(int n, struct volnode *nod,
                                       const char **namep)
 {
@@ -460,6 +488,7 @@ static struct volnode *vol_special_entry(int n, struct volnode *nod,
     }
 }
 
+/* called by vol_readdir */
 static struct volnode *vol_nth_entry(int n, struct volnode *nod,
                                      const char **namep)
 {
@@ -483,7 +512,6 @@ static struct volnode *vol_nth_entry(int n, struct volnode *nod,
     *namep = ent->name;
     return ent->node;
 }
-
 
 static int vol_readdir(vfile *vf, struct avdirent *buf)
 {
@@ -580,6 +608,7 @@ static int vol_unlink(ventry *ve)
     return 0;
 }
 
+/* called by vol_rmdir */
 static int vol_check_rmdir(struct volentry *ent)
 {
     struct volnode *nod = ent->node;
@@ -647,6 +676,7 @@ static int vol_mknod(ventry *ve, avmode_t mode, avdev_t dev)
     return 0;
 }
 
+/* called by vol_check_rename */
 static int vol_is_subdir(struct volentry *dir, struct volentry *basedir)
 {
     while(1) {
@@ -662,6 +692,7 @@ static int vol_is_subdir(struct volentry *dir, struct volentry *basedir)
     return 0;
 }
 
+/* called by vol_rename */
 static int vol_check_rename(struct volentry *ent, struct volentry *newent)
 {
     if(ent->node == NULL)
@@ -710,6 +741,7 @@ static int vol_rename(ventry *ve, ventry *newve)
     return 0;
 }
 
+/* called by vol_link */
 static int vol_check_link(struct volentry *ent, struct volentry *newent)
 {
     if(ent->node == NULL)
@@ -769,6 +801,9 @@ static void vol_destroy(struct avfs *avfs)
     av_unref_obj(fs->root);
     av_free(fs);
 }
+
+/* end of avfs ops                                              */
+/****************************************************************/
 
 extern int av_init_module_volatile(struct vmodule *module);
 

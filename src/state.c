@@ -11,7 +11,7 @@
 
 struct stentry {
     char *param;
-    struct entry *ent;
+    struct entry *ent; /* namespace.h */
 };
 
 struct stfile {

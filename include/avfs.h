@@ -265,7 +265,6 @@ typedef struct {
 #define AVLOG_DEBUG     004
 #define AVLOG_SYSCALL   010
 
-
 #define AVF_NEEDSLASH  (1 << 0)
 #define AVF_ONLYROOT   (1 << 1)
 #define AVF_NOLOCK     (1 << 2)
@@ -281,7 +280,7 @@ int        av_check_version(const char *modname, const char *name, int version,
 int        av_copy_ventry(ventry *ve, ventry **retp);
 void       av_free_ventry(ventry *ve);
 int        av_generate_path(ventry *ve, char **pathp);
-          
+
 avdev_t    av_mkdev(int major, int minor);
 void       av_splitdev(avdev_t dev, int *majorp, int *minorp);
 void       av_default_stat(struct avstat *stbuf);

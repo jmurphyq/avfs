@@ -6,7 +6,7 @@
     See the file COPYING.
 */
 
-#define NSF_NOCASE (1 << 0)
+#define NSF_NOCASE (1 << 0) /* for case-insensitive key comparisons */
 
 struct namespace;
 struct entry;

@@ -87,6 +87,7 @@ avssize_t av_file_read(vfile *vf, char *buf, avsize_t nbyte)
     return res;
 }
 
+/* read, specifying offset into file */
 avssize_t av_file_pread(vfile *vf, char *buf, avsize_t nbyte, avoff_t offset)
 {
     int res;
@@ -124,6 +125,7 @@ avssize_t av_file_write(vfile *vf, const char *buf, avsize_t nbyte)
     return res;
 }
 
+/* write, specifying offset into file */
 avssize_t av_file_pwrite(vfile *vf, const char *buf, avsize_t nbyte,
                          avoff_t offset)
 {

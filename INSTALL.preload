@@ -1,6 +1,6 @@
 At the moment the preload method only works for Solaris, but it should
-not be too hard to port it to other architecures supporting
-LD_PRELOAD. Unfortunately it is neary impossible to make the preload
+not be too hard to port it to other architectures supporting
+LD_PRELOAD. Unfortunately it is nearly impossible to make the preload
 method work under GLIBC versions >= 2.1, so don't expect this to be
 done.
 
@@ -88,9 +88,9 @@ export LD_PRELOAD=avfs_preload.so
 AVFS in login shells for all users:
 - - - - - - - - - - - - - - - - - -
 
-You could also have a look at the 'csh.login-begginning' and the
-'profile-begginning' sripts written by Egmont Koblinger in the 'misc'
-directory. You can insert these at the beggining of the /etc/csh.login
+You could also have a look at the 'csh.login-beginning' and the
+'profile-beginning' scripts written by Egmont Koblinger in the 'misc'
+directory. You can insert these at the beginning of the /etc/csh.login
 and /etc/profile scripts respectively.
 
 These scripts start a new shell with AVFS access on login, so you can

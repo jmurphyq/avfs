@@ -5,6 +5,13 @@
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
 */
+/* namespace.c
+
+   Provides functions for manipulating string-indexed tree-structured
+   'namespaces'.
+
+   For examples of use see archive.c, remote.c, state.c.
+*/
 
 #include "namespace.h"
 #include "avfs.h"

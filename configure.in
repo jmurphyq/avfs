@@ -142,7 +142,6 @@ moduledir='${libdir}/avfs'
 
 AC_SUBST(moduledir)
 
-
 dnl ================================================================
 dnl == Now comes the stuff that is only for preload               ==
 dnl ================================================================

@@ -99,9 +99,18 @@ static int get_logmask()
 static void filelog(const char *filename, const char *msg)
 {
     int fd;
+    int do_close;
     char buf[LOGMSG_SIZE + 128];
 
-    fd = open(filename, O_WRONLY | O_APPEND | O_CREAT, 0600);
+    if(strcmp(filename, "-") == 0) {
+        fd = STDERR_FILENO;
+        do_close = 0;
+    }
+    else {
+        fd = open(filename, O_WRONLY | O_APPEND | O_CREAT, 0600);
+        do_close = 1;
+    }
+    
     if(fd != -1) {
         struct avtm tmbuf;
 
@@ -111,7 +120,8 @@ static void filelog(const char *filename, const char *msg)
                 (unsigned long) getpid(), msg);
         
         write(fd, buf, strlen(buf));
-        close(fd);
+        if(do_close)
+            close(fd);
     }
 }
 
@@ -132,6 +142,8 @@ void av_log(int type, const char *format, ...)
     char buf[LOGMSG_SIZE+1];
     int logmask;
 
+    /* note get_logmask also causes initialization of 'logfile' and
+       'logmask' based on environment variables */
     logmask = get_logmask();
 
     if((type & logmask) == 0)

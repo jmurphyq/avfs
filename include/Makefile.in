@@ -11,4 +11,3 @@ INSTALL = @INSTALL@
 install: avfs.h
 	@../../mkinstalldirs $(i_includedir)
 	$(INSTALL) -m 644 avfs.h $(i_includedir)/avfs.h
-

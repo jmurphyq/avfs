@@ -31,7 +31,7 @@ int mount_coda(const char *dev, const char *dir, int devfd, int quiet)
     mntdata = &data;
 #endif
     type = "coda";
-    res = mount("coda", dir, type, MS_MGC_VAL, mntdata);
+    res = mount("coda", dir, type, MS_MGC_VAL | MS_NOSUID | MS_NODEV, mntdata);
     
     if(res == -1) {
 	if(!quiet) 
@@ -50,7 +50,7 @@ int mount_coda(const char *dev, const char *dir, int devfd, int quiet)
     ent.mnt_fsname = (char *) dev;
     ent.mnt_dir = (char *) dir;
     ent.mnt_type = (char *) type;
-    ent.mnt_opts = "rw";
+    ent.mnt_opts = "rw,nosuid,nodev";
     ent.mnt_freq = 0;
     ent.mnt_passno = 0;
     res = addmntent(fd, & ent);

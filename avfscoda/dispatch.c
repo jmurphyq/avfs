@@ -20,12 +20,9 @@
 #include <grp.h>
 #include <pwd.h>
 #include <sys/time.h>
-#include <ctype.h>
-#include <dirent.h>
-
 #include <sys/stat.h>
-
 #include <linux/coda.h>
+#include <syslog.h>
 
 
 /* Keep file lookups cached for at least this many seconds: */
@@ -87,6 +84,7 @@ struct openfile {
 
 struct fileinfo {
     struct fileinfo *subdir;
+    struct fileinfo *prev;
     struct fileinfo *next;
 	
     char *name;
@@ -95,7 +93,6 @@ struct fileinfo {
 	
     time_t lasttime;
     int use;
-    int iscwd;
 	
     struct openfile *ofs;
 };
@@ -107,8 +104,9 @@ static unsigned int nextunique = 0;
 static struct fileinfo rootinfo;
 static int needflush;
 
-static void log(const char *, ...) __attribute__ ((format (printf, 1, 2)));
+static struct fileinfo unused_files;
 
+static void log(const char *, ...) __attribute__ ((format (printf, 1, 2)));
 static void log(const char *fmt, ...)
 {
     if(debugmode) {
@@ -134,6 +132,23 @@ static void log_date()
     }
 }
 
+#define LOGMSG_SIZE 1024
+static void logerr(const char *, ...) __attribute__ ((format (printf, 1, 2)));
+static void logerr(const char *fmt, ...)
+{
+    char buf[LOGMSG_SIZE + 1];
+    va_list ap;
+
+    va_start(ap, fmt);
+    vsnprintf(buf, LOGMSG_SIZE, fmt, ap);
+    va_end(ap);
+
+    buf[LOGMSG_SIZE] = '\0';
+    syslog(LOG_INFO, buf);
+    log(buf);
+}
+
+
 static struct fileinfo *find_name(struct fileinfo *parentdir,
                                   const char *name)
 {
@@ -157,12 +172,6 @@ static struct fileinfo *remove_name(struct fileinfo *parentdir,
         fi = *fip;
         if(strcmp(fi->name, name) == 0) {
             *fip = fi->next;
-            free(fi->name);
-            free(fi->path);
-            fi->next = NULL;
-            fi->name = NULL;
-            fi->path = NULL;
-
             return fi;
         }
     }
@@ -178,11 +187,13 @@ static void add_name(struct fileinfo *fi, struct fileinfo *parentdir,
     fi->next = parentdir->subdir;
     parentdir->subdir = fi;
 		
+    free(fi->name);
+    free(fi->path);
+
     fi->name = strdup(name);
 	
     sprintf(buf, "%s/%s", parentdir->path, name);
     fi->path = strdup(buf);
-
 }
 
 static struct fileinfo *get_file(struct fileinfo *parentdir, const char *name)
@@ -196,7 +207,7 @@ static struct fileinfo *get_file(struct fileinfo *parentdir, const char *name)
 	
     fi = malloc(sizeof(*fi));
     if(fi == NULL) {
-        log("Out of memory");
+        logerr("Out of memory");
         clean_exit(1);
     }
     
@@ -216,7 +227,7 @@ static struct fileinfo *get_file(struct fileinfo *parentdir, const char *name)
     }
 
     if(i == FMAPSIZE) {
-        log("fmap full\n");
+        logerr("fmap full\n");
         clean_exit(1);
     }
 
@@ -228,31 +239,70 @@ static struct fileinfo *get_file(struct fileinfo *parentdir, const char *name)
     fi->lasttime = time(NULL);
     fi->ofs = NULL;
     fi->use = 0;
-    fi->iscwd = 0;
+    fi->path = NULL;
+    fi->name = NULL;
 
     add_name(fi, parentdir, name);    
 	
     return fi;
 }
 
+
 static void put_file(struct fileinfo *fi)
 {
-    unsigned int index;
-    if(fi->name != NULL || fi->ofs != NULL)
-        return;
+    struct fileinfo *prev;
+    struct fileinfo *next;
 
-    if(fi->subdir != NULL) {
-        log("Deleted nonepty dir\n");
-        return;
+    log("Put fid: 0x%x\n", fi->unique);
+
+    while(fi->subdir != NULL) {
+        struct fileinfo *tmpfi = fi->subdir;
+        fi->subdir = tmpfi->next;
+        put_file(tmpfi);
     }
 
+    prev = unused_files.prev;
+    next = &unused_files;
+    prev->next = fi;
+    next->prev = fi;
+    fi->next = next;
+    fi->prev = prev;
+
+    free(fi->name);
+    fi->name = NULL;
+}
+
+static void delete_file(struct fileinfo *fi)
+{
+    unsigned int index;
+    struct fileinfo *prev = fi->prev;
+    struct fileinfo *next = fi->next;
+
     log("Delete fid: 0x%x\n", fi->unique);
+
+    prev->next = next;
+    next->prev = prev;
 
     index = fi->unique % FMAPSIZE;
     fmap[index] = NULL;
 
+    free(fi->name);
+    free(fi->path);
     free(fi);
     numfids --;
+}
+
+static struct fileinfo *get_info(unsigned int unique)
+{
+    struct fileinfo *fi;
+    unsigned int index = (unique % FMAPSIZE);
+
+    fi = fmap[index];
+    if(fi == NULL || fi->unique != unique) {
+        logerr("Deleted Fid: 0x%x\n", unique);
+        return NULL;
+    }
+    return fi;
 }
 
 static struct fileinfo *look_info(ViceFid *id)
@@ -260,7 +310,7 @@ static struct fileinfo *look_info(ViceFid *id)
     struct fileinfo *fi;
 	
     if ((id->Volume != 0) || (id->Vnode != 0)) {
-        log("Bad handle passed %lx/%lx/%lx\n", 
+        logerr("Bad handle passed %lx/%lx/%lx\n", 
             id->Volume, id->Vnode, id->Unique );
         clean_exit(1);
     }
@@ -270,20 +320,9 @@ static struct fileinfo *look_info(ViceFid *id)
     if(id->Unique == 0) 
         return &rootinfo;
     else {
-        unsigned int index = (id->Unique % FMAPSIZE);
-        fi = fmap[index];
-        if(fi == NULL || fi->unique != id->Unique) {
-            if(fi == NULL)
-                log("Invalid Fid; 0x%x (deleted)\n",
-                    (unsigned int) id->Unique);
-            else
-                log("Invalid Fid: 0x%x (0x%x)\n", (unsigned int) id->Unique,
-                    (unsigned int) fi->unique);
-
-            return NULL;
-        }
-
-        fi->lasttime = time(NULL);
+        fi = get_info(id->Unique);
+        if(fi != NULL)
+            fi->lasttime = time(NULL);
 		
         return fi;
     }
@@ -338,7 +377,7 @@ static void send_to_kernel(union outputArgs *rep, int size)
     log("%i bytes\n",  size);
     ret = write(codafd, rep, size);
     if(ret == -1 || ret != size) {
-        log("Error writing to device: %s\n", strerror(errno));
+        logerr("Error writing to device: %s\n", strerror(errno));
     }
 }
 
@@ -358,8 +397,6 @@ static struct fileinfo *create_file(const char *filename, ViceFid *parentid,
 
     return fi;
 }
-
-
 
 static void purge_file(struct fileinfo *fi)
 {
@@ -430,94 +467,34 @@ static void clean_up_dir(struct fileinfo *dir, time_t oldtime)
         if(fi->subdir != NULL) 
             clean_up_dir(fi, oldtime);
 
-        if(!oldtime || fi->lasttime < oldtime) {
-            if(fi->subdir != NULL)
-                log("* %s not empty\n", fi->path);
-            else if(fi->use != 0)
-                log("* %s still in use (%i)\n", fi->path, fi->use);
-            else if(fi->iscwd)
-                log("* %s is a cwd\n", fi->path);
-            else {
-                *fip = fi->next;
-                
-                free(fi->name);
-                free(fi->path);
-                fi->next = NULL;
-                fi->name = NULL;
-                fi->path = NULL;
-                
-                purge_file(fi);
-                put_file(fi);
-                fi = NULL;
-            }
+        if((!oldtime || fi->lasttime < oldtime) && fi->subdir == NULL &&
+           fi->use == 0) {
+            *fip = fi->next;
+            purge_file(fi);
+            put_file(fi);
         }
-        if(fi != NULL) {
-            fi->iscwd = 0;
-            fip = &(*fip)->next;
-        }
+        else
+            fip = &fi->next;        
     }
 }
 
-static struct fileinfo *resolve_path_info(char *path)
+static void clean_up_unused()
 {
-    struct fileinfo *fi = &rootinfo;
-    char c;
-    
-    do {
-        unsigned int seglen;
-        for(seglen = 0; path[seglen] != '\0' && path[seglen] != '/'; seglen++);
-        c = path[seglen];
-        path[seglen] = '\0';
-        fi = find_name(fi, path);
-        if(fi == NULL)
-            return NULL;
-
-        path += seglen + 1;
-    } while(c != '\0');
-
-    return fi;
-}
-
-
-static void find_cwds()
-{
-    DIR *dp;
-    struct dirent *ent;
-    char pathbuf[256];
-    char linkbuf[4096];
-    int res;
-    unsigned int codadirlen = strlen(codadir);
     struct fileinfo *fi;
 
-    dp = opendir("/proc");
-    if(dp == NULL)
-        return;
+    for(fi = unused_files.next; fi != &unused_files;) {
+        struct fileinfo *nextfi = fi->next;
+        if(fi->use == 0)
+            delete_file(fi);
 
-    while((ent = readdir(dp)) != NULL) {
-        if(!isdigit(ent->d_name[0]))
-            continue;
-        
-        sprintf(pathbuf, "/proc/%s/cwd", ent->d_name);
-        res = readlink(pathbuf, linkbuf, 4095);
-        if(res == -1)
-            continue;
-
-        linkbuf[res] = '\0';
-        if(res <= codadirlen + 1 ||
-           strncmp(linkbuf, codadir, codadirlen) != 0 ||
-           linkbuf[codadirlen] != '/')
-            continue;
-
-        fi = resolve_path_info(linkbuf + codadirlen + 1);
-        if(fi != NULL) 
-            fi->iscwd = 1;
+        fi = nextfi;
     }
-    closedir(dp);
 }
+
 
 static void clean_up_names()
 {
-    find_cwds();
+    clean_up_unused();
 
     if(numfids > FMAPSIZE / 2)
         clean_up_dir(&rootinfo, 0);
@@ -617,13 +594,7 @@ static void reply(union inputArgs *req, int res)
 static void check_servers()
 {
     int i;
-	
-    checknum ++;
-    if(numfids > MAXFILES && checknum > CHECKNUM) {
-        clean_up_names();
-        checknum = 0;
-    }
-	
+		
     for(i = 0; i < MAXUSERS; i++) {
         if(currusers[i].serverpid == 0) {
             /* FIXME: reply to the pending messages */
@@ -674,17 +645,17 @@ static void process_answer(struct userinfo *user)
 
     numread = read(user->pipin, &insize, sizeof(insize));
     if(numread == -1) {
-        log("Error reading from device: %s\n", strerror(errno));
+        logerr("Error reading from device: %s\n", strerror(errno));
         return;
     }
     if(insize > MAXMSGLEN || insize <= 0) {
-        log("Error: illegal size");
+        logerr("Error: illegal size");
         return;
     }
 	
     numread = read(user->pipin, obuf, insize);
     if(numread == -1) {
-        log("Error reading from child [%i/%i]: %s\n", 
+        logerr("Error reading from child [%i/%i]: %s\n", 
             user->uid, user->gid, strerror(errno));
         return;
     }
@@ -701,7 +672,7 @@ static void process_answer(struct userinfo *user)
     op = *opp;
 	
     if(op == NULL)
-        log("Operation not found!!!!\n");
+        logerr("Operation not found!!!!\n");
     else {
         log("Found operation: %li\n", op->req->ih.unique);
 		
@@ -717,7 +688,7 @@ static void process_answer(struct userinfo *user)
                     if(of->pid == op->req->ih.pid) break;
 				
                 if(of == NULL) {
-                    log("Output file not found!!!\n");
+                    logerr("Output file not found!!!\n");
                     reply(op->req, ENOENT);
                 }
                 else {
@@ -737,7 +708,7 @@ static void process_answer(struct userinfo *user)
             of = *ofp;
 
             if(of == NULL) {
-                log("Output file not found!!!\n");
+                logerr("Output file not found!!!\n");
                 reply(op->req, ENOENT);
             }
             else
@@ -785,6 +756,8 @@ static void process_answer(struct userinfo *user)
                 filename = (char *) op->req + op->req->coda_remove.name;
                 fi = look_info(&op->req->coda_remove.VFid);
                 fi = remove_name(fi, filename);
+                if(fi != NULL)
+                    put_file(fi);
             }
             send_to_kernel(rep, numread);
             break;
@@ -794,6 +767,8 @@ static void process_answer(struct userinfo *user)
                 filename = (char *) op->req + op->req->coda_rmdir.name;
                 fi = look_info(&op->req->coda_rmdir.VFid);
                 fi = remove_name(fi, filename);
+                if(fi != NULL)
+                    put_file(fi);
             }
             send_to_kernel(rep, numread);
             break;
@@ -806,6 +781,8 @@ static void process_answer(struct userinfo *user)
                 newname = (char *) op->req + op->req->coda_rename.destname;
                 newfi = look_info(&op->req->coda_rename.destFid);
                 fi = remove_name(newfi, newname);
+                if(fi != NULL)
+                    put_file(fi);
 
                 filename = (char *) op->req + op->req->coda_rename.srcname;
                 fi = look_info(&op->req->coda_rename.sourceFid);
@@ -859,7 +836,7 @@ static void process_child_answer()
     ret = select(maxfd+1, &rfds, NULL, NULL, NULL);
     if(ret == -1) {
         if(errno != EINTR) 
-            log("Select failed: %s\n", strerror(errno));
+            logerr("Select failed: %s\n", strerror(errno));
     }
     else {
         for(i = 0; i < MAXUSERS; i++) {
@@ -942,7 +919,7 @@ static int new_child(struct userinfo *user, uid_t uid, gid_t gid)
     int num;
 	
     if(pipe(pipout) == -1) {
-        log("Could not open pipe for child: %s\n", strerror(errno));
+        logerr("Could not open pipe for child: %s\n", strerror(errno));
         return -1;
     }
     if(pipe(pipin) == -1) {
@@ -957,7 +934,7 @@ static int new_child(struct userinfo *user, uid_t uid, gid_t gid)
         close(pipout[1]);
         close(pipin[0]);
         close(pipin[1]);
-        log("Could not fork child: %s\n", strerror(errno));
+        logerr("Could not fork child: %s\n", strerror(errno));
         return -1;
     }
 	
@@ -1138,7 +1115,7 @@ static void send_to_child(union inputArgs *req, int reqsize, char *path1,
 	
     if(res != msgsize) {
         free(op);
-        log("Error writing to child: %s\n", strerror(errno));
+        logerr("Error writing to child: %s\n", strerror(errno));
 		
         reply(req, errno);
     }
@@ -1223,7 +1200,7 @@ void user_child(pid_t pid)
         }
     }
 	
-    log("Unknown child %i exited\n", pid);
+    logerr("Unknown child %i exited\n", pid);
 }
 
 static void process_kernel_req()
@@ -1242,7 +1219,7 @@ static void process_kernel_req()
 	
     numread = read(codafd, ibuf, MAXMSGLEN);
     if(numread == -1) {
-        log("Error reading from device: %s\n", strerror(errno));
+        logerr("Error reading from device: %s\n", strerror(errno));
         clean_exit(1);
     }
 	
@@ -1318,7 +1295,7 @@ static void process_kernel_req()
             fd = mkstemp(tmpname);
 			
             if(fd == -1) {
-                log("Could not make temporary file: %s\n", strerror(errno));
+                logerr("Could not make temporary file: %s\n", strerror(errno));
                 reply(req, ENFILE);
             }
             else {
@@ -1364,7 +1341,7 @@ static void process_kernel_req()
         of = *ofp;
 		
         if(of == NULL) {
-            log("File not found\n");
+            logerr("File not found\n");
             reply(req, ENOENT);
         }
         else {
@@ -1511,7 +1488,7 @@ static void process_kernel_req()
         op = *opp;
 		
         if(op == NULL) 
-            log("Operation not found!!!!\n");
+            logerr("Operation not found!!!!\n");
         else {
             /* FIXME: Inform the child that the operation
                is interrupted */
@@ -1537,19 +1514,27 @@ static void process()
     int ret;
     int maxfd;
     int i;
-	
+
     rootinfo.subdir = NULL;
     rootinfo.next = NULL; /* never used */
     rootinfo.name = NULL; /* never used */
     rootinfo.path = "/";
+
+    unused_files.prev = &unused_files;
+    unused_files.next = &unused_files;
 	
     while(1) {
         struct timeval timeout;
 
         check_servers();
+
+        checknum ++;
+        if(numfids > MAXFILES && checknum > CHECKNUM) {
+            clean_up_names();
+            checknum = 0;
+	}
 		
-        FD_ZERO(&rfds);
-		
+        FD_ZERO(&rfds);		
         FD_SET(codafd, &rfds);
         maxfd = codafd;
 		
@@ -1569,7 +1554,7 @@ static void process()
         if(ret == -1) {
             if(errno == EINTR)
                 continue;
-            log("Select failed: %s\n", strerror(errno));
+            logerr("Select failed: %s\n", strerror(errno));
             continue;
         }
         
@@ -1601,6 +1586,8 @@ static void process()
 void run(int cfs, const char *dir, int dm)
 {
     int i;
+
+    openlog("avfscoda", LOG_CONS, LOG_USER);
 	
     codafd = cfs;
     codadir = dir;

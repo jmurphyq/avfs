@@ -3,3 +3,4 @@
 *.ko
 *.mod.c
 *.s
+redir2mount

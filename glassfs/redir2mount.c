@@ -21,10 +21,18 @@ int main(int argc, char *argv[])
     fprintf(fp, "%u", getpid());
     fclose(fp);
     
-    res = mount(argv[1], argv[2], "none", MS_BIND, NULL);
-    if(res == -1) {
-        perror("mount failed");
-        exit(1);
+    if (argv[1][0] == '-') {
+        res = umount2(argv[2], 0);
+        if (res == -1) {
+            perror("umount failed");
+            exit(1);
+        }
+    } else {
+        res = mount(argv[1], argv[2], "none", MS_BIND, NULL);
+        if(res == -1) {
+            perror("mount failed");
+            exit(1);
+        }
     }
     return 0;
 }

@@ -1,3 +1,4 @@
+#include <linux/modversions.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/unistd.h>
@@ -9,7 +10,9 @@
 #include <linux/coda_psdev.h>
 #include <linux/version.h>
 
+#ifdef MODULE_LICENSE
 MODULE_LICENSE("GPL");
+#endif
 
 #if 0
 #define DEB(X) printk X

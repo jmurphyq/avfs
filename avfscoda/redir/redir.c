@@ -787,7 +787,11 @@ asmlinkage int real_execve(struct pt_regs *regs)
 		goto out;
 	error = do_execve(filename, (char **) regs->ecx, (char **) regs->edx, regs);
 	if (error == 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
+		current->flags &= ~PF_DTRACE;
+#else
 		current->ptrace &= ~PT_DTRACE;
+#endif
 	putname(filename);
 
 out:
@@ -826,7 +830,11 @@ asmlinkage int virt_execve(struct pt_regs regs)
 	ret = do_execve(newfilename, (char **) regs.ecx, (char **) regs.edx,
 			&regs);
 	if (ret == 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
+		current->flags &= ~PF_DTRACE;
+#else
 		current->ptrace &= ~PT_DTRACE;
+#endif
 	kfree(newfilename);
 
 	DEB((KERN_INFO "EXECVE: result %i\n", ret));

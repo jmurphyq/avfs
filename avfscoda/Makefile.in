@@ -8,7 +8,7 @@ top_srcdir = @top_srcdir@
 i_sbindir = $(install_root)$(sbindir)
 
 CC = @CC@
-CFLAGS = -I$(top_srcdir)/include -I@KERNINCLUDE@ @CFLAGS@ @CPPFLAGS@
+CFLAGS = -I$(top_srcdir)/include -DCODAINCLUDE=\"@KERNINCLUDE@/linux/coda.h\" @CFLAGS@ @CPPFLAGS@
 LDFLAGS = @LDFLAGS@ @LIBS@
 
 INSTALL = @INSTALL@

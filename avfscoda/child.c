@@ -19,7 +19,8 @@
 
 #include <sys/stat.h>
 
-#include <linux/coda.h>
+/* #include "KERNINCLUDE/linux/coda.h" */
+#include CODAINCLUDE
 
 #define MULTITHREADED 1
 

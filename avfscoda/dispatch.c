@@ -21,9 +21,10 @@
 #include <pwd.h>
 #include <sys/time.h>
 #include <sys/stat.h>
-#include <linux/coda.h>
 #include <syslog.h>
 
+/* #include "KERNINCLUDE/linux/coda.h" */
+#include CODAINCLUDE
 
 /* Keep file lookups cached for at least this many seconds: */
 #define KEEPTIME 600

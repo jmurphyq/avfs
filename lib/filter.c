@@ -19,11 +19,11 @@ struct filtid {
 };
 
 struct filtmod {
-    avsize_t size;
+    avoff_t size;
     avtimestruc_t mtime;
 };
 
-struct filtfile {
+struct filtnode {
     avmutex lock;
     vfile *vf;
     struct sfile *sf;
@@ -31,6 +31,11 @@ struct filtfile {
     struct filtmod mod;
     avino_t ino;
     unsigned int writers;
+};
+
+struct filtfile {
+    struct filtnode *nod;
+    int iswrite;
 };
 
 static char **filt_copy_prog(const char *prog[])
@@ -88,11 +93,11 @@ static int filt_lookup(ventry *ve, const char *name, void **newp)
     return 0;
 }
 
-static void filtfile_free(struct filtfile *ff)
+static void filtnode_free(struct filtnode *nod)
 {
-    av_unref_obj(ff->sf);
-    av_close(ff->vf);
-    AV_FREELOCK(ff->lock)
+    av_unref_obj(nod->sf);
+    av_close(nod->vf);
+    AV_FREELOCK(nod->lock)
 }
 
 
@@ -126,49 +131,45 @@ static void filt_mod_set(struct filtmod *mod, struct avstat *stbuf)
 }
 
 
-static struct filtfile *filt_newfile(ventry *ve, vfile *vf, const char *key,
-                                     struct avstat *buf, int flags)
+static struct filtnode *filt_newnode(ventry *ve, vfile *vf, const char *key,
+                                     struct avstat *buf)
 {
-    struct filtfile *ff;
+    struct filtnode *nod;
     struct filtdata *filtdat = (struct filtdata *) ve->mnt->avfs->data;
     struct cacheobj *cobj;
 
-    AV_NEW_OBJ(ff, filtfile_free);
-    AV_INITLOCK(ff->lock);
-    ff->vf = vf;
-    ff->sf = av_filtprog_new(vf, filtdat);
-    filt_id_set(&ff->id, buf);
-    filt_mod_set(&ff->mod, buf);
-    ff->ino = av_new_ino(ve->mnt->avfs);
-    ff->writers = 0;
+    AV_NEW_OBJ(nod, filtnode_free);
+    AV_INITLOCK(nod->lock);
+    nod->vf = vf;
+    nod->sf = av_filtprog_new(vf, filtdat);
+    filt_id_set(&nod->id, buf);
+    filt_mod_set(&nod->mod, buf);
+    nod->ino = av_new_ino(ve->mnt->avfs);
+    nod->writers = 0;
 
-    if((flags & AVO_TRUNC) != 0)
-       av_sfile_truncate(ff->sf, 0);
+    AV_LOCK(nod->lock);
 
-    if(AV_ISWRITE(flags))
-        ff->writers ++;
-
-    cobj = av_cacheobj_new(ff, key);
+    cobj = av_cacheobj_new(nod, key);
     av_filecache_set(key, cobj);
     av_unref_obj(cobj);
 
-    return ff;
+    return nod;
 }
 
-static int filt_validate_file(struct filtfile *ff, ventry *ve, vfile *vf,
-                              struct avstat *buf,  int flags)
+static int filt_validate_file(struct filtnode *nod, ventry *ve, vfile *vf,
+                              struct avstat *buf, int iswrite)
 {
-    if(ff->writers == 0 && !filt_unmodif_file(&ff->mod, buf)) {
+    if(nod->writers == 0 && !filt_unmodif_file(&nod->mod, buf)) {
         struct filtdata *filtdat = (struct filtdata *) ve->mnt->avfs->data;
         
-        av_unref_obj(ff->sf);
-        av_close(ff->vf);
-        ff->sf = av_filtprog_new(vf, filtdat);
-        ff->vf = vf;
-        filt_mod_set(&ff->mod, buf);
+        av_unref_obj(nod->sf);
+        av_close(nod->vf);
+        nod->sf = av_filtprog_new(vf, filtdat);
+        nod->vf = vf;
+        filt_mod_set(&nod->mod, buf);
     }
-    else if(ff->writers == 0 && AV_ISWRITE(flags)) {
-        avoff_t pos = av_lseek(ff->vf, 0, AVSEEK_CUR);
+    else if(nod->writers == 0 && iswrite) {
+        avoff_t pos = av_lseek(nod->vf, 0, AVSEEK_CUR);
 
         if(pos > 0)
             pos = av_lseek(vf, pos, AVSEEK_SET);
@@ -176,27 +177,21 @@ static int filt_validate_file(struct filtfile *ff, ventry *ve, vfile *vf,
         if(pos < 0)
             return pos;
         
-        av_filtprog_change(ff->sf, vf);
-        av_close(ff->vf);
-        ff->vf = vf;
+        av_filtprog_change(nod->sf, vf);
+        av_close(nod->vf);
+        nod->vf = vf;
     }
     else
         av_close(vf);
 
-    if((flags & AVO_TRUNC) != 0)
-       av_sfile_truncate(ff->sf, 0);
-
-    if(AV_ISWRITE(flags))
-        ff->writers ++;
-
     return 0;
 }
 
-static int filt_getfile(ventry *ve, vfile *vf, int flags, const char *key,
-                        struct filtfile **resp)
+static int filt_getfile(struct filtfile *ff, ventry *ve, vfile *vf,
+                        const char *key)
 {
     int res;
-    struct filtfile *ff;
+    struct filtnode *nod;
     struct cacheobj *cobj;
     struct avstat buf;
     int attrmask = AVA_INO | AVA_DEV | AVA_SIZE | AVA_MTIME;
@@ -207,92 +202,144 @@ static int filt_getfile(ventry *ve, vfile *vf, int flags, const char *key,
 
     cobj = (struct cacheobj *) av_filecache_get(key);
     if(cobj == NULL)
-        ff = NULL;
+        nod = NULL;
     else {
-        ff = (struct filtfile *) av_cacheobj_get(cobj);
+        nod = (struct filtnode *) av_cacheobj_get(cobj);
         av_unref_obj(cobj);
     }
 
-    if(ff == NULL || !filt_same_file(&ff->id, &buf)) {
-        ff = filt_newfile(ve, vf, key, &buf, flags);
-        *resp = ff;
+    if(nod == NULL || !filt_same_file(&nod->id, &buf)) {
+        ff->nod = filt_newnode(ve, vf, key, &buf);
         return 0;
     }
 
-    AV_LOCK(ff->lock);
-    res = filt_validate_file(ff, ve, vf, &buf, flags);
-    AV_UNLOCK(ff->lock);
-    if(res < 0)
+    AV_LOCK(nod->lock);
+    res = filt_validate_file(nod, ve, vf, &buf, ff->iswrite);
+    if(res < 0) {
+        AV_UNLOCK(nod->lock);
         return res;
+    }
 
-    *resp = ff;
+    ff->nod = nod;
     return 0;
 }
 
-static int filt_baseflags(int flags)
+static int filt_get_baseflags(int flags, int *maybecrp)
 {
-    int baseflags = 0;
-    int accmode = flags & AVO_ACCMODE;
+    int baseflags;
+    int maybecreat = 0;
 
-    if(accmode == AVO_NOPERM)
-        baseflags = AVO_RDONLY;
-    else if(accmode == AVO_WRONLY)
+    if(AV_ISWRITE(flags))
         baseflags = AVO_RDWR;
     else
-        baseflags = accmode;
-        
-    if((flags & AVO_CREAT) != 0)
-        baseflags |= AVO_CREAT;
-    if((flags & AVO_EXCL) != 0)
-        baseflags |= AVO_EXCL;
+        baseflags = AVO_RDONLY;
+    
     if((flags & AVO_TRUNC) != 0)
         baseflags |= AVO_TRUNC;
 
+    if((flags & AVO_CREAT) != 0) {
+        if(flags & AVO_EXCL)
+            baseflags = AVO_RDWR | AVO_CREAT | AVO_EXCL | AVO_TRUNC;
+        else if(flags & AVO_TRUNC)
+            baseflags = AVO_RDWR | AVO_CREAT | AVO_TRUNC;
+        else
+            maybecreat = 1;
+    }
+
+    *maybecrp = maybecreat;
     return baseflags;
 }
 
-
-static int filt_open(ventry *ve, int flags, avmode_t mode, void **resp)
+static int filt_open_base(ventry *ve, int flags, avmode_t mode, vfile **vfp,
+                          int *bfresp)
 {
-    struct filtfile *ff;
-    vfile *vf;
     int res;
+    int maybecreat;
     int baseflags;
-    char *key;
-    int maybecreat = 0;
 
-    if(flags & AVO_DIRECTORY)
-        return -ENOTDIR;
+    baseflags = filt_get_baseflags(flags, &maybecreat);
 
-    baseflags = filt_baseflags(flags);
-    if((flags & AVO_CREAT) != 0) {
-        if((flags & (AVO_EXCL | AVO_TRUNC)) == 0) {
-            baseflags &= ~AVO_CREAT;
-            maybecreat = 1;
-        }
-        else
-            flags |= AVO_TRUNC;
-    }
-    res = av_open(ve->mnt->base, baseflags, mode, &vf);
+    res = av_open(ve->mnt->base, baseflags, mode, vfp);
     if(res == -ENOENT && maybecreat) {
-        baseflags |= AVO_CREAT;
-        flags |= AVO_TRUNC;
-        res = av_open(ve->mnt->base, baseflags, mode, &vf);
+        baseflags = AVO_RDWR | AVO_CREAT | AVO_TRUNC;
+        res = av_open(ve->mnt->base, baseflags, mode, vfp);
     }
+
+    *bfresp = baseflags;
+    return res;
+}
+
+static int filt_getkey(ventry *ve, char **resp)
+{
+    int res;
+    char *key;
+
+    res = av_generate_path(ve->mnt->base, &key);
     if(res < 0)
         return res;
 
-    res = av_generate_path(ve->mnt->base, &key);
+    key = av_stradd(key, AVFS_SEP_STR, ve->mnt->avfs->name, NULL);
+
+    *resp = key;
+    return 0;
+}
+
+static int filt_open_file(struct filtfile *ff, ventry *ve, int flags,
+                          avmode_t mode)
+{
+    int res;
+    vfile *vf;
+    char *key;
+    int baseflags;
+    
+    res = filt_open_base(ve, flags, mode, &vf, &baseflags);
+    if(res < 0)
+        return res;
+
+    res = filt_getkey(ve, &key);
     if(res == 0) {
-        key = av_stradd(key, AVFS_SEP_STR, ve->mnt->avfs->name, NULL);
-        res = filt_getfile(ve, vf, flags, key, &ff);
+        if((baseflags & AVO_ACCMODE) == AVO_RDWR)
+            ff->iswrite = 1;
+
+        res = filt_getfile(ff, ve, vf, key);
+        if(res == 0) {
+            if((baseflags & AVO_TRUNC) != 0)
+                av_sfile_truncate(ff->nod->sf, 0);
+
+            if(ff->iswrite)
+                ff->nod->writers ++;
+
+            AV_UNLOCK(ff->nod->lock);
+        }
+
         av_free(key);
     }
     if(res < 0) {
         av_close(vf);
         return res;
     }
+
+    return 0;
+}
+
+static int filt_open(ventry *ve, int flags, avmode_t mode, void **resp)
+{
+    int res;
+    struct filtfile *ff;
     
+    if(flags & AVO_DIRECTORY)
+        return -ENOTDIR;
+
+    AV_NEW(ff);
+    ff->nod = NULL;
+    ff->iswrite = 0;
+
+    res = filt_open_file(ff, ve, flags, mode);
+    if(res < 0) {
+        av_free(ff);
+        return res;
+    }
+
     *resp = ff;
 
     return 0;
@@ -302,10 +349,11 @@ static avssize_t filt_read(vfile *vf, char *buf, avsize_t nbyte)
 {
     avssize_t res;
     struct filtfile *ff = (struct filtfile *) vf->data;
+    struct filtnode *nod = ff->nod;
     
-    AV_LOCK(ff->lock);
-    res = av_sfile_pread(ff->sf, buf, nbyte, vf->ptr);
-    AV_UNLOCK(ff->lock);
+    AV_LOCK(nod->lock);
+    res = av_sfile_pread(nod->sf, buf, nbyte, vf->ptr);
+    AV_UNLOCK(nod->lock);
 
     if(res > 0)
         vf->ptr += res;
@@ -317,23 +365,24 @@ static avssize_t filt_write(vfile *vf, const char *buf, avsize_t nbyte)
 {
     avssize_t res;
     struct filtfile *ff = (struct filtfile *) vf->data;
+    struct filtnode *nod = ff->nod;
     
-    AV_LOCK(ff->lock);
+    AV_LOCK(nod->lock);
     if((vf->flags & AVO_APPEND) != 0) {
         avoff_t pos;
 
-        pos = av_sfile_size(ff->sf);
+        pos = av_sfile_size(nod->sf);
         if(pos < 0) {
-            AV_UNLOCK(ff->lock);
+            AV_UNLOCK(nod->lock);
             return pos;
         }
         
         vf->ptr = pos;
     }
-    res = av_sfile_pwrite(ff->sf, buf, nbyte, vf->ptr);
+    res = av_sfile_pwrite(nod->sf, buf, nbyte, vf->ptr);
     if(res >= 0)
-        av_curr_time(&ff->mod.mtime);
-    AV_UNLOCK(ff->lock);
+        av_curr_time(&nod->mod.mtime);
+    AV_UNLOCK(nod->lock);
         
     if(res > 0)
         vf->ptr += res;
@@ -345,33 +394,61 @@ static int filt_truncate(vfile *vf, avoff_t length)
 {
     int res;
     struct filtfile *ff = (struct filtfile *) vf->data;
+    struct filtnode *nod = ff->nod;
     
-    AV_LOCK(ff->lock);
-    res = av_sfile_truncate(ff->sf, length);
-    AV_UNLOCK(ff->lock);
+    AV_LOCK(nod->lock);
+    res = av_sfile_truncate(nod->sf, length);
+    AV_UNLOCK(nod->lock);
 
     return res;
+}
+
+static void filt_afterflush(vfile *vf, struct filtnode *nod)
+{
+    int res;
+    struct avstat stbuf;
+    int attrmask = AVA_INO | AVA_DEV | AVA_SIZE | AVA_MTIME;
+    avoff_t size = -1;
+    vfile *bvf;
+
+    res = av_getattr(nod->vf, &stbuf, AVA_SIZE);
+    if(res == 0)
+        size = stbuf.size;
+
+    av_close(nod->vf);
+    nod->vf = NULL;
+    nod->mod.size = -1;
+
+    res = av_open(vf->mnt->base, AVO_NOPERM, 0, &bvf);
+    if(res < 0)
+        return;
+
+    res = av_getattr(bvf, &stbuf, attrmask);
+    if(res == 0 && filt_same_file(&nod->id, &stbuf) && stbuf.size == size)
+        filt_mod_set(&nod->mod, &stbuf);
+        
+    av_close(bvf);
 }
 
 static int filt_close(vfile *vf)
 {
     int res = 0;
     struct filtfile *ff = (struct filtfile *) vf->data;
+    struct filtnode *nod = ff->nod;
 
-    AV_LOCK(ff->lock);
-    if(AV_ISWRITE(vf->flags)) {
-        ff->writers --;
+    AV_LOCK(nod->lock);
+    if(ff->iswrite) {
+        nod->writers --;
 
-        if(ff->writers == 0) {
-            res = av_sfile_flush(ff->sf);
-            av_close(ff->vf);
-            ff->vf = NULL;
-            ff->mod.size = -1;
+        if(nod->writers == 0) {
+            res = av_sfile_flush(nod->sf);
+            filt_afterflush(vf, nod);
         }
     }
-    AV_UNLOCK(ff->lock);
+    AV_UNLOCK(nod->lock);
 
-    av_unref_obj(ff);
+    av_unref_obj(nod);
+    av_free(ff);
 
     return res;
 }
@@ -379,25 +456,26 @@ static int filt_close(vfile *vf)
 static int filt_getattr(vfile *vf, struct avstat *buf, int attrmask)
 {
     struct filtfile *ff = (struct filtfile *) vf->data;
+    struct filtnode *nod = ff->nod;
     struct avstat origbuf;
     int res;
     avoff_t size = -1;
     avino_t ino;
     avtimestruc_t mtime;
 
-    AV_LOCK(ff->lock);
-    ino = ff->ino;
-    res = av_getattr(ff->vf, &origbuf, AVA_ALL & ~AVA_SIZE);
+    AV_LOCK(nod->lock);
+    ino = nod->ino;
+    res = av_getattr(nod->vf, &origbuf, AVA_ALL & ~AVA_SIZE);
     if(res == 0) { 
-        size = av_sfile_size(ff->sf);
+        size = av_sfile_size(nod->sf);
         if(size < 0)
             res = size;
     }
-    if(ff->writers != 0)
-        mtime = ff->mod.mtime;
+    if(nod->writers != 0)
+        mtime = nod->mod.mtime;
     else
         mtime = origbuf.mtime;
-    AV_UNLOCK(ff->lock);
+    AV_UNLOCK(nod->lock);
 
     if(res < 0)
         return res;
@@ -418,10 +496,11 @@ static int filt_setattr(vfile *vf, struct avstat *buf, int attrmask)
 {
     int res;
     struct filtfile *ff = (struct filtfile *) vf->data;
+    struct filtnode *nod = ff->nod;
 
-    AV_LOCK(ff->lock);
-    res = av_setattr(ff->vf, buf, attrmask);
-    AV_UNLOCK(ff->lock);
+    AV_LOCK(nod->lock);
+    res = av_setattr(nod->vf, buf, attrmask);
+    AV_UNLOCK(nod->lock);
 
     return res;    
 }

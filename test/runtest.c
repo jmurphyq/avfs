@@ -164,7 +164,7 @@ static int file_create(struct filetest *ft)
     off_t off;
     size_t size;
 
-    res = virt_open(ft->filename, O_WRONLY | O_CREAT | O_EXCL, 0777);
+    res = virt_open(ft->filename, O_WRONLY | O_CREAT | O_EXCL, 0666);
     if(res == -1)
         return 0;
 
@@ -195,7 +195,7 @@ static int file_contents(struct filetest *ft)
     size_t size;
     char buf[TESTFILESIZE / 2];
 
-    /* FIXME: flush cache */
+    /* FIXME: flush cache (not in case of volatile) */
 
     res = virt_open(ft->filename, O_RDONLY, 0);
     if(res == -1)
@@ -237,6 +237,7 @@ static void add_filetest(struct test *tg, const char *testname,
     struct test *ftg;
     int i;
 
+    srand(1);
     ft = (struct filetest *) malloc(sizeof(*ft));
 
     ftg = test_new(tg, testname);
@@ -261,6 +262,8 @@ int main(int argc, char *argv[])
     root.sub = NULL;
     tg = test_new(&root, "filetest");
     add_filetest(tg, "ugz", test_file("t.gz#"));
+    add_filetest(tg, "ubz2", test_file("t.bz2#"));
+    add_filetest(tg, "volatile", "/#volatile/testfile");
     
     res = test_run(tg);
 

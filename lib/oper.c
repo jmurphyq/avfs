@@ -42,7 +42,7 @@ int av_file_open(vfile *vf, ventry *ve, int flags, avmode_t mode)
     }        
 
     AVFS_LOCK(avfs);
-    res = avfs->open(ve, flags, mode, &vf->data);
+    res = avfs->open(ve, flags, (mode & 07777), &vf->data);
     AVFS_UNLOCK(avfs);
     if(res < 0) {
 	av_free_vmount(vf->mnt);
@@ -90,7 +90,7 @@ avssize_t av_file_read(vfile *vf, char *buf, avsize_t nbyte)
 avssize_t av_file_pread(vfile *vf, char *buf, avsize_t nbyte, avoff_t offset)
 {
     int res;
-
+    
     res = check_file_access(vf, AVO_RDONLY);
     if(res == 0) {
         avoff_t sres;
@@ -150,6 +150,9 @@ int av_file_truncate(vfile *vf, avoff_t length)
 {
     int res;
     struct avfs *avfs = vf->mnt->avfs;
+
+    if(length < 0)
+        return -EINVAL;
 
     res = check_file_access(vf, AVO_WRONLY);
     if(res == 0) {
@@ -382,7 +385,7 @@ int av_mkdir(ventry *ve, avmode_t mode)
     struct avfs *avfs = ve->mnt->avfs;
     
     AVFS_LOCK(avfs);
-    res = avfs->mkdir(ve, mode);
+    res = avfs->mkdir(ve, (mode & 07777));
     AVFS_UNLOCK(avfs);
     
     return res;

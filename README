@@ -65,8 +65,8 @@ you would do with real files. Here are some examples:
 
 Listing a tar archive:
 
-  ls -l avfs-0.5.2.tgz@/
-  ls -l avfs-0.5.2.tgz@/avfs-0.5.2/
+  ls -l avfs-0.9.1.tgz@/
+  ls -l avfs-0.9.1.tgz@/avfs-0.9.1/
 
 Obtaining information about avfs itself:
 
@@ -78,8 +78,8 @@ Obtaining information about avfs itself:
   (For the 'preload' method the shell itself must be started with
    avfs)
 
-  cd avfs-0.5.2.tgz@/
-  less avfs-0.5.2/README
+  cd avfs-0.9.1.tgz@/
+  less avfs-0.9.1/README
 
 Some more examples: (these are all shell commands, but of course you
 could use any program: file manager, browser, editor, etc.)

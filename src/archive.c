@@ -589,7 +589,10 @@ int av_archive_init(const char *name, struct ext_info *exts, int version,
 
     AV_NEW(ap);
     ap->data = NULL;
+    ap->flags = 0;
     ap->parse = NULL;
+    ap->open = NULL;
+    ap->close = NULL;
     ap->read = av_arch_read;
     ap->release = NULL;
 

@@ -8,7 +8,7 @@
 
 #include "archive.h"
 
-#define ARCHF_READY (1 << 0)
+#define ARCHF_READY  (1 << 0)
 
 struct archive {
     int flags;

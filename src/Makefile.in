@@ -39,7 +39,8 @@ core_objs = \
 	socket.o     \
 	passwords.o  \
 	zread.o      \
-	exit.o
+	exit.o       \
+	realfile.o
 
 all: core.o
 

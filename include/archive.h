@@ -13,8 +13,11 @@ struct archive;
 struct archnode;
 struct archfile;
 
+#define ARF_NOBASE (1 << 0)
+
 struct archparams {
     void *data;
+    int flags;
     int (*parse) (void *data, ventry *ent, struct archive *arch);
     int (*open) (struct archfile *fil);
     int (*close) (struct archfile *fil);

@@ -144,7 +144,6 @@ static void ftp_release_conn(struct ftpconn *conn)
 static void ftp_close_conn(struct ftpconn *conn)
 {
     av_unref_obj(conn->sockfb);
-    close(conn->sock);
     conn->sockfb = NULL;
     conn->sock = -1;
     conn->binary = -1;
@@ -624,7 +623,6 @@ static int ftp_do_list(struct ftpconn *conn, const char *dir,
     res = ftp_read_list(fb, dl, lc);
     av_unref_obj(lc);
     av_unref_obj(fb);
-    close(listsock);
 
     res = ftp_wait_reply_code(conn);
     if(res >= 0 && res / 100 != 2)

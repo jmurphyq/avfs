@@ -170,6 +170,8 @@ static int rsh_list(struct remote *rem, struct dirlist *dl)
     if(res == 0) {
         struct filebuf *outfb = av_filebuf_new(pipeout[0], 1);
         struct filebuf *errfb = av_filebuf_new(pipeerr[0], 1);
+        pipeout[0] = -1;
+        pipeerr[0] = -1;
 
         res = rsh_read_list(outfb, errfb, dl);
         if(res >= 0)

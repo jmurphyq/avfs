@@ -130,7 +130,6 @@ void av_log(int type, const char *format, ...)
 {
     va_list ap;
     char buf[LOGMSG_SIZE+1];
-    int loglevel;
     int logmask;
 
     logmask = get_logmask();
@@ -147,15 +146,8 @@ void av_log(int type, const char *format, ...)
     buf[LOGMSG_SIZE] = '\0';
     va_end(ap);
 
-    if((type & AVLOG_ERROR) != 0)
-        loglevel = LOG_ERR;
-    else if((type & AVLOG_WARNING) != 0)
-        loglevel = LOG_WARNING;
-    else
-        loglevel = LOG_INFO;
-    
     if(logfile == NULL)
-        syslog(loglevel, buf);
+        syslog(LOG_INFO, buf);
     else
         filelog(logfile, buf);
 }

@@ -21,6 +21,7 @@ struct gznode {
     avino_t ino;
     avoff_t size;
     avoff_t dataoff;
+    avuint crc;
     avtime_t mtime;
 };
 
@@ -177,20 +178,16 @@ static int gz_read_header(vfile *vf, struct gznode *nod)
 
     nod->dataoff = gb.total;
 
-    res = av_lseek(vf, -4, AVSEEK_END);
+    res = av_lseek(vf, -8, AVSEEK_END);
     if(res < 0)
         return res;
 
-    res = av_read(vf, buf, 4);
+    res = av_read_all(vf, buf, 8);
     if(res < 0)
         return res;
 
-    if(res != 4) {
-        av_log(AVLOG_ERROR, "UGZ: Short read");
-        return -EIO;
-    }
-
-    nod->size = QBYTE(buf);
+    nod->crc = QBYTE(buf);
+    nod->size = QBYTE(buf + 4);
 
     return 0;
 }
@@ -276,7 +273,7 @@ static struct zcache *gz_getcache(ventry *base, struct gznode *nod)
 {
     struct zcache *cache;
     
-    cache = (struct zcache * ) av_cacheobj_get(nod->cache);
+    cache = (struct zcache *) av_cacheobj_get(nod->cache);
     if(cache == NULL) {
         int res;
         char *name;
@@ -289,8 +286,11 @@ static struct zcache *gz_getcache(ventry *base, struct gznode *nod)
 
         cache = av_zcache_new();
         av_unref_obj(nod->cache);
+
+        /* FIXME: the cacheobj should only be created when the zcache
+           is nonempty */
         nod->cache = av_cacheobj_new(cache, name);
-        av_free(name);
+        av_free(name); 
     }
 
     return cache;
@@ -346,7 +346,7 @@ static int gz_open(ventry *ve, int flags, avmode_t mode, void **resp)
 
     AV_NEW(fil);
     if((flags & AVO_ACCMODE) != AVO_NOPERM)
-        fil->zfil = av_zfile_new(base, nod->dataoff);
+        fil->zfil = av_zfile_new(base, nod->dataoff, nod->crc);
     else
         fil->zfil = NULL;
 
@@ -388,6 +388,12 @@ static avssize_t gz_read(vfile *vf, char *buf, avsize_t nbyte)
 
         /* FIXME: should only be set when changed, ugly, UGLY, etc... */
         av_cacheobj_setsize(cobj, av_zcache_size(zc));
+    }
+    else {
+        AV_LOCK(vf->mnt->avfs->lock);
+        av_unref_obj(fil->node->cache);
+        fil->node->cache = NULL;
+        AV_UNLOCK(vf->mnt->avfs->lock);
     }
 
     av_unref_obj(zc);

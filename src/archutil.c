@@ -33,6 +33,7 @@ struct archnode *av_arch_new_node(struct archive *arch, struct entry *ent,
     nod->realsize = 0;
     nod->data = NULL;
     nod->flags = 0;
+    nod->numopen = 0;
 
     /* FIXME: This scheme will allocate the same device to a tar file
        inside a tarfile. While this is not fatal, 'find -xdev' would not do
@@ -99,7 +100,7 @@ struct archnode *av_arch_default_dir(struct archive *arch, struct entry *ent)
 }
 
 struct entry *av_arch_resolve(struct archive *arch, const char *path,
-                              int create)
+                              int create, int flags)
 {
     struct entry *ent;
     char *s, *p;
@@ -127,6 +128,7 @@ struct entry *av_arch_resolve(struct archive *arch, const char *path,
                 break;
             }
             av_arch_default_dir(arch, ent);
+            av_namespace_setflags(ent, flags, 0);
         }
         else if(!AV_ISDIR(nod->st.mode)) {
             if(create) 
@@ -164,4 +166,31 @@ int av_arch_isroot(struct archive *arch, struct entry *ent)
     av_unref_obj(root);
     
     return res;
+}
+
+struct entry *av_arch_create(struct archive *arch, const char *path, int flags)
+{
+    struct archnode *nod;
+    struct entry *ent;
+
+    ent = av_arch_resolve(arch, path, 1, flags);
+    if(ent == NULL)
+        return NULL;
+
+    if(av_arch_isroot(arch, ent)) {
+        av_log(AVLOG_WARNING, "Empty filename");
+        av_unref_obj(ent);
+        return NULL;
+    }
+    
+    nod = (struct archnode *) av_namespace_get(ent);
+    if(nod != NULL) {
+        av_log(AVLOG_WARNING, "Entry for %s already exists", path);
+        av_unref_obj(ent);
+        return NULL;
+    }
+
+    av_namespace_setflags(ent, flags, 0);
+
+    return ent;
 }

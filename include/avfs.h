@@ -313,4 +313,7 @@ int        av_get_tmpfile(char **retp);
 void       av_del_tmpfile(char *tmpfile);
 avoff_t    av_tmp_free();
 
+avssize_t  av_read_all(vfile *vf, char *buf, avsize_t nbyte);
+avssize_t av_pread_all(vfile *vf, char *buf, avsize_t nbyte, avoff_t offset);
+
 #endif /* _AVFS_H */

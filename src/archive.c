@@ -236,6 +236,7 @@ static int arch_copyent(ventry *ve, void **resp)
     av_ref_obj(nae->ent);
     av_ref_obj(nae->arch);
 
+    *resp = nae;
     return 0;
 }
 
@@ -248,6 +249,29 @@ static int arch_getpath(ventry *ve, char **resp)
     return 0;
 }
 
+static void arch_do_close(struct archfile *fil)
+{
+    struct archive *arch = fil->arch;
+    struct archparams *ap = (struct archparams *) arch->avfs->data;
+
+    if(fil->basefile != NULL) {
+        arch->numread --;
+        if(arch->numread == 0) {
+            av_close(arch->basefile);
+            arch->basefile = NULL;
+        }
+
+        fil->nod->numopen --;
+        if(fil->nod->numopen == 0 && ap->release != NULL)
+            ap->release(arch, fil->nod);
+    }
+
+    av_unref_obj(fil->arch);
+    av_unref_obj(fil->nod);
+    av_unref_obj(fil->ent);
+    av_free(fil);
+}
+
 static int arch_do_open(ventry *ve, int flags, avmode_t mode, void **resp)
 {
     int res;
@@ -255,6 +279,7 @@ static int arch_do_open(ventry *ve, int flags, avmode_t mode, void **resp)
     struct archfile *fil;
     struct archnode *nod = (struct archnode *) av_namespace_get(ae->ent);
     struct archive *arch = ae->arch;
+    struct archparams *ap = (struct archparams *) ve->mnt->avfs->data;
     vfile *basefile = NULL;
    
     if(nod == NULL)
@@ -275,12 +300,14 @@ static int arch_do_open(ventry *ve, int flags, avmode_t mode, void **resp)
 
         arch->numread ++;
         basefile = arch->basefile;
+        nod->numopen ++;
     }
     
     AV_NEW(fil);
     fil->basefile = basefile;
     fil->arch = arch;
     fil->nod = nod;
+    fil->data = NULL;
     
     if((flags & AVO_DIRECTORY))
         fil->ent = ae->ent;
@@ -291,8 +318,15 @@ static int arch_do_open(ventry *ve, int flags, avmode_t mode, void **resp)
     av_ref_obj(fil->nod);
     av_ref_obj(fil->ent);
 
-    *resp = fil;
+    if(fil->basefile != NULL && ap->open != NULL) {
+        res = ap->open(fil);
+        if(res < 0) {
+            arch_do_close(fil);
+            return res;
+        }
+    }
 
+    *resp = fil;
     return 0;
 }
 
@@ -310,40 +344,24 @@ static int arch_open(ventry *ve, int flags, avmode_t mode, void **resp)
     return res;
 }
 
-static int arch_do_close(vfile *vf)
-{
-    struct archfile *fil = arch_vfile_file(vf);
-    struct archive *arch = fil->arch;
-
-    if(fil->basefile != NULL) {
-        arch->numread --;
-        if(arch->numread == 0) {
-            av_close(arch->basefile);
-            arch->basefile = NULL;
-        }
-    }
-
-    av_unref_obj(fil->arch);
-    av_unref_obj(fil->nod);
-    av_unref_obj(fil->ent);
-    av_free(fil);
-
-    return 0;
-}
 
 static int arch_close(vfile *vf)
 {
     int res;
     struct archfile *fil = arch_vfile_file(vf);
     struct archive *arch = fil->arch;
+    struct archparams *ap = (struct archparams *) vf->mnt->avfs->data;
 
     AV_LOCK(arch->lock);
-    res = arch_do_close(vf);
+    if(fil->basefile != NULL && ap->close != NULL)
+        res = ap->close(fil);
+    else
+        res = 0;
+    arch_do_close(fil);
     AV_UNLOCK(arch->lock);
 
     return res;
 }
-
 
 avssize_t av_arch_read(vfile *vf, char *buf, avsize_t nbyte)
 {

@@ -395,7 +395,7 @@ static void fill_link(struct archive *arch, struct entry *ent,
     struct entry *link;
     struct archnode *nod = NULL;
 
-    link = av_arch_resolve(arch, linkname, 0);
+    link = av_arch_resolve(arch, linkname, 0, 0);
     if(link != NULL)
         nod = (struct archnode *) av_namespace_get(link);
 
@@ -497,7 +497,7 @@ static void insert_tarentry(struct archive *arch, struct tar_entinfo *tinf,
     if(AV_ISREG(tarstat->mode) && tinf->name[strlen(tinf->name)-1] == '/') 
         tarstat->mode = (tarstat->mode & 07777) | AV_IFDIR;
     
-    ent = av_arch_resolve(arch, tinf->name, 1);
+    ent = av_arch_resolve(arch, tinf->name, 1, 0);
     if(ent == NULL)
         return;
 
@@ -992,14 +992,12 @@ static avssize_t tar_write(ave *v, void *devinfo, const char *buf,
 
 #endif
 
-static int tar_release(struct archive *arch, struct archnode *nod)
+static void tar_release(struct archive *arch, struct archnode *nod)
 {
     struct tarnode *tn = (struct tarnode *) nod->data;
 
     av_free(tn->sparsearray);
     tn->sparsearray = NULL;
-
-    return 0;
 }
 
 

@@ -37,7 +37,15 @@ static int oflags_to_avfs(int flags)
 
 int virt_open(const char *path, int flags, mode_t mode)
 {
-    return av_fd_open(path, oflags_to_avfs(flags), mode & 07777);
+    int res;
+
+    res = av_fd_open(path, oflags_to_avfs(flags), mode & 07777);
+    if(res < 0) {
+        errno = -res;
+        return -1;
+    }
+
+    return 0;
 }
 
 int virt_close(int fd)
@@ -186,14 +194,16 @@ typedef struct {
 DIR *virt_opendir(const char *path)
 {
     AVDIR *dp;
-    int fd;
+    int res;
 
-    fd = av_fd_open(path, AVO_DIRECTORY, 0);
-    if(fd == -1)
-	return NULL;
+    res = av_fd_open(path, AVO_DIRECTORY, 0);
+    if(res < 0) {
+        errno = -res;
+        return NULL;
+    }
 
     AV_NEW(dp);
-    dp->fd = fd;
+    dp->fd = res;
 
     return (DIR *) dp;
 }

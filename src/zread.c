@@ -51,7 +51,9 @@ struct zcache {
 struct zfile {
     z_stream s;
     int iseof;
+    int iserror;
     int id; /* Hack: the id of the last used zcache */
+    avuint crc;
     
     vfile *infile;
     avoff_t dataoff;
@@ -181,7 +183,7 @@ static int zfile_reset(struct zfile *fil)
                fil->s.msg == NULL ? "" : fil->s.msg, res);
         return -EIO;
     }
-
+    fil->s.adler = crc32(0L, Z_NULL, 0);
     fil->iseof = 0;
 
     return 0;
@@ -331,6 +333,7 @@ static int zfile_fill_inbuf(struct zfile *fil)
 static int zfile_inflate(struct zfile *fil, struct zcache *zc)
 {
     int res;
+    unsigned char *start;
 
     if(fil->s.avail_in == 0) {
         res = zfile_fill_inbuf(fil);
@@ -338,9 +341,15 @@ static int zfile_inflate(struct zfile *fil, struct zcache *zc)
             return res;
     }
     
+    start = fil->s.next_out;
     res = inflate(&fil->s, Z_NO_FLUSH);
+    fil->s.adler = crc32(fil->s.adler, start, fil->s.next_out - start);
     if(res == Z_STREAM_END) {
         fil->iseof = 1;
+        if(fil->s.adler != fil->crc) {
+            av_log(AVLOG_ERROR, "ZFILE: CRC error");
+            return -EIO;
+        }
         return 0;
     }
     if(res != Z_OK) {
@@ -435,8 +444,8 @@ static int zfile_seek(struct zfile *fil, struct zcache *zc, avoff_t offset)
     return 0;
 }
 
-avssize_t av_zfile_pread(struct zfile *fil, struct zcache *zc, char *buf,
-                         avsize_t nbyte, avoff_t offset)
+static avssize_t av_zfile_do_pread(struct zfile *fil, struct zcache *zc,
+                                   char *buf, avsize_t nbyte, avoff_t offset)
 {
     avssize_t res;
 
@@ -459,6 +468,22 @@ avssize_t av_zfile_pread(struct zfile *fil, struct zcache *zc, char *buf,
     return res;
 }
 
+avssize_t av_zfile_pread(struct zfile *fil, struct zcache *zc, char *buf,
+                         avsize_t nbyte, avoff_t offset)
+{
+    avssize_t res;
+
+    if(fil->iserror)
+        return -EIO;
+
+    res = av_zfile_do_pread(fil, zc, buf, nbyte, offset);
+    if(res < 0)
+        fil->iserror = 1;
+
+    return res;
+}
+
+
 static void zfile_destroy(struct zfile *fil)
 {
     AV_LOCK(zread_lock);
@@ -466,7 +491,7 @@ static void zfile_destroy(struct zfile *fil)
     AV_UNLOCK(zread_lock);
 }
 
-struct zfile *av_zfile_new(vfile *vf, avoff_t dataoff)
+struct zfile *av_zfile_new(vfile *vf, avoff_t dataoff, avuint crc)
 {
     int res;
     struct zfile *fil;
@@ -474,14 +499,17 @@ struct zfile *av_zfile_new(vfile *vf, avoff_t dataoff)
     AV_NEW_OBJ(fil, zfile_destroy);
     memset(&fil->s, 0, sizeof(z_stream));
     fil->iseof = 0;
+    fil->iserror = 0;
     fil->infile = vf;
     fil->dataoff = dataoff;
     fil->id = 0;
+    fil->crc = crc;
 
     res = inflateInit2(&fil->s, -MAX_WBITS);
     if(res != Z_OK)
         av_log(AVLOG_ERROR, "ZFILE: inflateInit: %s (%i)",
                fil->s.msg == NULL ? "" : fil->s.msg, res);
+    fil->s.adler = crc32(0L, Z_NULL, 0);
 
     return fil;
 }
@@ -505,7 +533,7 @@ struct zcache *av_zcache_new()
 
     AV_NEW_OBJ(zc, zcache_destroy);
     zc->indexfile = NULL;
-    zc->nextindex = 0;
+    zc->nextindex = INDEXDISTANCE;
     zc->indexes = NULL;
     zc->filesize = 0;
 

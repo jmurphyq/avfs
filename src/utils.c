@@ -8,6 +8,7 @@
 
 #include "internal.h"
 #include "version.h"
+#include "oper.h"
 #include <stdarg.h>
 #include <string.h>
 
@@ -91,8 +92,7 @@ static void free_avfs(struct avfs *avfs)
     av_free(avfs->exts);
 
     av_unref_obj(avfs->module);
-    if(!(avfs->flags & AVF_NOLOCK))
-        AV_FREELOCK(avfs->lock);
+    AV_FREELOCK(avfs->lock);
 }
 
 static int new_minor()
@@ -133,8 +133,7 @@ int av_new_avfs(const char *name, struct ext_info *exts, int version,
         return ret;
 
     AV_NEW_OBJ(avfs, free_avfs);
-    if(!(flags & AVF_NOLOCK))
-        AV_INITLOCK(avfs->lock);
+    AV_INITLOCK(avfs->lock);
 
     avfs->name = av_strdup(name);
 
@@ -287,4 +286,36 @@ void av_unref_obj(void *obj)
         else if(refctr < 0)
             av_log(AVLOG_ERROR, "Unreferencing deleted object (%p)", obj);
     }
+}
+
+avssize_t av_pread_all(vfile *vf, char *buf, avsize_t nbyte, avoff_t offset)
+{
+    avssize_t res;
+    
+    res = av_pread(vf, buf, nbyte, offset);
+    if(res < 0)
+        return res;
+    
+    if(res != nbyte) {
+        av_log(AVLOG_ERROR, "Premature end of file");
+        return -EIO;
+    }
+
+    return res;
+}
+
+avssize_t av_read_all(vfile *vf, char *buf, avsize_t nbyte)
+{
+    avssize_t res;
+    
+    res = av_read(vf, buf, nbyte);
+    if(res < 0)
+        return res;
+    
+    if(res != nbyte) {
+        av_log(AVLOG_ERROR, "Premature end of file");
+        return -EIO;
+    }
+
+    return res;
 }

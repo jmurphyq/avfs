@@ -15,6 +15,7 @@ static AV_LOCK_DECL(namespace_lock);
 
 struct entry {
     char *name;
+    int flags;
     struct entry *subdir;
     struct entry *next;
     struct entry **prevp;
@@ -49,6 +50,17 @@ static void free_entry(struct entry *ent)
     av_unref_obj(ent->parent);
 }
 
+static int name_eq(struct entry *ent, const char *name, unsigned int namelen)
+{
+    if(strlen(ent->name) != namelen)
+        return 0;
+
+    if(!(ent->flags & NSF_NOCASE))
+        return (strncmp(name, ent->name, namelen) == 0);
+    else
+        return (strncasecmp(name, ent->name, namelen) == 0);
+}
+
 static struct entry *lookup_name(struct entry **basep, struct entry *prev,
                                  const char *name, unsigned int namelen)
 {
@@ -56,8 +68,7 @@ static struct entry *lookup_name(struct entry **basep, struct entry *prev,
     struct entry *ent = NULL;
 
     for(entp = basep; *entp != NULL; entp = &(*entp)->next)
-	if(strlen((*entp)->name) == namelen &&
-           strncmp(name, (*entp)->name, namelen) == 0) {
+	if(name_eq(*entp, name, namelen)) {
 	    ent = *entp;
 	    av_ref_obj(ent);
             break;
@@ -67,6 +78,7 @@ static struct entry *lookup_name(struct entry **basep, struct entry *prev,
         AV_NEW_OBJ(ent, free_entry);
         
         ent->name = av_strndup(name, namelen);
+        ent->flags = 0;
         ent->subdir = NULL;
         ent->next = NULL;
         ent->prevp = entp;
@@ -163,6 +175,13 @@ char *av_namespace_getpath(struct entry *ent)
     AV_UNLOCK(namespace_lock);
 
     return path;
+}
+
+void av_namespace_setflags(struct entry *ent, int setflags, int resetflags)
+{
+    AV_LOCK(namespace_lock);
+    ent->flags = (ent->flags | setflags) & ~resetflags;
+    AV_UNLOCK(namespace_lock);
 }
 
 void av_namespace_set(struct entry *ent, void *data)

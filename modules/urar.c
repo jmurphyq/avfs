@@ -8,8 +8,10 @@
     RAR module
     Copyright (C) 1998 David Hanak (dhanak@inf.bme.hu)
 */
-#if 0
-#include "archives.h"
+
+#include "archive.h"
+#include "oper.h"
+#include "version.h"
 
 #define DOS_DIR_SEP_CHAR  '\\'
 
@@ -26,8 +28,8 @@ typedef avbyte file_header[FILE_HEAD_SIZE];
 
 #define BI(ptr, i)  ((avbyte) (ptr)[i])
 #define BYTE(ptr)  (BI(ptr,0))
-#define DBYTE(ptr) ((avdbyte)(BI(ptr,0) | (BI(ptr,1)<<8)))
-#define QBYTE(ptr) ((avqbyte)(BI(ptr,0) | (BI(ptr,1)<<8) | \
+#define DBYTE(ptr) ((avushort)(BI(ptr,0) | (BI(ptr,1)<<8)))
+#define QBYTE(ptr) ((avuint)(BI(ptr,0) | (BI(ptr,1)<<8) | \
                    (BI(ptr,2)<<16) | (BI(ptr,3)<<24)))
 
 #define bh_CRC(bh)      DBYTE(bh     )
@@ -97,20 +99,28 @@ typedef avbyte file_header[FILE_HEAD_SIZE];
 #define CRC_INIT      0xEDB88320UL
 
 #define CRC_TABLESIZE 256
-static avqbyte CRC_table[CRC_TABLESIZE];
+static avuint CRC_table[CRC_TABLESIZE];
 
-typedef struct rar_inodat {
-    avdbyte flags;
+struct rarnode {
+    avushort flags;
     avbyte hostos;
     avbyte packer_version;
     avbyte method;
-    char *orig_path;
-} rar_inodat;
+    char *path;
+};
+
+struct rar_entinfo {
+    char *name;
+    char *linkname;
+    avoff_t datastart;
+    block_header bh;
+    file_header fh;
+};
 
 static void initCRC(void)
 {
     int i, j;
-    avqbyte c;
+    avuint c;
   
     for (i = 0; i < CRC_TABLESIZE; i++)
     {
@@ -120,12 +130,12 @@ static void initCRC(void)
     }
 }
 
-static avqbyte CRC_byte(avqbyte crc, avbyte byte)
+static avuint CRC_byte(avuint crc, avbyte byte)
 {
     return CRC_table[(avbyte)crc ^ byte] ^ (crc >> 8);
 }
 
-static avqbyte CRC_string(avqbyte crc, avbyte *buf, long size)
+static avuint CRC_string(avuint crc, avbyte *buf, long size)
 {
     long i;
 
@@ -134,107 +144,97 @@ static avqbyte CRC_string(avqbyte crc, avbyte *buf, long size)
     return crc;
 }
 
-static avssize_t read_file(ave *v, arch_file *file, char *buf, avsize_t nbyte)
+static int read_block_header(vfile *vf, block_header bh, int all)
 {
-    /* FIXME: error checking */
-    avssize_t res = av_read(v, file->fh, buf, nbyte);
-    file->ptr += res;
-
-    return res;
-}
-static avoff_t seek_file(ave *v, arch_file *file, avoff_t offset, int whence)
-{
-    avoff_t res = av_lseek(v, file->fh, offset, whence);
-    file->ptr = res;
-
-    return res;
-}
-
-static int read_block_header(ave *v, arch_file *file, block_header bh)
-{
+    int res;
     int size = SHORT_HEAD_SIZE;
     int i;
 
     for(i = SHORT_HEAD_SIZE; i < LONG_HEAD_SIZE; i++) bh[i] = 0;
-  
-    if (read_file(v, file, bh, SHORT_HEAD_SIZE) != SHORT_HEAD_SIZE)
-        return -1;
+
+    if(all)
+        res = av_read_all(vf, bh, SHORT_HEAD_SIZE);
+    else
+        res = av_read(vf, bh, SHORT_HEAD_SIZE);
+    if(res < 0)
+        return res;
+    if(res < SHORT_HEAD_SIZE)
+        return 0;
 
     if ((bh_flags(bh) & FB_WITH_BODY) != 0) {
-        if (read_file(v, file, bh+SHORT_HEAD_SIZE, 4) != 4)
-            return -1;
+        res = av_read_all(vf, bh+SHORT_HEAD_SIZE, 4);
+        if(res < 0)
+            return res;
+
         size += 4;
     }
 
     return size;
 }
 
-static int read_marker_block(ave *v, arch_file *file)
+static int read_marker_block(vfile *vf)
 {
+    int res;
     avbyte buf[MARKER_HEAD_SIZE], *pos = buf;
     int readsize = MARKER_HEAD_SIZE;
 
     /* An SFX module starts with the extraction header. Skip that part by
        searching for the marker head. */
     while(1) {
-        if (read_file(v, file, buf + MARKER_HEAD_SIZE - readsize,
-                      readsize) != readsize) return -1;
+        res = av_read_all(vf, buf + MARKER_HEAD_SIZE - readsize, readsize);
+        if(res < 0)
+            return res;
 
-        if (av_memcmp(buf, good_marker_head, MARKER_HEAD_SIZE) == 0) return 0;
+        if (memcmp(buf, good_marker_head, MARKER_HEAD_SIZE) == 0) return 0;
 
-        pos = av_memchr(buf + 1, good_marker_head[0], MARKER_HEAD_SIZE-1);
-        if (pos == AVNULL) readsize = MARKER_HEAD_SIZE;
+        pos = memchr(buf + 1, good_marker_head[0], MARKER_HEAD_SIZE-1);
+        if (pos == NULL) readsize = MARKER_HEAD_SIZE;
         else {
             readsize = pos - buf;
-            av_memmove(buf, pos, MARKER_HEAD_SIZE - readsize);
+            memmove(buf, pos, MARKER_HEAD_SIZE - readsize);
         }
     }
     return 0; /* Just to avoid warnings. Never reaches this line. */
 }
 
-static int read_archive_header(ave *v, arch_file *file, archive *arch)
+static int read_archive_header(vfile *vf)
 {
+    int res;
     block_header main_head;
-    avqbyte crc;
+    avuint crc;
     avbyte tmpbuf[6];
-    avdbyte *flags;
     int headlen;
 
-    if ((headlen = read_block_header(v, file, main_head)) == -1)
-        return -1;
+    headlen = read_block_header(vf, main_head, 1);
+    if(headlen < 0)
+        return headlen;
 
     if (bh_type(main_head) != B_MAIN) {
-        v->errn = EIO;
-        return -1;
+        av_log(AVLOG_ERROR, "URAR: Bad archive header");
+        return -EIO;
     }
 
     crc = CRC_string(CRC_START, main_head + 2, headlen - 2);
 
     /* Read reserved bytes. */
-    if (read_file(v, file, tmpbuf, 6) != 6)
-        return -1;
+    res = av_read_all(vf, tmpbuf, 6);
+    if(res < 0)
+        return res;
     crc = CRC_string(crc, tmpbuf, 6);
 
-    if ((avdbyte)~crc != bh_CRC(main_head)) {
-        v->errn = EIO;
-        return -1;
+    if ((avushort)~crc != bh_CRC(main_head)) {
+        av_log(AVLOG_ERROR, "URAR: Bad archive header CRC");
+        return -EIO;
     }
 
-    if (seek_file(v, file, bh_size(main_head) - headlen - 6,
-                  AVSEEK_CUR) == -1)
-        return -1;
-
-    AV_NEW(v, flags);
-    if (flags == AVNULL) return -1;
-    *flags = bh_flags(main_head);
-    arch->udata = flags;
+    av_lseek(vf, bh_size(main_head) - headlen - 6, AVSEEK_CUR);
 
     return 0;
 }
 
 static void conv_tolower(char *s)
 {
-    for(; *s; s++) *s = av_tolower(*s);
+    for(; *s; s++) *s = tolower((int) *s);
 }
 
 
@@ -242,11 +242,11 @@ static void dos2unix_path(char *path)
 {
     char *pos = path;
 
-    while((pos = av_strchr(pos, DOS_DIR_SEP_CHAR)) != AVNULL)
-        *pos = DIR_SEP_CHAR;
+    while((pos = strchr(pos, DOS_DIR_SEP_CHAR)) != NULL)
+        *pos = '/';
 }
 
-static avtime_t dos2unix_time(avqbyte dt)
+static avtime_t dos2unix_time(avuint dt)
 {
     struct avtm ut;
 
@@ -260,7 +260,7 @@ static avtime_t dos2unix_time(avqbyte dt)
     return av_mktime(&ut);
 }
 
-static avmode_t dos2unix_attr(avqbyte da, avmode_t archmode)
+static avmode_t dos2unix_attr(avuint da, avmode_t archmode)
 {
     avmode_t mode = (archmode & 0666);
     if (da & 0x01) mode = mode & ~0222;
@@ -270,200 +270,193 @@ static avmode_t dos2unix_attr(avqbyte da, avmode_t archmode)
     return mode;
 }
 
-static int fill_rarentry(ave *v, arch_entry *ent, char *path, avdbyte flags,
-                         file_header fh, arch_file *file)
+static void rarnode_delete(struct rarnode *info)
 {
-    int res;
-    archive *arch = ent->arch;
-    char *lnkname = AVNULL;
-    rar_inodat *info = AVNULL;
-    struct avstat filestat;
-
-    if(ent->ino != AVNULL)
-        return 0; /* FIXME: what should we do in case of duplicate files? */
-
-    info = av_malloc(v, sizeof(*info) + av_strlen(path) + 1);
-    if(info == AVNULL)
-        return -1;
-
-    av_default_stat(&filestat);
-
-    filestat.uid = arch->uid;
-    filestat.gid = arch->gid;
-    if (flags & FF_WITH_PASSWORD)
-        filestat.mode = AV_IFREG; /* FIXME */
-    else {
-        if (fh_hostos(fh) == OS_UNIX)
-            filestat.mode = fh_attr(fh);
-        else 
-            filestat.mode = dos2unix_attr(fh_attr(fh), arch->mode);
-    }
-
-    filestat.blocks = AV_DIV(fh_origsize(fh), VBLOCKSIZE);
-    filestat.blksize = VBLOCKSIZE;
-    filestat.dev = arch->dev;
-    filestat.ino = arch->inoctr++;
-    filestat.mtime = dos2unix_time(fh_time(fh));
-    filestat.atime = filestat.mtime;
-    filestat.ctime = filestat.mtime;
-    filestat.size = fh_origsize(fh);
-
-    info->flags = flags;
-    info->hostos = fh_hostos(fh);
-    info->packer_version = fh_version(fh);
-    info->method = fh_method(fh);
-    info->orig_path = ((char *) info) + sizeof(*info);
-    av_strcpy(info->orig_path, path);
-
-    if (AV_ISLNK(filestat.mode)) {
-        lnkname = (char *)av_malloc(v, filestat.size+1);
-        if (lnkname == AVNULL || 
-            read_file(v, file, lnkname, filestat.size) != filestat.size)
-            goto error;
-
-        lnkname[filestat.size] = '\0';
-    }
-    else
-        lnkname = AVNULL;
-
-    res = av_new_inode(v, ent, &filestat);
-    if(res == -1)
-        goto error;
-
-    ent->ino->offset = file->ptr;
-    ent->ino->realsize = fh_origsize(fh); /* FIXME: Not the origsize!!! */
-    ent->ino->syml = lnkname;
-    ent->ino->udata = info;
-
-    return 0;
-
-  error:
-    av_free(info);
-    av_free(lnkname);
-
-    return -1;
-
+    av_free(info->path);
 }
 
-static int insert_rarentry(ave *v, archive *arch, char *path, avdbyte flags,
-                           file_header fh, arch_file *file)
+static avmode_t rar_get_mode(struct rar_entinfo *ei, avmode_t origmode)
 {
-    int res;
-    arch_entry *ent;
-    int entflags = 0;
-
-    if (path[0] == '\0') {
-        v->errn = EIO;
-        return -1; /* FIXME: warning: empty name */
+    if (bh_flags(ei->bh) & FF_WITH_PASSWORD)
+        return AV_IFREG; /* FIXME */
+    else {
+        if (fh_hostos(ei->fh) == OS_UNIX)
+            return fh_attr(ei->fh);
+        else 
+            return dos2unix_attr(fh_attr(ei->fh), origmode);
     }
+}
+
+static void fill_rarentry(struct archive *arch, struct entry *ent,
+                         struct rar_entinfo *ei)
+{
+    struct rarnode *info;
+    struct archnode *nod;
+    int isdir = AV_ISDIR(rar_get_mode(ei, 0));
+
+    nod = av_arch_new_node(arch, ent, isdir);
+
+    nod->st.mode = rar_get_mode(ei, nod->st.mode);
+    nod->st.mtime.sec = dos2unix_time(fh_time(ei->fh));
+    nod->st.mtime.nsec = 0;
+    nod->st.atime = nod->st.mtime;
+    nod->st.ctime = nod->st.mtime;
+    nod->st.size = fh_origsize(ei->fh);
+    nod->st.blocks = AV_BLOCKS(nod->st.size);
+    nod->st.blksize = 4096;
+
+    nod->offset = ei->datastart;
+    if(fh_method(ei->fh) == M_STORE)
+        nod->realsize = fh_origsize(ei->fh);
+    else
+        nod->realsize = 0;
+
+    nod->linkname = av_strdup(ei->linkname);
+
+    AV_NEW_OBJ(info, rarnode_delete);
+    nod->data = info;
+
+    info->flags = bh_flags(ei->bh);
+    info->hostos = fh_hostos(ei->fh);
+    info->packer_version = fh_version(ei->fh);
+    info->method = fh_method(ei->fh);
+    info->path = av_strdup(ei->name);
+}
+
+static void insert_rarentry(struct archive *arch, struct rar_entinfo *ei)
+{
+    struct entry *ent;
+    int entflags = 0;
+    char *path = ei->name;
 
     dos2unix_path(path);
 
-    if(fh_hostos(fh) == OS_MSDOS) {
+    if(fh_hostos(ei->fh) == OS_MSDOS) {
         conv_tolower(path);
-        entflags |= ENTF_NOCASE;
+        entflags |= NSF_NOCASE;
     }
 
-    ent = av_find_entry(v, arch->root, path, FIND_CREATE, entflags);
-    if(ent == AVNULL)
-        return -1;
+    ent = av_arch_create(arch, path, entflags);
+    if(ent == NULL)
+        return;
 
-    if(ent->ino == AVNULL)
-        ent->flags = entflags;
-    
-    res = fill_rarentry(v, ent, path, flags, fh, file);
-    av_unref_entry(ent);
-
-    return res;
+    fill_rarentry(arch, ent, ei);
+    av_unref_obj(ent);
 }
 
-static int read_rarfile(ave *v, arch_file *file, archive *arch)
+static int read_rarentry(vfile *vf, struct rar_entinfo *ei)
 {
-    block_header bh, ch;
-    file_header fh;
-    avqbyte crc;
-    char *name;
-    avoff_t headlen;
+    int res;
+    block_header ch;
+    avuint crc;
+
+    if (bh_size(ei->bh) < LONG_HEAD_SIZE + FILE_HEAD_SIZE) {
+        av_log(AVLOG_ERROR, "URAR: bad header");
+        return -EIO;
+    }
+            
+    res = av_read_all(vf, ei->fh, FILE_HEAD_SIZE);
+    if(res < 0)
+        return res;
+
+    ei->name = av_malloc(fh_namelen(ei->fh)+1);
+    res = av_read_all(vf, ei->name, fh_namelen(ei->fh));
+    if(res < 0)
+        return res;
+    ei->name[fh_namelen(ei->fh)] = '\0';
+    
+    crc = CRC_string(CRC_START, ei->bh + 2, LONG_HEAD_SIZE - 2);
+    crc = CRC_string(crc, ei->fh, FILE_HEAD_SIZE);
+    crc = CRC_string(crc, ei->name, fh_namelen(ei->fh));
+    
+    if ((avushort)~crc != bh_CRC(ei->bh)) {
+        av_log(AVLOG_ERROR, "URAR: bad CRC");
+        return -EIO;
+    }
+    
+    if ((bh_flags(ei->bh) & FF_WITH_COMMENT) != 0) {
+        res = read_block_header(vf, ch, 1);
+        if(res < 0)
+            return res;
+
+        av_lseek(vf, bh_size(ch) - res, AVSEEK_CUR);
+    }
+    
+    if(fh_hostos(ei->fh) == OS_UNIX && AV_ISLNK(fh_attr(ei->fh))) {
+        ei->linkname = av_malloc(fh_origsize(ei->fh) + 1);
+        res = av_read_all(vf, ei->linkname, fh_origsize(ei->fh));
+        if(res < 0)
+            return res;
+
+        ei->linkname[fh_origsize(ei->fh)] = '\0';
+    }
+    
+    return 0;
+}
+
+static int read_rarfile(vfile *vf, struct archive *arch)
+{
+    avoff_t headstart;
     int res;
 
-#define CLEANUP_EXIT() ({ return -1; })
+    res = read_marker_block(vf);
+    if(res < 0)
+        return res;
 
-    if (read_marker_block(v, file) != 0 ||
-        read_archive_header(v, file, arch) != 0)
-        CLEANUP_EXIT();
+    res = read_archive_header(vf);
+    if(res < 0)
+        return res;
 
-    headlen = file->ptr;
-    while ((res = read_block_header(DUMMYV, file, bh)) != -1) {
-        if (bh_type(bh) != B_FILE)
-            seek_file(DUMMYV, file, bh_size(bh) - res, AVSEEK_CUR);
-        else {
-            if (bh_size(bh) < LONG_HEAD_SIZE + FILE_HEAD_SIZE ||
-                read_file(v, file, fh, FILE_HEAD_SIZE) != FILE_HEAD_SIZE)
-                CLEANUP_EXIT();
+    headstart = vf->ptr;
+    while(1) {
+        struct rar_entinfo ei;
+    
+        res = read_block_header(vf, ei.bh, 0);
+        if(res < 0)
+            return res;
+        if(res == 0)
+            break;
 
-            name = av_malloc(v, fh_namelen(fh)+1);
-            if (!name) CLEANUP_EXIT();
+        if (bh_type(ei.bh) == B_FILE) {
+            ei.name = NULL;
+            ei.linkname = NULL;
 
-#undef CLEANUP_EXIT
-#define CLEANUP_EXIT() ({ av_free(name);                  \
-			        return -1;                        \
-			     })
-
-            if (read_file(v, file, name, fh_namelen(fh)) != fh_namelen(fh))
-                CLEANUP_EXIT();
-
-            name[fh_namelen(fh)] = '\0';
-
-            crc = CRC_string(CRC_START, bh + 2, LONG_HEAD_SIZE - 2);
-            crc = CRC_string(crc, fh, FILE_HEAD_SIZE);
-            crc = CRC_string(crc, name, fh_namelen(fh));
-
-            if ((avdbyte)~crc != bh_CRC(bh)) {
-                v->errn = EIO;
-                CLEANUP_EXIT();
+            res = read_rarentry(vf, &ei);
+            if(res < 0) {
+                av_free(ei.name);
+                av_free(ei.linkname);
+                return res;
             }
+            ei.datastart = vf->ptr;
 
-            if ((bh_flags(bh) & FF_WITH_COMMENT) != 0) {
-                if ((res = read_block_header(v, file, ch)) == -1) CLEANUP_EXIT();
-                seek_file(DUMMYV, file, bh_size(ch) - res, AVSEEK_CUR);
-            }
-
-            res = insert_rarentry(v, arch, name, bh_flags(bh), fh, file);
-            if (res == -1) CLEANUP_EXIT();
-            av_free(name);
-
-            headlen = file->ptr - headlen;
-
-            seek_file(DUMMYV, file, bh_size(bh) - headlen, AVSEEK_CUR);
+            insert_rarentry(arch, &ei);
+            av_free(ei.name);
+            av_free(ei.linkname);
         }
-        headlen = file->ptr;
+        av_lseek(vf, headstart + bh_size(ei.bh), AVSEEK_SET);
+        headstart = vf->ptr;
     }
 
     return 0;
 }
-#undef CLEANUP_EXIT
 
-static int parse_rarfile(ave *v, vpath *path, archive *arch)
+static int parse_rarfile(void *data, ventry *ve, struct archive *arch)
 {
     int res;
-    arch_file file;
+    vfile *vf;
 
-    if(PARAM(path)[0]) {
-        v->errn = ENOENT;
-        return -1;
-    }
-  
-    file.fh = av_open(v, BASE(path), AVO_RDONLY, 0);
-    if(file.fh == -1) return -1;
-    file.ptr = 0;
+    res = av_open(ve->mnt->base, AVO_RDONLY, 0, &vf);
+    if(res < 0)
+        return res;
 
-    res = read_rarfile(v, &file, arch);
-  
-    av_close(DUMMYV, file.fh);
+    res = read_rarfile(vf, arch);
+
+    av_close(vf);
     
     return res;  
 }
 
+#if 0
 /* FIXME: Because we use the 'rar' program to extract the contents of
    each file individually , we get _VERY_ poor performance */
 
@@ -483,7 +476,7 @@ static int do_unrar(ave *v, vpath *path, arch_fdi *di)
     if(di->file.fh == -1) return -1;
 
     basefile = av_get_realfile(v, BASE(path));
-    if(basefile == AVNULL) return -1;
+    if(basefile == NULL) return -1;
   
     prog[0] = "rar";
     prog[1] = "p";
@@ -491,7 +484,7 @@ static int do_unrar(ave *v, vpath *path, arch_fdi *di)
     prog[3] = "-ierr";
     prog[4] = basefile->name;
     prog[5] = info->orig_path;
-    prog[6] = AVNULL;
+    prog[6] = NULL;
   
     av_init_proginfo(&pri);
     pri.prog = prog;
@@ -526,7 +519,7 @@ static void *rar_open(ave *v,  vpath *path, int flags, int mode)
     rar_inodat *info;
 
     di = (arch_fdi *) (*dd->vdev->open)(v, path, flags, mode);
-    if(di == AVNULL) return AVNULL;
+    if(di == NULL) return NULL;
 
     if(AV_ISDIR(di->ino->st.mode))
         return di;
@@ -549,34 +542,36 @@ static void *rar_open(ave *v,  vpath *path, int flags, int mode)
 
   error:
     (*dd->vdev->close)(v, (void *) di);
-    return AVNULL;
+    return NULL;
 }
 
 /* FIXME: no CRC checking is done while reading files. How to do it? */
 
-extern int av_init_module_urar(ave *v);
+#endif
 
-int av_init_module_urar(ave *v)
+extern int av_init_module_urar(struct vmodule *module);
+
+int av_init_module_urar(struct vmodule *module)
 {
+    int res;
+    struct avfs *avfs;
     struct ext_info rarexts[3];
-    struct vdev_info *vdev;
-    arch_devd *dd;
+    struct archparams *ap;
 
-    INIT_EXT(rarexts[0], ".rar", AVNULL);
-    INIT_EXT(rarexts[1], ".sfx", AVNULL);
-    INIT_EXT(rarexts[2], AVNULL, AVNULL);
+    rarexts[0].from = ".rar",  rarexts[0].to = NULL;
+    rarexts[1].from = ".sfx",  rarexts[0].to = NULL;
+    rarexts[2].from = NULL;
 
-    vdev = av_init_arch(v, "urar", rarexts, AV_VER);
-    if(vdev == AVNULL) return -1;
-  
-    dd = (arch_devd *) vdev->devdata;
-    dd->parsefunc = parse_rarfile;
-    vdev->open = rar_open;
-
-    /* Getfile is now OK */
+    res = av_archive_init("urar", rarexts, AV_VER, module, &avfs);
+    if(res < 0)
+        return res;
+    
+    ap = (struct archparams *) avfs->data;
+    ap->parse = parse_rarfile;
 
     initCRC();
 
-    return av_add_vdev(v, vdev);
+    av_add_avfs(avfs);
+
+    return 0;
 }
-#endif

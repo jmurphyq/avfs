@@ -6,6 +6,8 @@
     See the file COPYING.
 */
 
+#define NSF_NOCASE (1 << 0)
+
 struct namespace;
 struct entry;
 
@@ -22,3 +24,4 @@ char *av_namespace_name(struct entry *ent);
 struct entry *av_namespace_next(struct entry *ent);
 struct entry *av_namespace_subdir(struct namespace *ns, struct entry *ent);
 struct entry *av_namespace_parent(struct entry *ent);
+void av_namespace_setflags(struct entry *ent, int setflags, int resetflags);

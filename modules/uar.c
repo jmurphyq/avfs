@@ -45,12 +45,6 @@ static void fill_arentry(struct archive *arch, struct entry *ent,
 {
     struct archnode *nod;
 
-    nod = (struct archnode *) av_namespace_get(ent);
-    if(nod != NULL) {
-        av_log(AVLOG_WARNING, "AR: duplicate names");
-        return;
-    }
-
     nod = av_arch_new_node(arch, ent, 0);
     
     nod->offset = arv->offset;
@@ -82,7 +76,7 @@ static void insert_arentry(struct archive *arch, struct ar_values *arv,
         return;
     }
         
-    ent = av_arch_resolve(arch, name, 1);
+    ent = av_arch_create(arch, name, 0);
     if(ent == NULL)
         return;
 

@@ -7,19 +7,22 @@
 
     ZIP module
 */
-#if 0
-#include "archives.h"
-#include "zfilt.h"
+
+#include "archive.h"
 #include "zipconst.h"
+#include "zfile.h"
+#include "cache.h"
+#include "oper.h"
+#include "version.h"
 
 struct ecrec {
-    avdbyte this_disk;
-    avdbyte cdir_disk;
-    avdbyte this_entries;
-    avdbyte total_entries;
-    avqbyte cdir_size;
-    avqbyte cdir_off;
-    avdbyte comment_len;
+    avushort this_disk;
+    avushort cdir_disk;
+    avushort this_entries;
+    avushort total_entries;
+    avuint cdir_size;
+    avuint cdir_off;
+    avushort comment_len;
 };
 
 #define ECREC_THIS_DISK     4
@@ -33,21 +36,21 @@ struct ecrec {
 #define ECREC_SIZE          22
 
 struct cdirentry {
-    avdbyte version;
-    avdbyte need_version;
-    avdbyte flag;
-    avdbyte method;
-    avqbyte mod_time;
-    avqbyte crc;
-    avqbyte comp_size;
-    avqbyte file_size;
-    avdbyte fname_len;
-    avdbyte extra_len;
-    avdbyte comment_len;
-    avdbyte start_disk;
-    avdbyte int_attr;
-    avqbyte attr;
-    avqbyte file_off;         
+    avushort version;
+    avushort need_version;
+    avushort flag;
+    avushort method;
+    avuint mod_time;
+    avuint crc;
+    avuint comp_size;
+    avuint file_size;
+    avushort fname_len;
+    avushort extra_len;
+    avushort comment_len;
+    avushort start_disk;
+    avushort int_attr;
+    avuint attr;
+    avuint file_off;         
 };
 
 #define CDIRENT_VERSION       4
@@ -69,15 +72,15 @@ struct cdirentry {
 #define CDIRENT_SIZE          46
 
 struct ldirentry {
-    avdbyte need_version;
-    avdbyte flag;
-    avdbyte method;
-    avqbyte mod_time;
-    avqbyte crc;
-    avqbyte comp_size;
-    avqbyte file_size;
-    avdbyte fname_len;
-    avdbyte extra_len;
+    avushort need_version;
+    avushort flag;
+    avushort method;
+    avuint mod_time;
+    avuint crc;
+    avuint comp_size;
+    avuint file_size;
+    avushort fname_len;
+    avushort extra_len;
 };
 
 #define LDIRENT_NEED_VERSION  4
@@ -108,51 +111,33 @@ struct ldirentry {
 #define QBYTE(ptr) (BI(ptr,0) | (BI(ptr,1)<<8) | \
                    (BI(ptr,2)<<16) | (BI(ptr,3)<<24))
 
-struct zipino_data {
-    avqbyte crc;
-    avqbyte comp_size;
+struct zipnode {
+    avuint crc;
+    avushort method;
+    avoff_t headeroff;
+    struct cacheobj *cache;
 };
 
 static void conv_tolower(char *s)
 {
-    for(; *s; s++) *s = av_tolower(*s);
+    for(; *s; s++) *s = tolower(*s);
 }
 
-static int read_from(ave *v, arch_file *file, 
-		     char *buf, avoff_t start, avsize_t nbytes)
+static avoff_t find_ecrec(vfile *vf, long searchlen, struct ecrec *ecrec)
 {
-    avssize_t rres;
-    avoff_t sres;
-
-    sres = av_lseek(v, file->fh, start, AVSEEK_SET);
-    if(sres == -1) return -1;  /* v->errn from lseek */
-    file->ptr = sres;
-
-    rres = av_read(v, file->fh, buf, nbytes);
-    if(rres == -1) return -1;  /* v->errn from read */
-    file->ptr += rres;
-
-    if((avsize_t) rres != nbytes) {
-	v->errn = EIO;
-	return -1;
-    }
-    return 0;
-}
-
-static avoff_t find_ecrec(ave *v, arch_file *file, 
-			  long searchlen, struct ecrec *ecrec)
-{
+    int res;
     avoff_t bufstart;
     int pos;
     char buf[BUFSIZE+3];
     avoff_t sres;
     int found;
   
-    sres = av_lseek(v, file->fh, 0, AVSEEK_END);
-    if(sres == -1) return -1;
+    sres = av_lseek(vf, 0, AVSEEK_END);
+    if(sres < 0)
+        return sres;
     if(sres < ECREC_SIZE) {
-	v->errn = EIO;
-	return -1;
+        av_log(AVLOG_ERROR, "UZIP: Broken archive");
+        return -EIO;
     }
   
     pos = 0;
@@ -168,7 +153,9 @@ static avoff_t find_ecrec(ave *v, arch_file *file,
 	    buf[pos]   = buf[0];
 	    buf[pos+1] = buf[1];
 	    buf[pos+2] = buf[2];
-	    if(read_from(v, file, buf, bufstart, pos) == -1) return -1;
+            res = av_pread_all(vf, buf, pos, bufstart);
+            if(res < 0)
+                return res;
 	}
 	pos--;
 	if(buf[pos] == 'P' && buf[pos+1] == 'K' && 
@@ -179,12 +166,15 @@ static avoff_t find_ecrec(ave *v, arch_file *file,
     } 
   
     if(!found) {
-	v->errn = EIO;
-	return -1;
+        av_log(AVLOG_ERROR, 
+               "UZIP: Couldn't find End of Central Directory Record");
+        return -EIO;
     }
 
     bufstart += pos;
-    if(read_from(v, file, buf, bufstart, ECREC_SIZE) == -1) return -1;
+    res = av_pread_all(vf, buf, ECREC_SIZE, bufstart);
+    if(res < 0)
+        return res;
   
     ecrec->this_disk =     DBYTE(buf+ECREC_THIS_DISK);
     ecrec->cdir_disk =     DBYTE(buf+ECREC_CDIR_DISK);
@@ -197,7 +187,7 @@ static avoff_t find_ecrec(ave *v, arch_file *file,
     return bufstart;
 }
 
-static avtime_t dos2unix_time(avqbyte dt)
+static avtime_t dos2unix_time(avuint dt)
 {
     struct avtm ut;
 
@@ -211,7 +201,7 @@ static avtime_t dos2unix_time(avqbyte dt)
     return av_mktime(&ut);
 }
 
-static avmode_t dos2unix_attr(avqbyte da, avmode_t archmode)
+static avmode_t dos2unix_attr(avuint da, avmode_t archmode)
 {
     avmode_t mode = (archmode & 0666);
     if (da & 0x01) mode = mode & ~0222;
@@ -221,65 +211,58 @@ static avmode_t dos2unix_attr(avqbyte da, avmode_t archmode)
     return mode;
 }
 
-static int fill_zipentry(ave *v, arch_entry *ent, struct cdirentry *cent,
-                         struct ecrec *ecrec)
+static avmode_t zip_get_mode(struct cdirentry *cent, avmode_t origmode)
 {
-    int res;
-    archive *arch = ent->arch;
-    struct zipino_data *zipd;
-    struct avstat filestat;
-
-    if(ent->ino != AVNULL)
-	return 0;
-  
-    av_default_stat(&filestat);
-
     /* FIXME: Handle other architectures */
     if((cent->version & 0xFF00) >> 8 == OS_UNIX) 
-	filestat.mode = (cent->attr >> 16) & 0xFFFF;
+	return (cent->attr >> 16) & 0xFFFF;
     else
-	filestat.mode = dos2unix_attr(cent->attr & 0xFF, arch->mode);
-  
-    filestat.uid = arch->uid;
-    filestat.gid = arch->gid;
-    filestat.blocks = AV_DIV(cent->comp_size, 512);
-    filestat.blksize = VBLOCKSIZE;
-    filestat.dev = arch->dev;
-    filestat.ino = arch->inoctr++;
-    filestat.mtime = dos2unix_time(cent->mod_time);
-    filestat.atime = filestat.mtime;
-    filestat.ctime = filestat.mtime;
-    filestat.size = cent->file_size;
-  
-    AV_NEW(v, zipd);
-    if(zipd == AVNULL) 
-	return -1;
+	return dos2unix_attr(cent->attr & 0xFF, origmode);
+}
 
-    zipd->crc = cent->crc;
-    zipd->comp_size = cent->comp_size;
+static void zipnode_delete(struct zipnode *nod)
+{
+    av_unref_obj(nod->cache);
+}
 
-    res = av_new_inode(v, ent, &filestat);
-    if(res == -1) {
-        av_free(zipd);
-        return -1;
-    }
-        
-    ent->ino->udata = (void *) zipd;
+static void fill_zipentry(struct archive *arch, struct entry *ent,
+                         struct cdirentry *cent, struct ecrec *ecrec)
+{
+    struct archnode *nod;
+    struct zipnode *info;
+    int isdir = AV_ISDIR(zip_get_mode(cent, 0));
+
+    nod = av_arch_new_node(arch, ent, isdir);
+    
+    nod->st.mode = zip_get_mode(cent, nod->st.mode);
+    nod->st.size = cent->file_size;
+    nod->st.blocks = AV_BLOCKS(cent->comp_size);
+    nod->st.blksize = 4096;
+    nod->st.mtime.sec = dos2unix_time(cent->mod_time);
+    nod->st.mtime.nsec = 0;
+    nod->st.atime = nod->st.mtime;
+    nod->st.ctime = nod->st.mtime;
+    nod->realsize = cent->comp_size;
+
+    AV_NEW_OBJ(info, zipnode_delete);
+    nod->data = info;
+
+    info->cache = NULL;
+    info->crc = cent->crc;
+    info->method = 0;
 
     /* FIXME: multivolume archives */
     if(cent->start_disk != 0 || ecrec->cdir_disk != 0)
-        ent->ino->offset = -1;
+        info->headeroff = -1;
     else
-        ent->ino->offset = cent->file_off;
+        info->headeroff = cent->file_off;
 
-    return 0;
 }
 
-static int insert_zipentry(ave *v, archive *arch, char *path, 
-			   struct cdirentry *cent, struct ecrec *ecrec)
+static void insert_zipentry(struct archive *arch, char *path, 
+                            struct cdirentry *cent, struct ecrec *ecrec)
 {
-    int res;
-    arch_entry *ent;
+    struct entry *ent;
     int entflags = 0;
 
     switch((cent->version & 0xFF00) >> 8) {
@@ -296,39 +279,32 @@ static int insert_zipentry(ave *v, archive *arch, char *path,
     case OS_NT:
     case OS_WIN95:
  
-	entflags |= ENTF_NOCASE;
+	entflags |= NSF_NOCASE;
     }
 
-    if (path[0] == '\0') {
-	v->errn = EIO;
-	return -1; /* FIXME: warning: empty name */
-    }
+    ent = av_arch_create(arch, path, entflags);
+    if(ent == NULL)
+        return;
 
-    ent = av_find_entry(v, arch->root, path, FIND_CREATE, entflags);
-    if(ent == AVNULL)
-        return -1;
-
-    if(ent->ino == AVNULL)
-        ent->flags = entflags;
-
-    res = fill_zipentry(v, ent, cent, ecrec);
-    av_unref_entry(ent);
-
-    return res;
+    fill_zipentry(arch, ent, cent, ecrec);
+    av_unref_obj(ent);
 }
 
-static avoff_t read_entry(ave *v, arch_file *file, archive *arch, avoff_t pos,
-			  struct ecrec *ecrec)
+static avoff_t read_entry(vfile *vf, struct archive *arch, avoff_t pos,
+                          struct ecrec *ecrec)
 {
+    int res;
     char buf[CDIRENT_SIZE];
     struct cdirentry ent;
     char *filename;
 
-    if(read_from(v, file, buf, pos, CDIRENT_SIZE) == -1) return -1;
+    res = av_pread_all(vf, buf, CDIRENT_SIZE, pos);
+    if(res < 0)
+        return res;
   
     if(buf[0] != 'P' || buf[1] != 'K' || buf[2] != 1 || buf[3] != 2) {
-	v->errn = EIO;
-	return -1;
+        av_log(AVLOG_ERROR, "UZIP: Broken archive");
+        return -EIO;
     }
 
     ent.version      = DBYTE(buf+CDIRENT_VERSION);
@@ -347,27 +323,23 @@ static avoff_t read_entry(ave *v, arch_file *file, archive *arch, avoff_t pos,
     ent.attr         = QBYTE(buf+CDIRENT_ATTR);
     ent.file_off     = QBYTE(buf+CDIRENT_FILE_OFF);
 
-    filename = av_malloc(v, ent.fname_len + 1);
-    if(filename == AVNULL) return -1;
-
-    if(read_from(v, file, filename, pos + CDIRENT_SIZE, ent.fname_len) == -1) {
-	av_free(filename);
-	return -1;
+    filename = av_malloc(ent.fname_len + 1);
+    res = av_pread_all(vf, filename, ent.fname_len, pos + CDIRENT_SIZE);
+    if(res < 0) {
+        av_free(filename);
+        return res;
     }
     filename[ent.fname_len] = '\0';
 
-    if(insert_zipentry(v, arch, filename, &ent, ecrec) == -1) {
-	av_free(filename);
-	return -1;
-    }
-  
+    insert_zipentry(arch, filename, &ent, ecrec);
     av_free(filename);
 
-    return pos + CDIRENT_SIZE + ent.fname_len + ent.extra_len + ent.comment_len;
+    return pos + CDIRENT_SIZE + ent.fname_len + ent.extra_len +
+        ent.comment_len;
 }
 
 
-static int read_zipfile(ave *v, arch_file *file, archive *arch)
+static int read_zipfile(vfile *vf, struct archive *arch)
 {
     avoff_t ecrec_pos;
     struct ecrec ecrec;
@@ -376,25 +348,21 @@ static int read_zipfile(ave *v, arch_file *file, archive *arch)
     avoff_t cdir_pos;
     int nument;
 
-    ecrec_pos = find_ecrec(v, file, SEARCHLEN, &ecrec);
-    if(ecrec_pos == -1) {
-#if 0
-	fprintf(stderr, "Couldn't find End of Central Directory Record\n");
-#endif
-	return -1;
-    }
+    ecrec_pos = find_ecrec(vf, SEARCHLEN, &ecrec);
+    if(ecrec_pos < 0)
+        return ecrec_pos;
 
     cdir_end = ecrec.cdir_size+ecrec.cdir_off;
 
     if(ecrec.this_disk != ecrec.cdir_disk) {
-	v->errn = EIO;
-	return -1;
+        av_log(AVLOG_ERROR, "UZIP: Cannot handle multivolume archives");
+        return -EIO;
     }
   
     extra_bytes = ecrec_pos - cdir_end;
     if(extra_bytes < 0) {
-	v->errn = EIO;
-	return -1;
+        av_log(AVLOG_ERROR, "UZIP: Broken archive");
+        return -EIO;
     }
   
     if(ecrec.cdir_off == 0 && ecrec.cdir_size == 0) {
@@ -406,77 +374,61 @@ static int read_zipfile(ave *v, arch_file *file, archive *arch)
   
     for(nument = 0; nument < ecrec.total_entries; nument++) {
 	if(cdir_pos >= ecrec_pos) {
-	    v->errn = EIO;
-	    return -1;
+            av_log(AVLOG_ERROR, "UZIP: Broken archive");
+            return -EIO;
 	}
-	cdir_pos = read_entry(v, file, arch, cdir_pos, &ecrec);
-	if(cdir_pos == -1) return -1;
+	cdir_pos = read_entry(vf, arch, cdir_pos, &ecrec);
+	if(cdir_pos < 0) 
+            return cdir_pos;
     }
   
     return 0;
 }
 
-static int parse_zipfile(ave *v, vpath *path, archive *arch)
+static int parse_zipfile(void *data, ventry *ve, struct archive *arch)
 {
     int res;
-    arch_file file;
-  
-    if(PARAM(path)[0]) {
-        v->errn = ENOENT;
-        return -1;
-    }
+    vfile *vf;
 
-    file.fh = av_open(v, BASE(path), AVO_RDONLY, 0);
-    if(file.fh == -1) return -1;
-    file.ptr = 0;
+    res = av_open(ve->mnt->base, AVO_RDONLY, 0, &vf);
+    if(res < 0)
+        return res;
 
-    res = read_zipfile(v, &file, arch);
-  
-    av_close(DUMMYV, file.fh);
+    res = read_zipfile(vf, arch);
+    av_close(vf);
     
     return res;  
 }
 
-
-static int zip_close(ave *v, void *devinfo)
+static int zip_close(struct archfile *fil)
 {
-    arch_fdi *di = (arch_fdi *) devinfo;
-  
-    if(di->ino->typeflag == METHOD_DEFLATE && di->udata != AVNULL) {
-	av_vfile_destroy(v, di->udata);
-	di->udata = AVNULL;
-    }
-    return (*di->vdev->close)(v, devinfo);
+    struct zfile *zfil = fil->data;
+
+    av_unref_obj(zfil);
+    return 0;
 }
 
-static void *zip_open(ave *v, vpath *path, int flags, int mode)
+static int zip_open(struct archfile *fil)
 {
+    int res;
     char buf[LDIRENT_SIZE];
     struct ldirentry ent;
     int headersize;
-    arch_fdi *di;
-    arch_devd *dd = (arch_devd *) av_get_vdev(path)->devdata;
-    avoff_t offset;
-    struct zipino_data *zipd;
+    struct zipnode *info = (struct zipnode *) fil->nod->data;
+    avoff_t offset = info->headeroff;
 
-    di = (arch_fdi *) (*dd->vdev->open)(v,  path, flags, mode);
-    if(di == AVNULL) return AVNULL;
-    offset = di->ino->offset;
-    zipd = (struct zipino_data *) di->ino->udata;
-
-    if(AV_ISDIR(di->ino->st.mode)) return di;
-  
     if(offset == -1) {
-	v->errn = ENODEV;
-	goto error;
+        av_log(AVLOG_ERROR, "UZIP: Cannot handle multivolume archives");
+        return -EPERM;
     }
 
-    if(read_from(v, &di->file, buf, di->ino->offset, LDIRENT_SIZE) == -1) 
-	goto error;
+    res = av_pread_all(fil->basefile, buf, LDIRENT_SIZE, offset);
+    if(res < 0)
+        return res;
 
     if(buf[0] != 'P' || buf[1] != 'K' || buf[2] != 3 || buf[3] != 4) {
-	v->errn = EIO;
-	goto error;
+        av_log(AVLOG_ERROR, "UZIP: Broken archive");
+        return -EIO;
     }
 
     ent.need_version = DBYTE(buf+LDIRENT_NEED_VERSION);
@@ -490,103 +442,110 @@ static void *zip_open(ave *v, vpath *path, int flags, int mode)
     ent.extra_len    = DBYTE(buf+LDIRENT_EXTRA_LEN);
 
     if(ent.method != METHOD_STORE && ent.method != METHOD_DEFLATE) {
-	v->errn = ENODEV;
-	goto error;
+        av_log(AVLOG_ERROR, "UZIP: Cannot handle compression method %i",
+               ent.method);
+        return -EPERM;
     }
 
     if((ent.flag & 0x08) != 0) {
 	/* can't trust local header, use central directory: */
     
-	ent.comp_size = zipd->comp_size;
-	ent.file_size = di->ino->st.size;
-	ent.crc = zipd->crc;
+	ent.comp_size = fil->nod->realsize;
+	ent.file_size = fil->nod->st.size;
+	ent.crc = info->crc;
     }
 
-    di->ino->typeflag = ent.method;
+    info->method = ent.method;
     headersize = LDIRENT_SIZE + ent.fname_len + ent.extra_len;
-
-    di->ino->realsize = headersize + ent.comp_size;
+    fil->nod->offset = offset + headersize;
 
     if(ent.method == METHOD_DEFLATE) {
-	struct zfilt_params fp;
+        struct zfile *zfil;
 
-	di->offset = di->ino->offset + headersize;
-	/* The extra 4 bytes are to make inflate happy */
-	di->size = ent.comp_size + 4; 
-	di->lptr = 0;
-
-	fp.read = di->vdev->read;
-	fp.lseek = di->vdev->lseek;
-	fp.crc = ent.crc;
-	fp.isgzip = 0;
-	fp.vfileflags = VFILE_CACHE_2;
-	fp.devinfo = (void *) di;
-
-	di->udata = av_zfilt_create(v, &fp);
-	if(di->udata == AVNULL) goto error;
-    }
-    else {
-	/* STORE */
-    
-	di->offset = di->ino->offset + headersize;
-	di->size = ent.comp_size;
+        zfil = av_zfile_new(fil->basefile, fil->nod->offset, ent.crc);
+        fil->data = zfil;
     }
 
-    return (void *) di;
-
- error:
-    zip_close(v, (void *) di);
-    return AVNULL;
+    return 0;
 }
 
-static avssize_t zip_read(ave *v, void *devinfo, char *buf, avsize_t nbyte)
-{
-    arch_fdi *di = (arch_fdi *) devinfo;
-    avssize_t res;
 
-    if(di->ino->typeflag == METHOD_DEFLATE) {
-	res = av_vfile_read(v, di->udata, buf, di->lptr, nbyte);
-	if(res != -1) di->lptr += res;
+static avssize_t zip_deflate_read(vfile *vf, char *buf, avsize_t nbyte)
+{
+    avssize_t res;
+    struct archfile *fil = arch_vfile_file(vf);
+    struct zfile *zfil = (struct zfile *) fil->data;
+    struct zipnode *info = (struct zipnode *) fil->nod->data;
+    struct zcache *zc;
+
+    zc = (struct zcache *) av_cacheobj_get(info->cache);
+    if(zc == NULL) {
+        av_unref_obj(info->cache);
+        info->cache = NULL;
+        zc = av_zcache_new();
     }
-    else
-	res = (*di->vdev->read)(v, devinfo, buf, nbyte);
+    
+    res = av_zfile_pread(zfil, zc, buf, nbyte, vf->ptr);
+    if(res >= 0) {
+        avoff_t cachesize;
+
+        vf->ptr += res;
+        cachesize = av_zcache_size(zc);
+        if(cachesize != 0) {
+            /* FIXME: name of this cacheobj? */
+            if(info->cache == NULL)
+                info->cache = av_cacheobj_new(zc, "(uzip:index)");
+            av_cacheobj_setsize(info->cache, cachesize);
+        }
+    }
+    else {
+        av_unref_obj(info->cache);
+        info->cache = NULL;
+    }
+    av_unref_obj(zc);
 
     return res;
 }
 
-static avoff_t zip_lseek(ave *v, void *devinfo, avoff_t offset, int whence)
+static avssize_t zip_read(vfile *vf, char *buf, avsize_t nbyte)
 {
-    arch_fdi *di = (arch_fdi *) devinfo;
+    avssize_t res;
+    struct archfile *fil = arch_vfile_file(vf);
+    struct zfile *zfil = (struct zfile *) fil->data;
 
-    if(di->ino->typeflag == METHOD_DEFLATE) 
-	return av_generic_lseek(v, &di->lptr, di->ino->st.size, offset, whence);
+    if(zfil != NULL)
+        res = zip_deflate_read(vf, buf, nbyte);
     else
-	return (*di->vdev->lseek)(v, devinfo, offset, whence);
+        res = av_arch_read(vf, buf, nbyte);
+
+    return res;
 }
 
-extern int av_init_module_uzip(ave *v);
+extern int av_init_module_uzip(struct vmodule *module);
 
-int av_init_module_uzip(ave *v)
+int av_init_module_uzip(struct vmodule *module)
 {
+    int res;
+    struct avfs *avfs;
     struct ext_info zipexts[3];
-    struct vdev_info *vdev;
-    arch_devd *dd;
+    struct archparams *ap;
 
-    INIT_EXT(zipexts[0], ".zip", AVNULL);
-    INIT_EXT(zipexts[1], ".jar", AVNULL);
-    INIT_EXT(zipexts[2], AVNULL, AVNULL);
+    zipexts[0].from = ".zip",   zipexts[0].to = NULL;
+    zipexts[1].from = ".jar",   zipexts[1].to = NULL;
+    zipexts[2].from = NULL;
 
-    vdev = av_init_arch(v, "uzip", zipexts, AV_VER);
-    if(vdev == AVNULL) return -1;
-  
-    dd = (arch_devd *) vdev->devdata;
-    dd->parsefunc = parse_zipfile;
+    res = av_archive_init("uzip", zipexts, AV_VER, module, &avfs);
+    if(res < 0)
+        return res;
 
-    vdev->open = zip_open;
-    vdev->close = zip_close;
-    vdev->read = zip_read;
-    vdev->lseek = zip_lseek;
+    ap = (struct archparams *) avfs->data;
+    ap->parse = parse_zipfile;
+    ap->open = zip_open;
+    ap->close = zip_close;
+    ap->read = zip_read;
 
-    return av_add_vdev(v, vdev);
+    av_add_avfs(avfs);
+
+    return 0;
 }
-#endif
+

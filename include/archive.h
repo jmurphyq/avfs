@@ -11,12 +11,15 @@
 
 struct archive;
 struct archnode;
+struct archfile;
 
 struct archparams {
     void *data;
     int (*parse) (void *data, ventry *ent, struct archive *arch);
+    int (*open) (struct archfile *fil);
+    int (*close) (struct archfile *fil);
     avssize_t (*read)  (vfile *vf, char *buf, avsize_t nbyte);
-    int (*release) (struct archive *arch, struct archnode *nod);
+    void (*release) (struct archive *arch, struct archnode *nod);
 };
 
 #define ANOF_DIRTY    (1 << 0)
@@ -30,6 +33,8 @@ struct archnode {
     
     avoff_t offset;
     avoff_t realsize;
+    
+    int numopen;
 
     void *data;
 };
@@ -39,6 +44,7 @@ struct archfile {
     struct archive *arch;
     struct archnode *nod;
     struct entry *ent;     /* Only for readdir */
+    void *data;
 };
 
 
@@ -50,8 +56,10 @@ struct archnode *av_arch_new_node(struct archive *arch, struct entry *ent,
                                   int isdir);
 void av_arch_del_node(struct entry *ent);
 struct entry *av_arch_resolve(struct archive *arch, const char *path,
-                              int create);
+                              int create, int flags);
 int av_arch_isroot(struct archive *arch, struct entry *ent);
+struct entry *av_arch_create(struct archive *arch, const char *path,
+                             int flags);
 
 static inline struct archfile *arch_vfile_file(vfile *vf)
 {

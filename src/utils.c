@@ -214,24 +214,18 @@ char *av_stradd(char *str, ...)
 
     len = origlen;
     va_start(ap, str);
-    do {
-	s = va_arg(ap, char *);
-	if(s != NULL)
-            len += strlen(s);
-    } while(s != NULL);
+    while((s = va_arg(ap, char*)) != NULL)
+        len += strlen(s);
     va_end(ap);
   
     str = av_realloc(str, len + 1);
     ns = str + origlen;
     ns[0] = '\0';
     va_start(ap, str);
-    do {
-	s = va_arg(ap, char *);
-	if(s != NULL) {
-	    strcpy(ns, s);
-            ns += strlen(ns);
-        }
-    } while(s != NULL);
+    while((s = va_arg(ap, char*)) != NULL) {
+        strcpy(ns, s);
+        ns += strlen(ns);
+    }
     va_end(ap);
   
     return str;

@@ -25,7 +25,7 @@ static void *load_module(const char *modname, const char *moduledir)
     char *modpath;
     void *lib_handle;
 
-    modpath = av_stradd(NULL, modname, "/", moduledir, NULL);
+    modpath = av_stradd(NULL, moduledir, "/", modname, NULL);
 
     lib_handle = dlopen(modpath, RTLD_NOW);
     if(lib_handle == NULL)

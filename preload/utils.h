@@ -6,6 +6,8 @@
     See the file COPYING.LIB.
 */
 
+#define _GNU_SOURCE /* necessary to get definition of RTLD_NEXT */
+
 #include "cmd.h"
 #include "client.h"
 #include <dlfcn.h>

@@ -218,7 +218,8 @@ static void process_open(struct cmdinfo *ci)
     struct avfs_out_message outmsg;
     struct avfs_result result;
 
-    av_log(AVLOG_SYSCALL, "open(\"%s\", 0%o, 0%lo)", path, flags, mode);
+    av_log(AVLOG_SYSCALL, "open(\"%s\", 0%o, 0%lo)", path, flags,
+           (unsigned long) mode);
     
     outmsg.num = 2;
     outmsg.seg[0].len = sizeof(result);
@@ -255,7 +256,7 @@ static void process_open(struct cmdinfo *ci)
         }
     }
     av_log(AVLOG_SYSCALL, "   open(\"%s\", 0%o, 0%lo) = %i (%s)",
-             path, flags, mode, result.result,
+             path, flags, (unsigned long) mode, result.result,
              outmsg.seg[1].len ? (char *) ve->data : "");
 
     register_holder(ci->fd, result.result);

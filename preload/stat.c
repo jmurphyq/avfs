@@ -10,7 +10,9 @@
 #include "config.h"
 
 #include <sys/stat.h>
+#ifdef HAVE_ACL
 #include <sys/acl.h>
+#endif
 
 #ifdef HAVE_STAT64
 static int real_stat64(const char *path, struct stat64 *buf, int deref,
@@ -132,6 +134,7 @@ static int real_fstat(int fd, struct stat *buf, int undersc)
     }
 }
 
+#ifdef HAVE_ACL
 static int real_acl(const char *path, int cmd, int nent, aclent_t *aclbuf,
                     int undersc)
 {
@@ -152,6 +155,7 @@ static int real_acl(const char *path, int cmd, int nent, aclent_t *aclbuf,
         return prev(path, cmd, nent, aclbuf);
     }
 }
+#endif
 
 static int real_access(const char *path, int amode, int undersc)
 {
@@ -417,6 +421,7 @@ static int virt_fstat(int fd, struct stat *buf, int undersc)
     return res;
 }
 
+#ifdef HAVE_ACL
 static int convert_acl(struct avstat *vbuf, int cmd, int nent,
                        aclent_t *aclbuf)
 {
@@ -496,6 +501,7 @@ static int virt_acl(const char *path, int cmd, int nent, aclent_t *aclbuf,
 
     return res;
 }
+#endif
 
 static int virt_access(const char *path, int amode, int undersc)
 {
@@ -586,6 +592,7 @@ int _fstat(int fd, struct stat *buf)
     return virt_fstat(fd, buf, 1);
 }
 
+#ifdef HAVE_ACL
 int acl(const char *path, int cmd, int nent, aclent_t *aclbuf)
 {
     return virt_acl(path, cmd, nent, aclbuf, 0);
@@ -595,6 +602,7 @@ int _acl(const char *path, int cmd, int nent, aclent_t *aclbuf)
 {
     return virt_acl(path, cmd, nent, aclbuf, 1);
 }
+#endif
 
 int access(const char *path, int amode)
 {

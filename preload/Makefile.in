@@ -13,6 +13,7 @@ CC = @CC@
 CFLAGS = -I$(top_srcdir)/include @CFLAGS@ -fPIC @CPPFLAGS@ \
 	-DAVFS_SERVER_DIR=\"$(serverdir)\"
 LDFLAGS = @LDFLAGS@ @LIBS@
+PRELOAD_LIBS = @PRELOAD_LIBS@
 
 INSTALL = @INSTALL@
 
@@ -48,7 +49,7 @@ avfs_preload_objs = \
 	misc.o
 
 avfs_preload.so: $(avfs_preload_objs)
-	$(CC) -shared -o avfs_preload.so $(avfs_preload_objs) -lsocket
+	$(CC) -shared -o avfs_preload.so $(avfs_preload_objs) $(PRELOAD_LIBS)
 
 install-yes:
 	rm -f $(i_serverdir)/avfs_server

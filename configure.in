@@ -143,7 +143,14 @@ dnl == Now comes the stuff that is only for preload               ==
 dnl ================================================================
 
 if test $avfscoda_build = no; then
-   AC_CHECK_FUNCS(lseek64 getdents64 open64 creat64 stat64)
+	origlibs=$LIBS
+	LIBS=
+	AC_CHECK_FUNCS(lseek64 getdents64 open64 creat64 stat64 acl)
+	AC_SEARCH_LIBS(socket, socket inet)
+	AC_SEARCH_LIBS(dlsym, dl)
+	PRELOAD_LIBS=$LIBS
+	AC_SUBST(PRELOAD_LIBS)
+	LIBS=$origlibs
 fi
 
 dnl ================================================================

@@ -1,5 +1,9 @@
 Changes from 0.9.0 to 0.9.1
 
+	* Make preload compile on linux (does not work yet) (Frederik Eaton)
+	
+	* Fix bug in module loader (Frederik Eaton)
+
 	* The magic char (#) is escaped when reading a virtual directory
 	
 	* Avfscoda correctly returns error codes when reading a file or a

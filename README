@@ -153,8 +153,7 @@ The following "handelers" are available now:
 
   name of handler    type of operation      notes
   ---------------    -----------------      -----
-  #ugz               gunzip                 builtin, use '-s' option for
-                                            huge (>=4G) files
+  #ugz               gunzip                 builtin (1)
   #ugzip             gunzip                 uses gzip
   #uz                uncompress             uses gzip
   #gz                gzip                   uses gzip
@@ -176,6 +175,11 @@ The following "handelers" are available now:
   #dav_ctl           control dav sessions   
   #volatile          'memory fs'            mainly for testing
   #local             local filesysem        only for internal use
+
+(1) With the '-s' option (blala.gz#-s) the gunzip module will use the
+size stored at the end of the gzip file.  This will make some
+operations on a .gz file much faster, but it isn't usable for huge
+(>=4GByte) files, since the size is stored in 32 bits :(.
 
 The following handlers are available through Midnight Commanders
 'extfs'. These were not written by me, and could contain security

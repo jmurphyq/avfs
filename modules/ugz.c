@@ -377,9 +377,9 @@ static int gz_open(ventry *ve, int flags, avmode_t mode, void **resp)
     fil->base = base;
     fil->node = nod;
     if(strcmp(ve->mnt->opts, "-s") == 0)
-        fil->validsize = 0;
-    else
         fil->validsize = 1;
+    else
+        fil->validsize = 0;
     
     *resp = fil;
     return 0;

@@ -26,7 +26,7 @@
 #define MAXPMSGLEN 8192
 #define MAXMSGLEN 1045
 
-#define HAVE_FIFO_BUG
+/* #define HAVE_FIFO_BUG */
 
 static int child_outfd;
 
@@ -128,21 +128,22 @@ static int set_attr(const char *path, struct coda_vattr *a)
     return 0;
 }
 
-static void create_empty_dir(const char *tmpname)
+static int create_empty_dir(const char *tmpname)
 {
     int outfd;
 
     outfd = open(tmpname, O_WRONLY | O_TRUNC);
     if(outfd == -1) {
-        fprintf(stderr, "creat(%s) failed (%s)\n", tmpname, 
+        fprintf(stderr, "open(%s, O_WRONLY | O_TRUNC) failed (%s)\n", tmpname, 
                 strerror(errno));
-        return;
+        return -EIO;
     }
 
     close(outfd);
+    return 0;
 }
 
-static void copy_dir(const char *path, const char *tmpname)
+static int copy_dir(const char *path, const char *tmpname)
 {
     struct venus_dirent vd;
     int res;
@@ -151,46 +152,58 @@ static void copy_dir(const char *path, const char *tmpname)
     struct dirent *ent;
 	
     dirp = virt_opendir(path);
-    if(dirp == NULL) {
-        fprintf(stderr, "opendir(%s) failed (%s)\n", path, 
-                strerror(errno));
-        return;
-    }
+    if(dirp == NULL)
+        return -errno;
 	
     outfd = open(tmpname, O_WRONLY | O_TRUNC);
     if(outfd == -1) {
-        fprintf(stderr, "creat(%s) failed (%s)\n", tmpname, 
+        fprintf(stderr, "open(%s, O_WRONLY | O_TRUNC) failed (%s)\n", tmpname, 
                 strerror(errno));
         virt_closedir(dirp);
-        return;
+        return -EIO;
     }
-	
-    do {
+
+    while(1) {
+        errno = 0;
         ent = virt_readdir(dirp);
-        if(ent != NULL) {
-            vd.d_fileno = 1; /* We don't know the inode number */
-            vd.d_type   = CDT_UNKNOWN;
-            strncpy(vd.d_name, ent->d_name, CODA_MAXNAMLEN);
-            vd.d_name[CODA_MAXNAMLEN] = '\0';
-            vd.d_namlen = strlen(vd.d_name);
-            vd.d_reclen = DIRSIZ(&vd);
-			
-            res = write(outfd, &vd, vd.d_reclen);
-            if(res == -1) {
-                fprintf(stderr, "write failed (%s)\n",
-                        strerror(errno));
-                break;
-            }
+        if(ent == NULL) {
+            if(errno != 0)
+                res = -errno;
+            else
+                res = 0;
+            break;
+        }
+
+        vd.d_fileno = 1; /* We don't know the inode number */
+        vd.d_type   = CDT_UNKNOWN;
+        strncpy(vd.d_name, ent->d_name, CODA_MAXNAMLEN);
+        vd.d_name[CODA_MAXNAMLEN] = '\0';
+        vd.d_namlen = strlen(vd.d_name);
+        vd.d_reclen = DIRSIZ(&vd);
+        
+        res = write(outfd, &vd, vd.d_reclen);
+        if(res == -1) {
+            fprintf(stderr, "write failed (%s)\n", strerror(errno));
+            res = -EIO;
+            break;
         }
     } while(ent != NULL);
 	
     close(outfd);
-    virt_closedir(dirp);
+    if(res == 0) {
+        res = virt_closedir(dirp);
+        if(res == -1)
+            return -errno;
+    }
+    else
+        virt_closedir(dirp);
+
+    return res;
 }
 
 #define COPYBUF 16384
 
-static void copy_file(const char *name, const char *tmpname)
+static int copy_file(const char *name, const char *tmpname)
 {
     char buf[COPYBUF];
     int infd;
@@ -198,39 +211,42 @@ static void copy_file(const char *name, const char *tmpname)
     int res;
 	
     infd = virt_open(name, O_RDONLY, 0);
-    if(infd == -1) {
-        fprintf(stderr, "open(%s) failed (%s)\n", name,
-                strerror(errno));
-        return;
-    }
+    if(infd == -1)
+        return -errno;
 	
     outfd = open(tmpname, O_WRONLY | O_TRUNC);
     if(outfd == -1) {
-        fprintf(stderr, "creat(%s) failed (%s)\n", tmpname,
-                strerror(errno));
+        fprintf(stderr, "open(%s) failed (%s)\n", tmpname, strerror(errno));
         virt_close(infd);
-        return;
+        return -EIO;
     }
 	
     do {
         res = virt_read(infd, buf, COPYBUF);
         if(res == -1) {
-            fprintf(stderr, "read failed (%s)\n",
-                    strerror(errno));
+            res = -errno;
             break;
         }
         if (res > 0) {
             res = write(outfd, buf, res);
             if(res == -1) {
-                fprintf(stderr, "write failed (%s)\n", 
-                        strerror(errno));
+                fprintf(stderr, "write failed (%s)\n", strerror(errno));
+                res = -EIO;
                 break;
             }
         }
     } while(res > 0);
 
     close(outfd);
-    virt_close(infd);
+    if(res == 0) {
+        res = virt_close(infd);
+        if(res == -1)
+            return -errno;
+    }
+    else
+        virt_close(infd);
+
+    return res;
 }
 
 static int write_file(const char *tmpname, const char *name)
@@ -241,58 +257,58 @@ static int write_file(const char *tmpname, const char *name)
     int res;
 	
     outfd = virt_open(name, O_WRONLY | O_TRUNC, 0);
-    if(outfd == -1) {
-        fprintf(stderr, "open(%s) failed (%s)\n", name, strerror(errno));
-        return -1;
-    }
+    if(outfd == -1)
+        return -errno;
 	
     infd = open(tmpname, O_RDONLY, 0);
     if(infd == -1) {
         fprintf(stderr, "open(%s) failed (%s)\n", tmpname, strerror(errno));
         virt_close(outfd);
-        return -1;
+        return -EIO;
     }
 	
     do {
         res = read(infd, buf, COPYBUF);
         if(res == -1) {
             fprintf(stderr, "read failed (%s)\n", strerror(errno));
+            res = -EIO;
             break;
         }
         if (res > 0) {
             res = virt_write(outfd, buf, res);
             if(res == -1) {
-                fprintf(stderr, "write failed (%s)\n", strerror(errno));
+                res = -errno;
                 break;
             }
         }
     } while(res > 0);
 
-    if(res == -1) {
-        int saverrno = errno;
-        close(infd);
-        virt_close(outfd);
-        errno = saverrno;
-    }
-    else {
-        close(infd);
+    close(infd);
+    if(res == 0) {
         res = virt_close(outfd);
+        if(res == -1)
+            return -errno;
     }
     
     return res;
 }
 
-static void create_empty_file(const char *tmpname)
+static int create_empty_file(const char *tmpname)
 {
     int fd;
 
     fprintf(stderr, "create_empty_file: %s\n", tmpname);
 
     fd = open(tmpname, O_WRONLY | O_TRUNC);
-    if(fd == -1)
-        fprintf(stderr, "creat(%s) failed (%s)\n", tmpname, strerror(errno));
+    if(fd == -1) {
+        fprintf(stderr, "open(%s, O_WRONLY | O_TRUNC) failed (%s)\n", tmpname,
+                strerror(errno));
+        
+        return -EIO;
+    }
 
     close(fd);
+    return 0;
 }
 
 
@@ -366,22 +382,24 @@ void *process_request(void *arg)
     case CODA_OPEN:
 	size = sizeof(rep->oh);
 	if(strcmp(path1, "/") == 0)
-	    create_empty_dir(path2);
+	    ret = create_empty_dir(path2);
 	else {
-	    if((req->coda_open.flags & C_O_TRUNC) != 0) 
-		create_empty_file(path2);
+	    if((req->coda_open.flags & C_O_TRUNC) != 0)
+		ret = create_empty_file(path2);
 	    else {
 		ret = virt_stat(path1, &stbuf);
 		if(ret == -1)
-		    rep->oh.result = errno;
+                    ret = -errno;
 		else {
 		    if(S_ISDIR(stbuf.st_mode))
-			copy_dir(path1, path2);
+			ret = copy_dir(path1, path2);
 		    else 
-			copy_file(path1, path2);
+			ret = copy_file(path1, path2);
 		}
 	    }
-	}
+        }
+        if(ret < 0)
+            rep->oh.result = -ret;
 	break;
 
     case CODA_CREATE:
@@ -390,7 +408,7 @@ void *process_request(void *arg)
 	    ret = virt_open(path1, O_WRONLY | O_CREAT | O_TRUNC, 
 			    req->coda_create.mode & 07777);
 	    if(ret != -1) 
-		virt_close(ret);
+		ret = virt_close(ret);
 	}
 	else {
 	    ret = virt_mknod(path1, req->coda_create.mode,
@@ -404,8 +422,8 @@ void *process_request(void *arg)
     case CODA_CLOSE:
 	size = sizeof(rep->oh);
 	ret = write_file(path2, path1);
-	if(ret == -1)
-	    rep->oh.result = errno;
+	if(ret < 0)
+	    rep->oh.result = -ret;
 	break;
 			
     case CODA_LOOKUP:
@@ -495,8 +513,7 @@ void *process_request(void *arg)
     size += sizeof(int);
     ret = write(outfd, obuf, size);
     if(ret == -1 || ret != size) {
-	fprintf(stderr, "Error writing to parent: %s\n",
-		strerror(errno));
+	fprintf(stderr, "Error writing to parent: %s\n", strerror(errno));
 	exit(1);
     }
     
@@ -533,7 +550,7 @@ void child_process(int infd, int outfd)
     while(1) {
         numread = read(infd, &insize, sizeof(insize));
         if(numread == -1) {
-            fprintf(stderr, "Error reading from device: %s\n", 
+            fprintf(stderr, "Error reading from device: %s\n",
                     strerror(errno));
             exit(1);
         }

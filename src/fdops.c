@@ -195,6 +195,27 @@ avoff_t av_fd_lseek(int fd, avoff_t offset, int whence)
     return res;
 }
 
+static void avdirent_escape_magic(struct avdirent *buf)
+{
+    char *newname;
+    char *src;
+    char *dst;
+
+    if(strchr(buf->name, AVFS_SEP_CHAR) == NULL)
+        return;
+
+    newname = av_malloc(strlen(buf->name) * 2 + 1);
+    dst = newname;
+    for(src = buf->name; *src != '\0'; src++) {
+        *dst++ = *src;
+        if(*src == AVFS_SEP_CHAR)
+            *dst++ = AVFS_SEP_CHAR;
+    }
+    *dst = '\0';
+    av_free(buf->name);
+    buf->name = newname;
+}
+
 int av_fd_readdir(int fd, struct avdirent *buf, avoff_t *posp)
 {
     int res;
@@ -208,6 +229,8 @@ int av_fd_readdir(int fd, struct avdirent *buf, avoff_t *posp)
         AVFS_LOCK(avfs);
 	res = avfs->readdir(vf, buf);
         AVFS_UNLOCK(avfs);
+
+        avdirent_escape_magic(buf);
 
 	put_file(vf);
     }

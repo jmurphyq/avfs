@@ -19,7 +19,7 @@
 #include <sys/stat.h>
 
 struct sfile {
-    struct sfilefuncs *func;
+    const struct sfilefuncs *func;
     void *data;
     int flags;
     void *conndata;
@@ -65,7 +65,8 @@ static void sfile_delete(struct sfile *fil)
     av_unref_obj(fil->data);
 }
 
-struct sfile *av_sfile_new(struct sfilefuncs *func, void *data, int flags)
+struct sfile *av_sfile_new(const struct sfilefuncs *func,
+			   void *data, int flags)
 {
     struct sfile *fil;
 

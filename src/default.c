@@ -73,42 +73,42 @@ static int default_readlink(ventry *ve, char **bufp)
 
 static int default_symlink(const char *path, ventry *newve)
 {
-    return -EPERM;
+    return -ENOSYS;
 }
 
 static int default_unlink(ventry *ve)
 {
-    return -EPERM;
+    return -ENOSYS;
 }
 
 static int default_rmdir(ventry *ve)
 {
-    return -EPERM;
+    return -ENOSYS;
 }
 
 static int default_mknod(ventry *ve, avmode_t mode, avdev_t dev)
 {
-    return -EPERM;
+    return -ENOSYS;
 }
 
 static int default_mkdir(ventry *ve, avmode_t mode)
 {
-    return -EPERM;
+    return -ENOSYS;
 }
 
 static int default_rename(ventry *ve, ventry *newve)
 {
-    return -EPERM;
+    return -ENOSYS;
 }
 
 static int default_link(ventry *ve, ventry *newve)
 {
-    return -EPERM;
+    return -ENOSYS;
 }
 
 static int default_open(ventry *ve, int flags, avmode_t mode, void **resp)
 {
-    return -EPERM;
+    return -ENOSYS;
 }
 
 static int default_close(vfile *vf)
@@ -118,33 +118,33 @@ static int default_close(vfile *vf)
 
 static avssize_t default_read(vfile *vf, char *buf, avsize_t nbyte)
 {
-    return -EPERM;
+    return -ENOSYS;
 }
 
 static avssize_t default_write(vfile *vf, const char *buf,
 			       avsize_t nbyte)
 {
-    return -EPERM;
+    return -ENOSYS;
 }
 
 static int default_readdir(vfile *vf, struct avdirent *buf)
 {
-    return -EPERM;
+    return -ENOSYS;
 }
 
 static int default_getattr(vfile *vf, struct avstat *buf, int attrmask)
 {
-    return -EPERM;
+    return -ENOSYS;
 }
 
 static int default_setattr(vfile *vf, struct avstat *buf, int attrmask)
 {
-    return -EPERM;
+    return -ENOSYS;
 }
 
 static int default_truncate(vfile *vf, avoff_t length)
 {
-    return -EPERM;
+    return -ENOSYS;
 }
 
 static avoff_t get_size(vfile *vf)

@@ -20,11 +20,12 @@ struct sfilefuncs {
 
 struct sfile;
 
-struct sfile *av_sfile_new(struct sfilefuncs *func, void *data, int flags);
+struct sfile *av_sfile_new(const struct sfilefuncs *func, void *data,
+			   int flags);
 avssize_t av_sfile_pread(struct sfile *fil, char *buf, avsize_t nbyte,
-                           avoff_t offset);
+			 avoff_t offset);
 avssize_t av_sfile_pwrite(struct sfile *fil, const char *buf, avsize_t nbyte,
-                            avoff_t offset);
+			  avoff_t offset);
 avoff_t av_sfile_size(struct sfile *fil);
 int av_sfile_truncate(struct sfile *fil, avoff_t length);
 int av_sfile_startget(struct sfile *fil);

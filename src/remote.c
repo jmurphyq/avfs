@@ -613,7 +613,7 @@ static int rem_open(ventry *ve, int flags, avmode_t mode, void **resp)
     }
     else {
         if(accmode == AVO_WRONLY || accmode == AVO_RDWR)
-            return -EPERM;
+            return -EROFS;
 
         rem_check_file(fs, ent);
     }
@@ -761,7 +761,7 @@ static int rem_get_file(struct remfs *fs, struct remnode *nod,
     if(rem->get != NULL) 
         res = rem->get(rem, &gp);
     else
-        res = -EPERM;
+        res = -ENOENT;
     av_free(gp.hostpath.host);
     av_free(gp.hostpath.path);
 

@@ -38,6 +38,7 @@ static int oflags_to_avfs(int flags)
 int virt_open(const char *path, int flags, mode_t mode)
 {
     int res;
+    int errno_save = errno;
 
     res = av_fd_open(path, oflags_to_avfs(flags), mode & 07777);
     if(res < 0) {
@@ -45,12 +46,14 @@ int virt_open(const char *path, int flags, mode_t mode)
         return -1;
     }
 
-    return 0;
+    errno = errno_save;
+    return res;
 }
 
 int virt_close(int fd)
 {
     int res;
+    int errno_save = errno;
 
     res = av_fd_close(fd);
     if(res < 0) {
@@ -58,6 +61,7 @@ int virt_close(int fd)
         return -1;
     }
     
+    errno = errno_save;
     return 0;
 }
 
@@ -65,6 +69,7 @@ int virt_close(int fd)
 ssize_t virt_write(int fd, const void *buf, size_t nbyte)
 {
     ssize_t res;
+    int errno_save = errno;
 
     res = av_fd_write(fd, buf, nbyte);
     if(res < 0) {
@@ -72,12 +77,14 @@ ssize_t virt_write(int fd, const void *buf, size_t nbyte)
         return -1;
     }
 
+    errno = errno_save;
     return res;
 }
 
 ssize_t virt_read(int fd, void *buf, size_t nbyte)
 {
     ssize_t res;
+    int errno_save = errno;
 
     res = av_fd_read(fd, buf, nbyte);
     if(res < 0) {
@@ -85,12 +92,14 @@ ssize_t virt_read(int fd, void *buf, size_t nbyte)
         return -1;
     }
 
+    errno = errno_save;
     return res;
 }
 
 off_t virt_lseek(int fd, off_t offset, int whence)
 {
     off_t res;
+    int errno_save = errno;
 
     res = av_fd_lseek(fd, offset, whence);
     if(res < 0) {
@@ -98,6 +107,7 @@ off_t virt_lseek(int fd, off_t offset, int whence)
         return -1;
     }
 
+    errno = errno_save;
     return res;
 }
 
@@ -122,6 +132,7 @@ int virt_fstat(int fd, struct stat *buf)
 {
     int res;
     struct avstat avbuf;
+    int errno_save = errno;
 
     res = av_fd_getattr(fd, &avbuf, AVA_ALL);
     if(res < 0) {
@@ -130,6 +141,7 @@ int virt_fstat(int fd, struct stat *buf)
     }
     avstat_to_stat(buf, &avbuf);
 
+    errno = errno_save;
     return 0;
 }
 
@@ -154,6 +166,7 @@ static int common_stat(const char *path, struct stat *buf, int flags)
     int res;
     vfile vf;
     struct avstat avbuf;
+    int errno_save = errno;
 
     res = open_path(&vf, path, AVO_NOPERM | flags, 0);
     if(res == 0) {
@@ -167,6 +180,7 @@ static int common_stat(const char *path, struct stat *buf, int flags)
         return -1;
     }
     
+    errno = errno_save;
     return 0;
 }
 
@@ -195,6 +209,7 @@ DIR *virt_opendir(const char *path)
 {
     AVDIR *dp;
     int res;
+    int errno_save = errno;
 
     res = av_fd_open(path, AVO_DIRECTORY, 0);
     if(res < 0) {
@@ -205,6 +220,7 @@ DIR *virt_opendir(const char *path)
     AV_NEW(dp);
     dp->fd = res;
 
+    errno = errno_save;
     return (DIR *) dp;
 }
 
@@ -212,22 +228,31 @@ int virt_closedir(DIR *dirp)
 {
     int res;
     AVDIR *dp = (AVDIR *) dirp;
-    
+    int errno_save = errno;
+    int fd;
+
     if(dp == NULL) {
 	errno = EINVAL;
 	return -1;
     }
     
-    res = virt_close(dp->fd);
+    fd = dp->fd;
     av_free(dp);
+    res = av_fd_close(fd);
+    if(res < 0) {
+        errno = -res;
+        return -1;
+    }
 
-    return res;
+    errno = errno_save;
+    return 0;
 }
 
 void virt_rewinddir(DIR *dirp)
 {
     int res;
     AVDIR *dp = (AVDIR *) dirp;
+    int errno_save = errno;
 
     if(dp == NULL) {
 	errno = EINVAL;
@@ -237,6 +262,8 @@ void virt_rewinddir(DIR *dirp)
     res = av_fd_lseek(dp->fd, 0, AVSEEK_SET);
     if(res < 0)
         errno = -res;
+
+    errno = errno_save;
 }
 
 #define AVFS_DIR_RECLEN 256 /* just an arbitary number */
@@ -260,6 +287,7 @@ struct dirent *virt_readdir(DIR *dirp)
     struct avdirent buf;
     avoff_t n;
     AVDIR *dp = (AVDIR *) dirp;
+    int errno_save = errno;
 
     if(dp == NULL) {
 	errno = EINVAL;
@@ -269,12 +297,15 @@ struct dirent *virt_readdir(DIR *dirp)
     if(res <= 0) {
         if(res < 0)
             errno = -res;
+        else
+            errno = errno_save;
         return NULL;
     }
 
     avdirent_to_dirent(&dp->entry, &buf, n);
     av_free(buf.name);
 
+    errno = errno_save;
     return &dp->entry;
 }
 
@@ -283,6 +314,7 @@ int virt_truncate(const char *path, off_t length)
 {
     int res;
     vfile vf;
+    int errno_save = errno;
 
     res = open_path(&vf, path, AVO_WRONLY, 0);
     if(res == 0) {
@@ -294,6 +326,7 @@ int virt_truncate(const char *path, off_t length)
         return -1;
     }
 
+    errno = errno_save;
     return 0;
 }
 
@@ -301,6 +334,7 @@ static int common_setattr(const char *path, struct avstat *buf, int attrmask,
 			  int flags)
 {
     int res;
+    int errno_save = errno;
     vfile vf;
 
     res = open_path(&vf, path, AVO_NOPERM | flags, 0);
@@ -313,6 +347,7 @@ static int common_setattr(const char *path, struct avstat *buf, int attrmask,
         return -1;
     }
 
+    errno = errno_save;
     return 0;
 }
 
@@ -321,7 +356,9 @@ int virt_utime(const char *path, struct utimbuf *buf)
     struct avstat stbuf;
 
     if(buf == NULL) {
+        int errno_save = errno;
 	av_curr_time(&stbuf.mtime);
+        errno = errno_save;
 	stbuf.atime = stbuf.mtime;
     }
     else {
@@ -372,6 +409,7 @@ int virt_lchown(const char *path, uid_t owner, gid_t grp)
 int virt_ftruncate(int fd, off_t length)
 {
     int res;
+    int errno_save = errno;
     
     res = av_fd_truncate(fd, length);
     if(res < 0) {
@@ -379,12 +417,14 @@ int virt_ftruncate(int fd, off_t length)
         return -1;
     }
 
+    errno = errno_save;
     return 0;
 }
 
 static int common_fsetattr(int fd, struct avstat *stbuf, int attrmask)
 {
     int res;
+    int errno_save = errno;
     
     res = av_fd_setattr(fd, stbuf, attrmask);
     if(res < 0) {
@@ -392,6 +432,7 @@ static int common_fsetattr(int fd, struct avstat *stbuf, int attrmask)
         return -1;
     }
 
+    errno = errno_save;
     return 0;
 }
 
@@ -424,6 +465,7 @@ int virt_access(const char *path, int amode)
 {
     int res;
     ventry *ve;
+    int errno_save = errno;
 
     res = av_get_ventry(path, 1, &ve);
     if(res == 0) {
@@ -435,6 +477,7 @@ int virt_access(const char *path, int amode)
         return -1;
     }
 
+    errno = errno_save;
     return 0;
 }
 
@@ -455,6 +498,7 @@ int virt_readlink(const char *path, char *buf, size_t bsiz)
     int res;
     ventry *ve;
     char *avbuf;
+    int errno_save = errno;
    
     res = av_get_ventry(path, 0, &ve);
     if(res == 0) {
@@ -470,6 +514,7 @@ int virt_readlink(const char *path, char *buf, size_t bsiz)
         return -1;
     }
 
+    errno = errno_save;
     return res;
 }
 
@@ -477,6 +522,7 @@ int virt_unlink(const char *path)
 {
     int res;
     ventry *ve;
+    int errno_save = errno;
 
     res = av_get_ventry(path, 0, &ve);
     if(res == 0) {
@@ -488,6 +534,7 @@ int virt_unlink(const char *path)
         return -1;
     }
     
+    errno = errno_save;
     return 0;
 }
 
@@ -495,6 +542,7 @@ int virt_rmdir(const char *path)
 {
     int res;
     ventry *ve;
+    int errno_save = errno;
 
     res = av_get_ventry(path, 0, &ve);
     if(res == 0) {
@@ -506,6 +554,7 @@ int virt_rmdir(const char *path)
         return -1;
     }
     
+    errno = errno_save;
     return 0;
 }
 
@@ -513,6 +562,7 @@ int virt_mkdir(const char *path, mode_t mode)
 {
     int res;
     ventry *ve;
+    int errno_save = errno;
 
     res = av_get_ventry(path, 0, &ve);
     if(res == 0) {
@@ -524,6 +574,7 @@ int virt_mkdir(const char *path, mode_t mode)
         return -1;
     }
     
+    errno = errno_save;
     return 0;
 }
 
@@ -531,6 +582,7 @@ int virt_mknod(const char *path, mode_t mode, dev_t dev)
 {
     int res;
     ventry *ve;
+    int errno_save = errno;
 
     res = av_get_ventry(path, 0, &ve);
     if(res == 0) {
@@ -542,6 +594,7 @@ int virt_mknod(const char *path, mode_t mode, dev_t dev)
         return -1;
     }
     
+    errno = errno_save;
     return 0;
 }
 
@@ -549,6 +602,7 @@ int virt_symlink(const char *path, const char *newpath)
 {
     int res;
     ventry *newve;
+    int errno_save = errno;
 
     res = av_get_ventry(newpath, 0, &newve);
     if(res == 0) {
@@ -560,6 +614,7 @@ int virt_symlink(const char *path, const char *newpath)
         return -1;
     }
     
+    errno = errno_save;
     return 0;
 }
 
@@ -568,6 +623,7 @@ int virt_rename(const char *path, const char *newpath)
     int res;
     ventry *ve;
     ventry *newve;
+    int errno_save = errno;
 
     res = av_get_ventry(path, 0, &ve);
     if(res == 0) {
@@ -583,6 +639,7 @@ int virt_rename(const char *path, const char *newpath)
         return -1;
     }
     
+    errno = errno_save;
     return 0;
 }
 
@@ -591,6 +648,7 @@ int virt_link(const char *path, const char *newpath)
     int res;
     ventry *ve;
     ventry *newve;
+    int errno_save = errno;
 
     res = av_get_ventry(path, 0, &ve);
     if(res == 0) {
@@ -606,5 +664,6 @@ int virt_link(const char *path, const char *newpath)
         return -1;
     }
     
+    errno = errno_save;
     return 0;
 }

@@ -338,8 +338,9 @@ static int vol_open_check_type(avmode_t mode, int flags)
         return 0;
 
     default:
+        /* FIFO, char/bockdev, socket */
         if((flags & AVO_ACCMODE) != AVO_NOPERM)
-            return -EPERM;
+            return -ENXIO;
         return 0;
     }
 }

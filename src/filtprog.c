@@ -330,7 +330,7 @@ struct sfile *av_filtprog_new(vfile *vf, struct filtdata *filtdat)
 {
     struct filtprog *fp;
     struct sfile *sf;
-    static struct sfilefuncs func = {
+    static const struct sfilefuncs func = {
         filtprog_startget,
         filtprog_read,
         filtprog_startput,

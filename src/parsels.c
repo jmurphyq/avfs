@@ -99,7 +99,7 @@ static int is_week(const char *str)
 
 static int is_month(const char *str, struct avtm *tim)
 {
-    static const char *month = "JanFebMarAprMayJunJulAugSepOctNovDec";
+    static const char *const month = "JanFebMarAprMayJunJulAugSepOctNovDec";
     char *pos;
     
     if((pos=strstr(month, str)) != NULL){

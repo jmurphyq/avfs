@@ -142,7 +142,7 @@ static int bz_open(ventry *ve, int flags, avmode_t mode, void **resp)
         return -ENOTDIR;
 
     if(AV_ISWRITE(flags))
-        return -EPERM;
+        return -EROFS;
 
     res = av_open(ve->mnt->base, AVO_RDONLY, 0, &base);
     if(res < 0)

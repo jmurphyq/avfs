@@ -6,7 +6,7 @@ The canonical form
    [basepath]#handler[options][:parameters][/internalpath]
 
 'basepath', if given is an ordinary file path (can be a regular file,
-or a directory).
+or a directory, and can be a real or a virtual path).
 
 '#' is the character that prefixes the handler name and is
 defined by VDEV_SEP_CHAR. 

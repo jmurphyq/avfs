@@ -316,6 +316,7 @@ static void arch_do_close(struct archfile *fil, int realopen)
     av_unref_obj(fil->arch);
     av_unref_obj(fil->nod);
     av_unref_obj(fil->ent);
+    av_unref_obj(fil->curr);
     av_free(fil);
 }
 
@@ -334,7 +335,7 @@ static int arch_do_open(ventry *ve, int flags, avmode_t mode, void **resp)
         return -ENOENT;
 
     if(AV_ISWRITE(flags))
-        return -EPERM;
+        return -EROFS;
 
     if((flags & AVO_DIRECTORY) != 0 && !AV_ISDIR(nod->st.mode))
         return -ENOTDIR;
@@ -365,6 +366,9 @@ static int arch_do_open(ventry *ve, int flags, avmode_t mode, void **resp)
         fil->ent = ae->ent;
     else
         fil->ent = NULL;
+
+    fil->curr = NULL;
+    fil->currn = -1;
 
     av_ref_obj(fil->arch);
     av_ref_obj(fil->nod);
@@ -482,31 +486,30 @@ static struct archnode *arch_special_entry(int n, struct entry *ent,
     }
 }
 
-static struct archnode *arch_nth_entry(int n, struct entry *parent,
-                                       char **namep)
+static struct archnode *arch_nth_entry(int n, struct archfile *fil,
+				       char **namep)
 {
     struct entry *ent;
     struct archnode *nod;
-    int i;
 
     if(n  < 2)
-        return arch_special_entry(n, parent, namep);
+        return arch_special_entry(n, fil->ent, namep);
     
     n -= 2;
+    if(n == 0 || fil->currn != n - 1)
+	ent = av_namespace_nth(NULL, fil->ent, n);
+    else
+	ent = av_namespace_next(fil->curr);
 
-    ent = av_namespace_subdir(NULL, parent);
-    for(i = 0; i < n && ent != NULL; i++) {
-        struct entry *nextent = av_namespace_next(ent);
-        av_unref_obj(ent);
-        ent = nextent;
-    }
+    av_unref_obj(fil->curr);
+    fil->curr = ent;
+    fil->currn = n;
 
     if(ent == NULL)
         return NULL;
 
     *namep = av_namespace_name(ent);
     nod = (struct archnode *) av_namespace_get(ent);
-    av_unref_obj(ent);
 
     return nod;
 }
@@ -520,7 +523,7 @@ static int arch_readdir(vfile *vf, struct avdirent *buf)
     char *name;
 
     AV_LOCK(arch->lock);
-    nod = arch_nth_entry(vf->ptr, fil->ent, &name);
+    nod = arch_nth_entry(vf->ptr, fil, &name);
     if(nod == NULL)
         res = 0;
     else {

@@ -83,13 +83,13 @@ struct openfile {
 };
 
 struct fileinfo {
-    struct fileinfo *subdir;
     struct fileinfo *prev;
     struct fileinfo *next;
 	
     char *name;
     char *path;
     unsigned int unique;
+    unsigned int parunique;
 	
     time_t lasttime;
     int use;
@@ -101,7 +101,9 @@ struct fileinfo {
 static struct fileinfo *fmap[FMAPSIZE];
 static unsigned int nextunique = 0;
 
-static struct fileinfo rootinfo;
+#define HASHSIZE 6247
+static struct fileinfo *fhash[HASHSIZE];
+
 static int needflush;
 
 static struct fileinfo unused_files;
@@ -148,63 +150,73 @@ static void logerr(const char *fmt, ...)
     log(buf);
 }
 
-
-static struct fileinfo *find_name(struct fileinfo *parentdir,
-                                  const char *name)
+static unsigned int fi_hash(unsigned int unique, const char *name)
 {
-    struct fileinfo *fi;
+    unsigned int hash = unique;
 
-    for(fi = parentdir->subdir; fi != NULL; fi = fi->next) {
-        if(strcmp(fi->name, name) == 0) {
-            return  fi;
-        }
+    for(; *name != 0; name++) {
+	hash = (hash << 4) | (hash >> 28);
+	hash ^= (unsigned int) *name;
     }
-
-    return NULL;
+    return hash % HASHSIZE;
 }
 
 static struct fileinfo *remove_name(struct fileinfo *parentdir,
-                                    const char *name)
+				    const char *name)
 {
-    struct fileinfo *fi, **fip;
-
-    for(fip = &parentdir->subdir; *fip != NULL; fip = &(*fip)->next) {
-        fi = *fip;
-        if(strcmp(fi->name, name) == 0) {
-            *fip = fi->next;
-            return fi;
-        }
+    struct fileinfo **fip;
+    unsigned int hash = fi_hash(parentdir->unique, name);
+    
+    for(fip = &fhash[hash]; *fip != NULL; fip = &(*fip)->next) {
+	struct fileinfo *fi = *fip;
+	if(fi->parunique == parentdir->unique && strcmp(fi->name, name) == 0) {
+	    *fip = fi->next;
+	    return fi;
+	}
     }
 
     return NULL;
 }
 
-static void add_name(struct fileinfo *fi, struct fileinfo *parentdir,
-                     const char *name)
-{
-    char buf[1024];
 
-    fi->next = parentdir->subdir;
-    parentdir->subdir = fi;
-		
-    free(fi->name);
-    free(fi->path);
+static void add_name(struct fileinfo *fi, struct fileinfo *parentdir,
+                     const char *name, int hash)
+{
+    fi->next = fhash[hash];
+    fhash[hash] = fi;
 
     fi->name = strdup(name);
+    fi->parunique = parentdir->unique;
+    fi->path = (char *) malloc(strlen(parentdir->path) + 1 + strlen(name) + 1);
+    sprintf(fi->path, "%s/%s", parentdir->path, name);
+}
+
+static void rename_file(struct fileinfo *oldfi, const char *oldname,
+			struct fileinfo *newfi, const char *newname)
+{
+    struct fileinfo *fi;
+
+    fi = remove_name(oldfi, oldname);
+    if(fi != NULL) {
+	unsigned int hash = fi_hash(newfi->unique, newname);
 	
-    sprintf(buf, "%s/%s", parentdir->path, name);
-    fi->path = strdup(buf);
+	free(fi->name);
+	free(fi->path);
+	add_name(fi, newfi, newname, hash);
+    }
+
 }
 
 static struct fileinfo *get_file(struct fileinfo *parentdir, const char *name)
 {
+    unsigned int hash = fi_hash(parentdir->unique, name);
     struct fileinfo *fi;
     int i;
-	
-    fi = find_name(parentdir, name);
-    if(fi != NULL)
-        return fi;
-	
+
+    for(fi = fhash[hash]; fi != NULL; fi = fi->next)
+	if(fi->parunique == parentdir->unique && strcmp(fi->name, name) == 0)
+	    return fi;
+
     fi = malloc(sizeof(*fi));
     if(fi == NULL) {
         logerr("Out of memory");
@@ -235,15 +247,12 @@ static struct fileinfo *get_file(struct fileinfo *parentdir, const char *name)
 
     numfids ++;
 
-    fi->subdir = NULL;
     fi->lasttime = time(NULL);
     fi->ofs = NULL;
     fi->use = 0;
-    fi->path = NULL;
-    fi->name = NULL;
 
-    add_name(fi, parentdir, name);    
-	
+    add_name(fi, parentdir, name, hash);
+
     return fi;
 }
 
@@ -255,12 +264,6 @@ static void put_file(struct fileinfo *fi)
 
     log("Put fid: 0x%x\n", fi->unique);
 
-    while(fi->subdir != NULL) {
-        struct fileinfo *tmpfi = fi->subdir;
-        fi->subdir = tmpfi->next;
-        put_file(tmpfi);
-    }
-
     prev = unused_files.prev;
     next = &unused_files;
     prev->next = fi;
@@ -271,6 +274,16 @@ static void put_file(struct fileinfo *fi)
     free(fi->name);
     fi->name = NULL;
 }
+
+static void remove_file(struct fileinfo *parentdir, const char *name)
+{
+    struct fileinfo *fi;
+
+    fi = remove_name(parentdir, name);
+    if(fi != NULL)
+	put_file(fi);
+}
+
 
 static void delete_file(struct fileinfo *fi)
 {
@@ -317,8 +330,11 @@ static struct fileinfo *look_info(ViceFid *id)
 	
     log("unique: 0x%x\n", (unsigned int) id->Unique);
 	
-    if(id->Unique == 0) 
+    if(id->Unique == 0) {
+	static struct fileinfo rootinfo;
+	rootinfo.path = "/";
         return &rootinfo;
+    }
     else {
         fi = get_info(id->Unique);
         if(fi != NULL)
@@ -457,24 +473,24 @@ static void zap_dir(struct fileinfo *fi)
 }
 #endif
 
-static void clean_up_dir(struct fileinfo *dir, time_t oldtime)
+static void clean_up(time_t oldtime)
 {
-    struct fileinfo **fip, *fi;
-	
-    for(fip = &dir->subdir; *fip != NULL; ) {
-        fi = *fip;
-		
-        if(fi->subdir != NULL) 
-            clean_up_dir(fi, oldtime);
+    int i;
 
-        if((!oldtime || fi->lasttime < oldtime) && fi->subdir == NULL &&
-           fi->use == 0) {
-            *fip = fi->next;
-            purge_file(fi);
-            put_file(fi);
-        }
-        else
-            fip = &fi->next;        
+    for(i = 0; i < HASHSIZE; i++) {
+	struct fileinfo **fip = &fhash[i];
+
+	while(*fip != NULL) {
+	    struct fileinfo *fi = *fip;
+		
+	    if((!oldtime || fi->lasttime < oldtime) && fi->use == 0) {
+		*fip = fi->next;
+		purge_file(fi);
+		put_file(fi);
+	    }
+	    else
+		fip = &fi->next;        
+	}
     }
 }
 
@@ -497,9 +513,9 @@ static void clean_up_names()
     clean_up_unused();
 
     if(numfids > FMAPSIZE / 2)
-        clean_up_dir(&rootinfo, 0);
+        clean_up(0);
     else
-        clean_up_dir(&rootinfo, time(NULL) - KEEPTIME);
+        clean_up(time(NULL) - KEEPTIME);
 }
 
 static void open_file(union inputArgs *req, struct openfile *of)
@@ -681,22 +697,26 @@ static void process_answer(struct userinfo *user)
         case CODA_OPEN_BY_FD:
 #endif
         case CODA_OPEN:
-            if(rep->oh.result == 0) {
-                fi = look_info(&op->req->coda_open.VFid);
+            fi = look_info(&op->req->coda_open.VFid);
 
-                for(of = fi->ofs; of != NULL; of = of->next) 
-                    if(of->pid == op->req->ih.pid) break;
+            for(ofp = &fi->ofs; *ofp != NULL; ofp = &(*ofp)->next)
+                if((*ofp)->pid == op->req->ih.pid) break;
 				
-                if(of == NULL) {
-                    logerr("Output file not found!!!\n");
-                    reply(op->req, ENOENT);
-                }
-                else {
+            of = *ofp;
+
+            if(of == NULL) {
+                logerr("Output file not found!!!\n");
+                reply(op->req, ENOENT);
+            }
+            else {
+                if(rep->oh.result == 0) {
                     open_file(op->req, of);
                 }
+                else {
+                    close_file(of, ofp, &op->req->coda_open.VFid);
+                    send_to_kernel(rep, numread);
+                }
             }
-            else 
-                send_to_kernel(rep, numread);
             break;
         
         case CODA_CLOSE:
@@ -755,9 +775,7 @@ static void process_answer(struct userinfo *user)
             if(rep->oh.result == 0) {
                 filename = (char *) op->req + op->req->coda_remove.name;
                 fi = look_info(&op->req->coda_remove.VFid);
-                fi = remove_name(fi, filename);
-                if(fi != NULL)
-                    put_file(fi);
+		remove_file(fi, filename);
             }
             send_to_kernel(rep, numread);
             break;
@@ -766,9 +784,7 @@ static void process_answer(struct userinfo *user)
             if(rep->oh.result == 0) {
                 filename = (char *) op->req + op->req->coda_rmdir.name;
                 fi = look_info(&op->req->coda_rmdir.VFid);
-                fi = remove_name(fi, filename);
-                if(fi != NULL)
-                    put_file(fi);
+		remove_file(fi, filename);
             }
             send_to_kernel(rep, numread);
             break;
@@ -780,15 +796,11 @@ static void process_answer(struct userinfo *user)
 
                 newname = (char *) op->req + op->req->coda_rename.destname;
                 newfi = look_info(&op->req->coda_rename.destFid);
-                fi = remove_name(newfi, newname);
-                if(fi != NULL)
-                    put_file(fi);
+		remove_file(newfi, newname);
 
                 filename = (char *) op->req + op->req->coda_rename.srcname;
                 fi = look_info(&op->req->coda_rename.sourceFid);
-                fi = remove_name(fi, filename);
-                if(fi != NULL)
-                    add_name(fi, newfi, newname);
+		rename_file(fi, filename, newfi, newname);
             }
             send_to_kernel(rep, numread);
             break;
@@ -1493,6 +1505,25 @@ static void process_kernel_req()
             /* FIXME: Inform the child that the operation
                is interrupted */
 
+            switch(op->req->ih.opcode) {
+#ifdef CODA_OPEN_BY_FD
+            case CODA_OPEN_BY_FD:
+#endif
+            case CODA_OPEN:
+                fi = look_info(&op->req->coda_open.VFid);
+
+                for(ofp = &fi->ofs; *ofp != NULL; ofp = &(*ofp)->next)
+                    if((*ofp)->pid == op->req->ih.pid) break;
+				
+                of = *ofp;
+                if(of != NULL)
+                    close_file(of, ofp, &op->req->coda_open.VFid);
+
+                break;
+
+            default:                
+            }
+
             release_fids(op->req);
             *opp = op->next;
             free(op);
@@ -1514,11 +1545,6 @@ static void process()
     int ret;
     int maxfd;
     int i;
-
-    rootinfo.subdir = NULL;
-    rootinfo.next = NULL; /* never used */
-    rootinfo.name = NULL; /* never used */
-    rootinfo.path = "/";
 
     unused_files.prev = &unused_files;
     unused_files.next = &unused_files;

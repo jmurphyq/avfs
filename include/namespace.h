@@ -25,3 +25,5 @@ struct entry *av_namespace_next(struct entry *ent);
 struct entry *av_namespace_subdir(struct namespace *ns, struct entry *ent);
 struct entry *av_namespace_parent(struct entry *ent);
 void av_namespace_setflags(struct entry *ent, int setflags, int resetflags);
+struct entry *av_namespace_nth(struct namespace *ns, struct entry *parent,
+			       unsigned int n);

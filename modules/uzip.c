@@ -274,6 +274,7 @@ static void insert_zipentry(struct archive *arch, char *path,
     struct entry *ent;
     int entflags = 0;
 
+    /* FIXME: option for uzip, not to convert filenames to lowercase */
     switch((cent->version & 0xFF00) >> 8) {
     case OS_MSDOS:
     case OS_CPM:
@@ -428,7 +429,7 @@ static int zip_open(ventry *ve, struct archfile *fil)
 
     if(offset == -1) {
         av_log(AVLOG_ERROR, "UZIP: Cannot handle multivolume archives");
-        return -EPERM;
+        return -ENOENT;
     }
 
     res = av_pread_all(fil->basefile, buf, LDIRENT_SIZE, offset);
@@ -453,7 +454,7 @@ static int zip_open(ventry *ve, struct archfile *fil)
     if(ent.method != METHOD_STORE && ent.method != METHOD_DEFLATE) {
         av_log(AVLOG_ERROR, "UZIP: Cannot handle compression method %i",
                ent.method);
-        return -EPERM;
+        return -ENOENT;
     }
 
     if((ent.flag & 0x08) != 0) {

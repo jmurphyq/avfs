@@ -10,7 +10,8 @@ Flush file caches
 
 uzip - symlinks
 ucpio - builtin
-namespace - use hash table for lookup
+convert # to ## in directory listings
+option for uzip, not to convert filenames to lowercase
 
 automatic handler detection based on extension AND content
 

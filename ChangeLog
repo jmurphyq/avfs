@@ -1,5 +1,24 @@
 Changes from 0.9.0 to 0.9.1
 
+	* The magic char (#) is escaped when reading a virtual directory
+	
+	* Avfscoda correctly returns error codes when reading a file or a
+	directory
+
+	* Fixed bug in virt_open(), to actually return the file descriptor
+	instead of zero. This fixes bad behaivor of avfscoda under heavier
+	load.
+
+	* Commented out HAVE_FIFO_BUG define in child.c. If you have a
+	very old kernel, you need to uncomment this.
+
+	* Avfscoda uses hash table for lookups. This improves performance
+	for large directories.
+	
+	* Namespace uses hash table for lookups. This improves performance
+	for large directories.  TODO: current namespace implementation
+	doesn't honor the NSF_NOCASE flag.
+
 	* Removed buggy 'mkdir' from redir.c
 
 	* Added execve (only for ix86) to redir.c
@@ -18,6 +37,3 @@ Changes from 0.9.0 to 0.9.1
 	symlinks in zipfiles
 
 	* Handle archives which have '.' or '..' in their internal paths.
-
-	
-	

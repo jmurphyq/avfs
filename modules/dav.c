@@ -214,9 +214,9 @@ http_error_to_errno (const char *method, int httpret, const char *errstr)
         if (!strncmp (errstr, "404", 3)) {
             errval = -ENOENT;
         } else if (!strncmp (errstr, "403", 3)) {
-            errval = -EPERM;
+            errval = -EACCES;
         } else if (!strncmp (errstr, "405", 3)) {
-            errval = -EPERM;
+            errval = -EACCES;
         }
         break;
 

@@ -228,7 +228,7 @@ int pass_loggedin_set(struct entry *ent, const char *param, const char *val)
     AV_LOCK(pass_lock);
     fts = pass_find_session(passd, param);
     if(fts == NULL)
-        res = -EPERM;
+        res = -EACCES;
     else {
         int ival;
 

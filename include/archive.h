@@ -47,6 +47,8 @@ struct archfile {
     struct archive *arch;
     struct archnode *nod;
     struct entry *ent;     /* Only for readdir */
+    struct entry *curr;
+    int currn;
     void *data;
 };
 

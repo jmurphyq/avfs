@@ -1027,7 +1027,7 @@ static int ftp_loggedin_set(struct entry *ent, const char *param,
     AV_LOCK(ftp_lock);
     fts = ftp_find_session(ftd, param);
     if(fts == NULL)
-        res = -EPERM;
+        res = -EACCES;
     else {
         int ival;
 

@@ -4,7 +4,9 @@ top_srcdir = @top_srcdir@
 
 CC = @CC@
 LD = @LD@
-CFLAGS = -I$(top_srcdir)/include @ZLIB_CFLAGS@ @CPPFLAGS@
+cppflags = -I$(top_srcdir)/include @CPPFLAGS@ -DBZ_NO_STDIO
+CFLAGS = @ZLIB_CFLAGS@ $(cppflags)
+BZFILE_CFLAGS = @CFLAGS@ $(cppflags)
 
 bzlib_objs = \
 	blocksort.o  \
@@ -13,12 +15,16 @@ bzlib_objs = \
 	randtable.o  \
 	compress.o   \
 	decompress.o \
-	bzlib.o
+	bzlib.o      \
+	bzread.o
 
 all: libbz.o
 
 libbz.o: $(bzlib_objs)
 	$(LD) -o libbz.o $(bzlib_objs)
+
+bzread.o: bzread.c
+	$(CC) $(BZFILE_CFLAGS) -c -o bzread.o bzread.c
 
 depend:
 	cp -f Makefile Makefile.old

@@ -38,7 +38,8 @@ core_objs = \
 	filecache.o  \
 	socket.o     \
 	passwords.o  \
-	zread.o
+	zread.o      \
+	exit.o
 
 all: core.o
 

@@ -8,6 +8,7 @@
 
 #include "filecache.h"
 #include "internal.h"
+#include "exit.h"
 
 struct filecache {
     struct filecache *next;
@@ -42,6 +43,7 @@ static void filecache_insert(struct filecache *fc)
 
 static void filecache_delete(struct filecache *fc)
 {
+    av_log(AVLOG_DEBUG, "FILECACHE: delete <%s>", fc->key);
     filecache_remove(fc);
 
     av_unref_obj(fc->obj);
@@ -87,20 +89,31 @@ void av_filecache_set(const char *key, void *obj)
     struct filecache *oldfc;
     struct filecache *fc;
 
-    if(obj == NULL)
-        return;
+    if(obj != NULL) {
+        AV_NEW(fc);
+        fc->key = av_strdup(key);
+        fc->obj = obj;
+        av_ref_obj(obj);
+    }
+    else
+        fc = NULL;
 
-    AV_NEW(fc);
-    fc->key = av_strdup(key);
-    fc->obj = obj;
-    av_ref_obj(obj);
-    
     AV_LOCK(fclock);
     oldfc = filecache_find(key);
     if(oldfc != NULL)
         filecache_delete(oldfc);
-    
-    filecache_insert(fc);
+    if(fc != NULL) {
+        av_log(AVLOG_DEBUG, "FILECACHE: insert <%s>", key);
+        filecache_insert(fc);
+    }
+    AV_UNLOCK(fclock);
+}
+
+static void destroy_filecache()
+{
+    AV_LOCK(fclock);
+    while(fclist.next != &fclist)
+        filecache_delete(fclist.next);
     AV_UNLOCK(fclock);
 }
 
@@ -110,15 +123,10 @@ void av_init_filecache()
     fclist.prev = &fclist;
     fclist.obj = NULL;
     fclist.key = NULL;
+    
+    av_add_exithandler(destroy_filecache);
 }
 
-void av_destroy_filecache()
-{
-    AV_LOCK(fclock);
-    while(fclist.next != &fclist)
-        filecache_delete(fclist.next);
-    AV_UNLOCK(fclock);
-}
 
 int av_filecache_getkey(ventry *ve, char **resp)
 {

@@ -50,28 +50,6 @@ static void arch_delete(struct archive *arch)
     AV_FREELOCK(arch->lock);
 }
 
-static int new_archive(ventry *ve, struct archive *arch)
-{
-    int res;
-    struct archparams *ap = (struct archparams *) ve->mnt->avfs->data;
-    struct entry *root;
-    
-    arch->ns = av_namespace_new();
-    arch->avfs = ve->mnt->avfs;
-
-    root = av_namespace_lookup(arch->ns, NULL, "");
-    av_arch_default_dir(arch, root);
-    av_unref_obj(root);
-
-    res = ap->parse(ap->data, ve, arch);
-    if(res < 0)
-        return res;
-
-    arch->flags |= ARCHF_READY;
-
-    return 0;
-}
-
 static int arch_same(struct archive *arch, struct avstat *stbuf)
 {
     if(arch->st.ino == stbuf->ino &&
@@ -83,26 +61,70 @@ static int arch_same(struct archive *arch, struct avstat *stbuf)
         return 0;
 }
 
-static struct archive *do_get_archive(const char *key, struct avstat *stbuf)
+static int new_archive(ventry *ve, struct archive *arch)
+{
+    int res;
+    struct archparams *ap = (struct archparams *) ve->mnt->avfs->data;
+    struct entry *root;
+    struct avstat stbuf;
+
+    arch->ns = av_namespace_new();
+    arch->avfs = ve->mnt->avfs;
+
+    root = av_namespace_lookup(arch->ns, NULL, "");
+    av_arch_default_dir(arch, root);
+    av_unref_obj(root);
+
+    res = av_getattr(ve->mnt->base, &arch->st, AVA_ALL & ~AVA_SIZE, 0);
+    if(res < 0)
+        return res;
+    
+    res = ap->parse(ap->data, ve, arch);
+    if(res < 0)
+        return res;
+
+    /* The size is only requested _after_ the parse, so bzip2 &
+       al. won't suffer. */
+    res = av_getattr(ve->mnt->base, &stbuf, AVA_SIZE, 0);
+    if(res < 0)
+        return res;
+
+    arch->st.size = stbuf.size;
+
+    arch->flags |= ARCHF_READY;
+
+    return 0;
+}
+
+static int check_archive(ventry *ve, struct archive *arch, int *neednew)
+{
+    int res;
+    struct avstat stbuf;
+    int attrmask = AVA_INO | AVA_DEV | AVA_SIZE | AVA_MTIME;
+    
+    res = av_getattr(ve->mnt->base, &stbuf, attrmask, 0);
+    if(res < 0)
+        return res;
+
+    if(!arch_same(arch, &stbuf))
+        *neednew = 1;
+
+    return 0;
+}
+
+static struct archive *find_archive(const char *key)
 {
     struct archive *arch;
 
+    AV_LOCK(archlock);
     arch = (struct archive *) av_filecache_get(key);
-    if(arch != NULL) {
-        if(!arch_same(arch, stbuf)) {
-            av_unref_obj(arch);
-            arch = NULL;
-        }
-    }
-
     if(arch == NULL) {
         AV_NEW_OBJ(arch, arch_delete);
         AV_INITLOCK(arch->lock);
         arch->flags = 0;
         av_filecache_set(key, arch);
     }
-
-    arch->st = *stbuf;
+    AV_UNLOCK(archlock);
 
     return arch;
 }
@@ -111,39 +133,43 @@ static int get_archive(ventry *ve, struct archive **archp)
 {
     int res;
     char *key;
-    struct avstat stbuf;
     struct archive *arch;
-
-    res = av_getattr(ve->mnt->base, &stbuf, AVA_ALL, 0);
-    if(res < 0)
-        return res;
+    int neednew;
+    int tries;
 
     res = av_filecache_getkey(ve, &key);
     if(res < 0)
         return res;
 
-    AV_LOCK(archlock);
-    arch = do_get_archive(key, &stbuf);
-    AV_UNLOCK(archlock);
+    tries = 0;
+    do {
+        if(tries > 5) {
+            av_log(AVLOG_ERROR, "ARCH: Giving up trying to create archive");
+            res = -EIO;
+            break;
+        }
+        arch = find_archive(key);
 
-    AV_LOCK(arch->lock);
-    if(!(arch->flags & ARCHF_READY)) {
-        res = new_archive(ve, arch);
-        if(res < 0) {
+        neednew = 0;
+        AV_LOCK(arch->lock);
+        if(!(arch->flags & ARCHF_READY))
+            res = new_archive(ve, arch);
+        else
+            res = check_archive(ve, arch, &neednew);
+        if(res < 0 || neednew) {
             AV_UNLOCK(arch->lock);
             av_unref_obj(arch);
             av_filecache_set(key, NULL);
-            arch = NULL;
         }
-    }
-    else
-        res = 0;
+        tries ++;
+    } while(neednew);
 
     av_free(key);
+    if(res < 0)
+        return res;
 
     *archp = arch;
-    
-    return res;
+    return 0;
 }
 
 static int lookup_check_node(struct entry *ent, const char *name)

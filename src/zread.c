@@ -163,11 +163,6 @@ static void zfile_scache_save(int id, z_stream *s)
 
     scache.id = id;
     scache.s = *s;
-
-    scache.s.avail_in = 0;
-    scache.s.next_in = NULL;
-    scache.s.avail_out = 0;
-    scache.s.next_out = NULL;
 }
 
 static int zfile_reset(struct zfile *fil)
@@ -429,6 +424,7 @@ static int zfile_seek(struct zfile *fil, struct zcache *zc, avoff_t offset)
         if((dist == -1 || scdist < dist) && scdist < zcdist) {
             z_stream tmp = fil->s;
             fil->s = scache.s;
+            fil->s.avail_in = 0;
             scache.s = tmp;
             return 0;
         }
@@ -497,7 +493,6 @@ struct zfile *av_zfile_new(vfile *vf, avoff_t dataoff, avuint crc)
     struct zfile *fil;
 
     AV_NEW_OBJ(fil, zfile_destroy);
-    memset(&fil->s, 0, sizeof(z_stream));
     fil->iseof = 0;
     fil->iserror = 0;
     fil->infile = vf;
@@ -505,10 +500,13 @@ struct zfile *av_zfile_new(vfile *vf, avoff_t dataoff, avuint crc)
     fil->id = 0;
     fil->crc = crc;
 
+    memset(&fil->s, 0, sizeof(z_stream));
     res = inflateInit2(&fil->s, -MAX_WBITS);
-    if(res != Z_OK)
+    if(res != Z_OK) {
         av_log(AVLOG_ERROR, "ZFILE: inflateInit: %s (%i)",
                fil->s.msg == NULL ? "" : fil->s.msg, res);
+        fil->iserror = 1;
+    }
     fil->s.adler = crc32(0L, Z_NULL, 0);
 
     return fil;

@@ -48,6 +48,9 @@ struct ugidcache *av_new_ugidcache()
 
 char *av_finduname(struct ugidcache *cache, int uid, const char *deflt)
 {
+    if(uid == -1)
+        return av_strdup(deflt);
+
     if(cache->uname == NULL || uid != cache->uid) {
         int res;
         struct passwd pw;
@@ -61,18 +64,20 @@ char *av_finduname(struct ugidcache *cache, int uid, const char *deflt)
             res = getpwuid_r(uid, &pw, buf, bufsize, &pwres);
         } while(res == ERANGE);
 
-        if(res != 0 || pwres == NULL) {
-            av_free(buf);
-            return av_strdup(deflt);
-        }
-
         av_free(cache->uname);
-        cache->uid = pwres->pw_uid;
-        cache->uname = av_strdup(pwres->pw_name);
+        if(pwres == NULL)
+            cache->uname = av_strdup("");
+        else
+            cache->uname = av_strdup(pwres->pw_name);
+
+        cache->uid = uid;
         av_free(buf);
     }
-    
-    return av_strdup(cache->uname);
+
+    if(!cache->uname[0])
+        return av_strdup(deflt);
+    else
+        return av_strdup(cache->uname);
 }
 
 int av_finduid(struct ugidcache *cache, const char *uname, int deflt)
@@ -93,22 +98,27 @@ int av_finduid(struct ugidcache *cache, const char *uname, int deflt)
             res = getpwnam_r(uname, &pw, buf, bufsize, &pwres);
         } while(res == ERANGE);
 
-        if(res != 0 || pwres == NULL) {
-            av_free(buf);
-            return deflt == -1 ? cache->myuid : deflt;
-        }
+        if(pwres == NULL)
+            cache->uid = -1;
+        else
+            cache->uid = pwres->pw_uid;
 
         av_free(cache->uname);
-        cache->uid = pwres->pw_uid;
-        cache->uname = av_strdup(pwres->pw_name);
+        cache->uname = av_strdup(uname);
         av_free(buf);
     }
-
-    return cache->uid;
+    
+    if(cache->uid == -1)
+        return deflt == -1 ? cache->myuid : deflt;
+    else
+        return cache->uid;
 }
 
 char *av_findgname(struct ugidcache *cache, int gid, const char *deflt)
 {
+    if(gid == -1)
+        return av_strdup(deflt);
+
     if(cache->gname == NULL || gid != cache->gid) {
         int res;
         struct group gr;
@@ -122,18 +132,20 @@ char *av_findgname(struct ugidcache *cache, int gid, const char *deflt)
             res = getgrgid_r(gid, &gr, buf, bufsize, &grres);
         } while(res == ERANGE);
 
-        if(res != 0 || grres == NULL) {
-            av_free(buf);
-            return av_strdup(deflt);
-        }
-
         av_free(cache->gname);
-        cache->gid = grres->gr_gid;
-        cache->gname = av_strdup(grres->gr_name);
+        if(grres == NULL)
+            cache->gname = av_strdup("");
+        else
+            cache->gname = av_strdup(grres->gr_name);
+
+        cache->gid = gid;
         av_free(buf);
     }
     
-    return av_strdup(cache->gname);
+    if(!cache->gname[0])
+        return av_strdup(deflt);
+    else
+        return av_strdup(cache->gname);
 }
 
 int av_findgid(struct ugidcache *cache, const char *gname, int deflt)
@@ -154,17 +166,19 @@ int av_findgid(struct ugidcache *cache, const char *gname, int deflt)
             res = getgrnam_r(gname, &gr, buf, bufsize, &grres);
         } while(res == ERANGE);
 
-        if(res != 0 || grres == NULL) {
-            av_free(buf);
-            return deflt == -1 ? cache->mygid : deflt;
-        }
+        if(grres == NULL)
+            cache->gid = -1;
+        else
+            cache->gid = grres->gr_gid;
 
         av_free(cache->gname);
-        cache->gid = grres->gr_gid;
-        cache->gname = av_strdup(grres->gr_name);
+        cache->gname = av_strdup(gname);
         av_free(buf);
     }
-
-    return cache->gid;
+ 
+    if(cache->gid == -1)
+        return deflt == -1 ? cache->mygid : deflt;
+    else
+        return cache->gid;
 }
 

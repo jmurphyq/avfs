@@ -156,7 +156,7 @@ static void destroy()
         }
         AV_UNLOCK(avfs_lock);
 
-        av_destroy_filecache();
+        av_do_exit();
 	av_delete_tmpdir();
 
         inited = 0;

@@ -27,6 +27,6 @@ void av_init_logstat();
 void av_init_cache();
 void av_check_malloc();
 void av_init_filecache();
-void av_destroy_filecache();
+void av_do_exit();
 
 void av_avfsstat_register(const char *path, struct statefile *func);

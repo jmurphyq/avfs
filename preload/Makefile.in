@@ -29,11 +29,17 @@ all-yes: avfs_server avfs_preload.so
 
 #leak=leak.o
 
+ifeq (@shared_build@,yes)
+  lib = ../lib/avfs.so.0.0.0
+else
+  lib = ../lib/avfs.o
+endif
+
 avfs_server_objs = \
 	avfs_server.o       \
 	server.o            \
 	send.o              \
-	../lib/avfs.o       \
+	$(lib)              \
 	$(leak)
 
 avfs_server: $(avfs_server_objs)

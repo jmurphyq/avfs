@@ -1,3 +1,7 @@
+2003-04-28  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Added shared lib build and fixes by Daniel Koukola
+	
 2003-04-14  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Added API documentation by Frederik Eaton 

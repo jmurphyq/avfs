@@ -3,12 +3,14 @@ all:
 	$(MAKE) -C modules all
 	$(MAKE) -C zlib all
 	$(MAKE) -C bzlib all
-	$(MAKE) -C lib all
 	$(MAKE) -C libneon all
+	$(MAKE) -C lib all
 	$(MAKE) -C avfscoda all
 	$(MAKE) -C preload all
 
 install: all
+	$(MAKE) -C lib install
+	$(MAKE) -C include install
 	$(MAKE) -C avfscoda install
 	$(MAKE) -C preload install
 	$(MAKE) -C extfs install

@@ -1,10 +1,53 @@
 SHELL = /bin/sh
 
-LD = @LD@
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+libdir = @libdir@
+serverdir = @moduledir@
+top_srcdir = @top_srcdir@
 
-all: avfs.o
+i_libdir = $(install_root)$(libdir)
+
+CC = @CC@
+LD = @LD@
+CFLAGS = -I$(top_srcdir)/include @CFLAGS@ -fPIC @CPPFLAGS@ 
+LDFLAGS = @LDFLAGS@ @LIBS@
+
+INSTALL = @INSTALL@
+
+all: all-@shared_build@
+install: install-@shared_build@
+depend: depend-@shared_build@
+
+all-no: avfs.o
+
+install-no:
+
+depend-no:
+	cp -f Makefile Makefile.old
+	sed '/^# DO NOT REMOVE THIS LINE/q' < Makefile.old > Makefile
+	gcc -MM $(CFLAGS) *.c >> Makefile
+
+all-yes: avfs.so
 
 avfs_objs = ../src/core.o ../modules/modules.o ../zlib/zlib.o ../bzlib/libbz.o
 
+avfs.so: $(avfs_objs)
+	$(CC) -shared -o avfs.so.0.0.0 -Wl,-soname -Wl,libavfs.so.0 $(avfs_objs) $(LDFLAGS)
+
 avfs.o: $(avfs_objs)
 	$(LD) -o avfs.o $(avfs_objs)
+
+install-yes:
+	@../mkinstalldirs $(i_libdir)
+	$(INSTALL) -m 755 avfs.so.0.0.0 $(i_libdir)/libavfs.so.0.0.0
+	ln -s libavfs.so.0.0.0 $(i_libdir)/libavfs.so
+	ln -s libavfs.so.0.0.0 $(i_libdir)/libavfs.so.0
+
+depend-yes:
+	cp -f Makefile Makefile.old
+	sed '/^# DO NOT REMOVE THIS LINE/q' < Makefile.old > Makefile
+	gcc -MM $(CFLAGS) *.c >> Makefile
+
+# DO NOT REMOVE THIS LINE, OR "make depend" WILL NOT WORK
+

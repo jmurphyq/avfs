@@ -26,12 +26,18 @@ all-yes: avfscoda
 
 #leak=leak.o
 
+ifeq (@shared_build@,yes)
+  lib = ../lib/avfs.so.0.0.0
+else
+  lib = ../lib/avfs.o
+endif
+
 avfscoda_objs = \
 	avfscoda.o           \
 	mount.o              \
 	dispatch.o           \
 	child.o              \
-	../lib/avfs.o        \
+	$(lib)               \
 	$(leak)
 
 avfscoda: $(avfscoda_objs)

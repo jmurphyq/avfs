@@ -507,9 +507,9 @@ int av_parse_ls(struct lscache *cache, const char *line,
         s = av_strdup (line + col->cptr[col->idx]);
         p = strlen (s);
     
-        if (s [p-1] == '\r' || s [p-1] == '\n')
+        if (p >= 1 && (s [p-1] == '\r' || s [p-1] == '\n'))
             s [p-1] = 0;
-        if (s [p-2] == '\r' || s [p-2] == '\n')
+        if (p >= 2 && (s [p-2] == '\r' || s [p-2] == '\n'))
             s [p-2] = 0;
     
         *filename = s;

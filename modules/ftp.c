@@ -1082,11 +1082,11 @@ static void ftp_destroy(struct remote *rem)
     for(conn = ftd->conns; conn != NULL; conn = nextconn) {
         nextconn = conn->next;
 
+        ftp_close_conn(conn);
         av_free(conn->host);
         av_free(conn->user);
         av_free(conn->password);
         av_free(conn->cwd);
-        ftp_close_conn(conn);
         av_free(conn);
         
         conn = nextconn;

@@ -18,6 +18,8 @@ static struct dentry *(*orig_lookup)(struct inode *, struct dentry *,
 
 
 static struct vfsmount *orig_mount;
+static struct semaphore *redir2_sem;
+
 static struct super_operations dummy_super_operations;
 static struct super_block dummy_sb = {
 	.s_op = &dummy_super_operations,
@@ -30,40 +32,6 @@ static int is_avfs(const unsigned char *name, unsigned int len)
 			return 1;
 	return 0;
 }
-
-#if 0
-/*
-	char *page;
-	char *path;
-
-	page = (char *) __get_free_page(GFP_KERNEL);
-	if(!page)
-		return result;
-
-	path = d_path(nd->dentry,nd->mnt, page, PAGE_SIZE);
-	
-	printk("redir2_lookup: '%s/%.*s'\n",
-			       path,
-1			       dentry->d_name.len,
-			       dentry->d_name.name);
-			free_page((unsigned long) page);
-		}
-	}
-	return orig_lookup(inode, dentry, nd);
-*/
-#endif
-#if 0
-		result = d_alloc(dentry->d_parent, &dentry->d_name);
-		if (!result)
-			result = ERR_PTR(-ENOMEM);
-		else {
-			/* Take over the dentry */
-			d_drop(dentry);
-			dentry = result;
-			dentry->d_op = &redir2_dentry_operations;
-			d_add(dentry, NULL);
-		}
-#endif
 
 static char * my_d_path( struct dentry *dentry, struct vfsmount *vfsmnt,
 			struct dentry *root, struct vfsmount *rootmnt,
@@ -132,18 +100,6 @@ global_root:
 Elong:
 	return ERR_PTR(-ENAMETOOLONG);
 }
-
-static int redir2_dentry_revalidate(struct dentry *dentry,
-				    struct nameidata *nd)
-{
-	printk("redir2_dentry_revalidate\n");
-	return 1;
-}
-
-
-static struct dentry_operations redir2_dentry_operations = {
-	.d_revalidate	= redir2_dentry_revalidate,
-};
 
 static struct dentry *mount_avfs(struct dentry *orig_dentry, char *path,
 				 int mode)
@@ -237,6 +193,17 @@ static struct dentry *lookup_avfs(struct dentry *dentry, struct nameidata *nd)
 	return result;
 }
 
+static int redir2_dentry_revalidate(struct dentry *dentry,
+				    struct nameidata *nd)
+{
+	//printk("redir2_dentry_revalidate\n");
+
+}
+
+static struct dentry_operations redir2_dentry_operations = {
+	.d_revalidate	= redir2_dentry_revalidate,
+};
+
 static inline int is_create(struct nameidata *nd)
 {
 	if (!nd)
@@ -249,77 +216,30 @@ static inline int is_create(struct nameidata *nd)
 static struct dentry *redir2_lookup(struct inode *dir, struct dentry *dentry,
 				    struct nameidata *nd)
 {
-	struct dentry *result;
-
 	//printk("lookup %.*s\n", dentry->d_name.len, dentry->d_name.name);
-	result = orig_lookup(dir, dentry, nd);
-	if (!is_create(nd) && !result && !dentry->d_inode &&
-	    is_avfs(dentry->d_name.name, dentry->d_name.len)) {
-		up(&dir->i_sem);
-		result = lookup_avfs(dentry, nd);
-		down(&dir->i_sem);
-	}
 
-	return result;	
-}
-
-#if 0
-static int glassfs_fill_super(struct super_block * sb, void * data, int silent)
-{
-	struct inode * inode;
-	struct dentry * root;
-	struct super_block *nsb;
-	struct dentry * nroot;
-	struct vfsmount *nmnt;
-
-	inode = new_inode(sb);
-	if (!inode)
-		return -ENOMEM;
-
+	if (is_create(nd) || !is_avfs(dentry->d_name.name, dentry->d_name.len))
+		return orig_lookup(dir, dentry, nd);
 	
-	nsb = nmnt->mnt_sb;
-	sb->s_blocksize = nsb->s_blocksize;
-	sb->s_blocksize_bits = nsb->s_blocksize_bits;
-	sb->s_magic = GLASSFS_MAGIC;
-	sb->s_op = &glassfs_ops;
-
-	root = d_alloc_root(inode);
-	if (!root) {
-		iput(inode);
-		return -ENOMEM;
-	}
-	sb->s_fs_info = nsb;
-	root->d_op = &glassfs_dentry_operations;
-
-	sb->s_root = root;
-	return 0;
+	dentry->d_op = &redir2_dentry_operations;
+	dentry->d_flags |= DCACHE_AUTOFS_PENDING;
+	d_add(new_dentry, NULL);
+	up(&dir->i_sem);
+	dentry->d_op->d_revalidate(dentry, nd);
+	down(&dir->i_sem);
+	return NULL;
 }
-
-static struct super_block *glassfs_get_sb(struct file_system_type *fs_type,
-	int flags, const char *dev_name, void *data)
-{
-//	printk("glassfs_get_sb\n");
-	return get_sb_nodev(fs_type, flags, data, glassfs_fill_super);
-}
-
-static struct file_system_type glassfs_fs_type = {
-	.owner		= THIS_MODULE,
-	.name		= "glassfs",
-	.get_sb		= glassfs_get_sb,
-	.kill_sb	= kill_anon_super,
-};
-#endif
 
 static int __init init_redir2(void)
 {
 	printk(KERN_INFO "redir2 init (version %s)\n", REDIR2_VERSION);
-	
+
+	sema_init(&redir2_sem, 1);
 	read_lock(&current->fs->lock);
 	orig_mount = mntget(current->fs->rootmnt);
 	orig_lookup = current->fs->root->d_inode->i_op->lookup;
 	current->fs->root->d_inode->i_op->lookup = redir2_lookup;
 	read_unlock(&current->fs->lock);
-//	register_filesystem(&redir2_fs_type);
 
 	return 0;
 }
@@ -331,7 +251,6 @@ static void __exit exit_redir2(void)
 	if(orig_lookup)
 		current->fs->root->d_inode->i_op->lookup = orig_lookup;
 	mntput(orig_mount);
-//	unregister_filesystem(&redir2_fs_type);
 }
 
 

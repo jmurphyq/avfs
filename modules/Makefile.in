@@ -21,9 +21,8 @@ modules = \
 	gz.o         \
 	ubz2.o       \
 	bz2.o        \
-	uar.o
-
-#	utar.o       \
+	uar.o        \
+	utar.o
 #	urar.o       \
 #	uzip.o       \
 #	floppy.o     \

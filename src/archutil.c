@@ -53,6 +53,16 @@ struct archnode *av_arch_new_node(struct archive *arch, struct entry *ent)
     return nod;
 }
 
+void av_arch_del_node(struct entry *ent)
+{
+    struct archnode *nod;
+
+    nod = av_namespace_get(ent);
+    av_namespace_set(ent, NULL);
+    av_unref_obj(nod);
+    av_unref_obj(ent);
+}
+
 struct archnode *av_arch_default_dir(struct archive *arch, struct entry *ent)
 {
     struct archnode *nod;
@@ -71,8 +81,8 @@ struct archnode *av_arch_default_dir(struct archive *arch, struct entry *ent)
     return nod;
 }
 
-
-struct entry *av_arch_get_entry(struct archive *arch, const char *path)
+struct entry *av_arch_resolve(struct archive *arch, const char *path,
+                              int create)
 {
     struct entry *ent;
     char *s, *p;
@@ -93,9 +103,18 @@ struct entry *av_arch_get_entry(struct archive *arch, const char *path)
             break;
 
         nod = av_namespace_get(ent);
-        if(nod == NULL)
+        if(nod == NULL) {
+            if(!create) {
+                av_unref_obj(ent);
+                ent = NULL;
+                break;
+            }
             av_arch_default_dir(arch, ent);
+        }
         else if(!AV_ISDIR(nod->st.mode)) {
+            if(create) 
+                av_log(AVLOG_WARNING,
+                       "ARCH: cannot create %s: Not a directory", path);
             av_unref_obj(ent);
             ent = NULL;
             break;
@@ -112,4 +131,20 @@ struct entry *av_arch_get_entry(struct archive *arch, const char *path)
     av_free(pathdup);
 
     return ent;
+}
+
+int av_arch_isroot(struct archive *arch, struct entry *ent)
+{
+    int res;
+    struct entry *root;
+    
+    root = av_namespace_subdir(arch->ns, NULL);
+    if(root == ent)
+        res = 1;
+    else
+        res = 0;
+
+    av_unref_obj(root);
+    
+    return res;
 }

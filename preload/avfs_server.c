@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <poll.h>
+#include <assert.h>
 
 #define MULTITHREADED 1
 
@@ -597,7 +598,9 @@ static void mark_file_holder(int holderfd)
         unsigned int newnum = holderfd + 1;
         unsigned int newsize = newnum  * sizeof(struct file_holder);
 
-        file_holders = av_realloc(file_holders, newsize);
+        file_holders = realloc(file_holders, newsize);
+        assert(file_holders != NULL);
+
         for(i = file_holder_num; i <= holderfd; i++)
             file_holders[i].state = FIH_UNUSED;
 

@@ -133,13 +133,14 @@ static void exit_handler(int sig)
     exit(0);
 }
 
+#if 0
 static void bad_handler(int sig)
 {
     av_log(AVLOG_ERROR, "%s, Exiting",
              strsignal(sig));
     _exit(1);
 }
-
+#endif
 
 int server_init()
 {
@@ -233,6 +234,7 @@ int server_init()
     act.sa_handler = SIG_IGN;
     sigaction(SIGPIPE, &act, NULL);
 
+#if 0
     act.sa_handler = bad_handler;
     sigfillset(&act.sa_mask);
     sigaction(SIGQUIT, &act, NULL);
@@ -241,6 +243,7 @@ int server_init()
     sigaction(SIGABRT, &act, NULL);
     sigaction(SIGBUS, &act, NULL);
     sigaction(SIGSEGV, &act, NULL);
+#endif
 
     return res;
 }

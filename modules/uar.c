@@ -82,7 +82,7 @@ static void insert_arentry(struct archive *arch, struct ar_values *arv,
         return;
     }
         
-    ent = av_arch_get_entry(arch, name);
+    ent = av_arch_resolve(arch, name, 1);
     if(ent == NULL)
         return;
 
@@ -308,12 +308,12 @@ static int read_arfile(vfile *vf, struct archive *arch)
     return res;
 }
 
-static int parse_arfile(void *data, ventry *ent, struct archive *arch)
+static int parse_arfile(void *data, ventry *ve, struct archive *arch)
 {
     int res;
     vfile *vf;
 
-    res = av_open(ent->mnt->base, AVO_RDONLY, 0, &vf);
+    res = av_open(ve->mnt->base, AVO_RDONLY, 0, &vf);
     if(res < 0)
         return res;
 
@@ -323,14 +323,7 @@ static int parse_arfile(void *data, ventry *ent, struct archive *arch)
     return res;  
 }
 
-static void ar_destroy(struct avfs *avfs)
-{
-    struct archparams *ap = (struct archparams *) avfs->data;
-
-    av_free(ap);
-}
-
-extern int av_init_module_uar(struct vmodule *module);
+int av_init_module_uar(struct vmodule *module);
 
 int av_init_module_uar(struct vmodule *module)
 {
@@ -343,18 +336,12 @@ int av_init_module_uar(struct vmodule *module)
     arexts[1].from = ".deb", arexts[1].to = NULL;
     arexts[2].from = NULL;
 
-    res = av_new_avfs("uar", arexts, AV_VER, /* flags */ 0, module, &avfs);
+    res = av_archive_init("uar", arexts, AV_VER, module, &avfs);
     if(res < 0)
         return res;
-  
-    AV_NEW(ap);
-    ap->data = NULL;
-    ap->parse = parse_arfile;
-
-    avfs->data = ap;
-    avfs->destroy = ar_destroy;
     
-    av_archive_init(avfs);
+    ap = (struct archparams *) avfs->data;
+    ap->parse = parse_arfile;
 
     av_add_avfs(avfs);
 

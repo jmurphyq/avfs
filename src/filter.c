@@ -83,6 +83,8 @@ static int filt_lookup(ventry *ve, const char *name, void **newp)
     if(path == NULL) {
         if(name[0] != '\0')
             return -ENOENT;
+	if(ve->mnt->opts[0] != '\0')
+            return -ENOENT;
         path = av_strdup(name);
     }
     else if(name == NULL) {

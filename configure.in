@@ -138,6 +138,13 @@ moduledir='${libdir}/avfs'
 AC_SUBST(moduledir)
 
 
+dnl ================================================================
+dnl == Now comes the stuff that is only for preload               ==
+dnl ================================================================
+
+if test $avfscoda_build = no; then
+   AC_CHECK_FUNCS(lseek64 getdents64 open64 creat64 stat64)
+fi
 
 dnl ================================================================
 dnl == Now comes the stuff that is only for avfscoda              ==

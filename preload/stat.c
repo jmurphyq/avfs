@@ -7,9 +7,12 @@
 */
 
 #include "utils.h"
+#include "config.h"
+
 #include <sys/stat.h>
 #include <sys/acl.h>
 
+#ifdef HAVE_STAT64
 static int real_stat64(const char *path, struct stat64 *buf, int deref,
                        int undersc)
 {
@@ -68,6 +71,7 @@ static int real_fstat64(int fd, struct stat64 *buf, int undersc)
         return prev(fd, buf);        
     }
 }
+#endif
 
 static int real_stat(const char *path, struct stat *buf, int deref,
                      int undersc)
@@ -269,26 +273,10 @@ static int fstat_server(int serverfh, struct avstat *buf)
     return result.result;
 }
 
-static void convert_stat64(struct avstat *vbuf, struct stat64 *lbuf)
-{
-    memset((void *) lbuf, 0, sizeof(*lbuf));
-  
-    lbuf->st_dev      = vbuf->dev;
-    lbuf->st_ino      = vbuf->ino;
-    lbuf->st_mode     = vbuf->mode;
-    lbuf->st_nlink    = vbuf->nlink;
-    lbuf->st_uid      = vbuf->uid;
-    lbuf->st_gid      = vbuf->gid;
-    lbuf->st_rdev     = vbuf->rdev;
-    lbuf->st_size     = vbuf->size;
-    lbuf->st_blksize  = vbuf->blksize;
-    lbuf->st_blocks   = vbuf->blocks;
-    lbuf->st_atime    = vbuf->atime.sec;
-    lbuf->st_mtime    = vbuf->mtime.sec;
-    lbuf->st_ctime    = vbuf->ctime.sec;
-}
 
-static void convert_stat(struct avstat *vbuf, struct stat *lbuf)
+
+#ifdef HAVE_STAT64
+static void convert_stat64(struct avstat *vbuf, struct stat64 *lbuf)
 {
     memset((void *) lbuf, 0, sizeof(*lbuf));
   
@@ -357,7 +345,26 @@ static int virt_fstat64(int fd, struct stat64 *buf, int undersc)
 
     return res;
 }
+#endif
 
+static void convert_stat(struct avstat *vbuf, struct stat *lbuf)
+{
+    memset((void *) lbuf, 0, sizeof(*lbuf));
+  
+    lbuf->st_dev      = vbuf->dev;
+    lbuf->st_ino      = vbuf->ino;
+    lbuf->st_mode     = vbuf->mode;
+    lbuf->st_nlink    = vbuf->nlink;
+    lbuf->st_uid      = vbuf->uid;
+    lbuf->st_gid      = vbuf->gid;
+    lbuf->st_rdev     = vbuf->rdev;
+    lbuf->st_size     = vbuf->size;
+    lbuf->st_blksize  = vbuf->blksize;
+    lbuf->st_blocks   = vbuf->blocks;
+    lbuf->st_atime    = vbuf->atime.sec;
+    lbuf->st_mtime    = vbuf->mtime.sec;
+    lbuf->st_ctime    = vbuf->ctime.sec;
+}
 
 static int virt_stat(const char *path, struct stat *buf, int deref, 
                      int undersc)
@@ -517,6 +524,7 @@ static int virt_access(const char *path, int amode, int undersc)
 }
 
 
+#ifdef HAVE_STAT64
 int lstat64(const char *path, struct stat64 *buf)
 {
     return virt_stat64(path, buf, 0, 0);
@@ -546,6 +554,7 @@ int _fstat64(int fd, struct stat64 *buf)
 {
     return virt_fstat64(fd, buf, 1);
 }
+#endif
 
 int lstat(const char *path, struct stat *buf)
 {

@@ -7,11 +7,12 @@
 */
 
 #include "utils.h"
+#include "config.h"
+
 #include <dirent.h>
 
-#define AVFS_DIR_RECLEN ((size_t)(((struct dirent64 *)0)->d_name)+NAME_MAX+1)
 
-
+#ifdef HAVE_LSEEK64
 static off64_t real_lseek64(int fd, off64_t offset, int whence, int undersc)
 {
     if(undersc == 0) {
@@ -31,6 +32,7 @@ static off64_t real_lseek64(int fd, off64_t offset, int whence, int undersc)
         return prev(fd, offset, whence);
     }
 }
+#endif
 
 static off_t real_lseek(int fd, off_t offset, int whence, int undersc)
 {
@@ -97,6 +99,7 @@ static ssize_t real_write(int fd, const void *buf, size_t nbyte, int undersc)
     }
 }
 
+#ifdef HAVE_GETDENTS64
 static int real_getdents64(int fd, struct dirent64 *buf, size_t nbyte,
                            int undersc)
 {
@@ -115,6 +118,30 @@ static int real_getdents64(int fd, struct dirent64 *buf, size_t nbyte,
         if(!prev)
             prev = (int (*)(int, struct dirent64 *, size_t)) 
                 __av_get_real("_getdents64");
+        
+        return prev(fd, buf, nbyte);
+    }
+}
+#endif
+
+static int real_getdents(int fd, struct dirent *buf, size_t nbyte,
+                           int undersc)
+{
+    if(undersc == 0) {
+        static int (*prev)(int, struct dirent *, size_t);
+        
+        if(!prev)
+            prev = (int (*)(int, struct dirent *, size_t)) 
+                __av_get_real("getdents");
+        
+        return prev(fd, buf, nbyte);
+    }
+    else {
+        static int (*prev)(int, struct dirent *, size_t);
+        
+        if(!prev)
+            prev = (int (*)(int, struct dirent *, size_t)) 
+                __av_get_real("_getdents");
         
         return prev(fd, buf, nbyte);
     }
@@ -199,7 +226,7 @@ static ssize_t cmd_write(int serverfh, const void *buf, size_t nbyte)
     return result.result;
 }
 
-
+#ifdef HAVE_LSEEK64
 static off64_t virt_lseek64(int fd, off64_t offset, int whence, int undersc)
 {
     off64_t res;
@@ -218,6 +245,7 @@ static off64_t virt_lseek64(int fd, off64_t offset, int whence, int undersc)
 
     return res;
 }
+#endif
 
 static off_t virt_lseek(int fd, off_t offset, int whence, int undersc)
 {
@@ -303,13 +331,15 @@ static int cmd_readdir(int serverfh, struct avfs_direntry *de, char *name)
     return result.result;
 }
 
+#ifdef HAVE_GETDENTS64
+#define AVFS_DIR_RECLEN64 ((size_t)(((struct dirent64 *)0)->d_name)+NAME_MAX+1)
 
 static void avfs_direntry_to_dirent64(struct dirent64 *ent,
                                  struct avfs_direntry *avent)
 {
     ent->d_ino = avent->ino;
-    ent->d_off = avent->n * AVFS_DIR_RECLEN; 
-    ent->d_reclen = AVFS_DIR_RECLEN;
+    ent->d_off = avent->n * AVFS_DIR_RECLEN64; 
+    ent->d_reclen = AVFS_DIR_RECLEN64;
 }
 
 static int virt_getdents64(int fd, struct dirent64 *buf, size_t nbyte,
@@ -319,6 +349,47 @@ static int virt_getdents64(int fd, struct dirent64 *buf, size_t nbyte,
 
     if(!FD_OK(fd) || !ISVIRTUAL(fd))
         res =  real_getdents64(fd, buf, nbyte, undersc);
+    else {
+        struct avfs_direntry de;
+        int errnosave;
+
+        if(nbyte < AVFS_DIR_RECLEN64) {
+            errno = EINVAL;
+            return -1;
+        }
+
+        errnosave = errno;
+        res = cmd_readdir(SERVERFH(fd), &de, buf->d_name);
+        errno = errnosave;
+        if(res < 0) 
+            errno = -res, res = -1;
+        else if(res > 0) {
+            avfs_direntry_to_dirent64(buf, &de);
+            res = AVFS_DIR_RECLEN64;
+        }
+    }
+
+    return res;
+}
+#endif
+
+#define AVFS_DIR_RECLEN ((size_t)(((struct dirent *)0)->d_name)+NAME_MAX+1)
+
+static void avfs_direntry_to_dirent(struct dirent *ent,
+                                 struct avfs_direntry *avent)
+{
+    ent->d_ino = avent->ino;
+    ent->d_off = avent->n * AVFS_DIR_RECLEN; 
+    ent->d_reclen = AVFS_DIR_RECLEN;
+}
+
+static int virt_getdents(int fd, struct dirent *buf, size_t nbyte,
+                           int undersc)
+{
+    int res;
+
+    if(!FD_OK(fd) || !ISVIRTUAL(fd))
+        res =  real_getdents(fd, buf, nbyte, undersc);
     else {
         struct avfs_direntry de;
         int errnosave;
@@ -334,7 +405,7 @@ static int virt_getdents64(int fd, struct dirent64 *buf, size_t nbyte,
         if(res < 0) 
             errno = -res, res = -1;
         else if(res > 0) {
-            avfs_direntry_to_dirent64(buf, &de);
+            avfs_direntry_to_dirent(buf, &de);
             res = AVFS_DIR_RECLEN;
         }
     }
@@ -342,6 +413,8 @@ static int virt_getdents64(int fd, struct dirent64 *buf, size_t nbyte,
     return res;
 }
 
+
+#ifdef HAVE_LSEEK64
 off64_t lseek64(int fd, off64_t offset, int whence)
 {
     return virt_lseek64(fd, offset, whence, 0);
@@ -351,6 +424,7 @@ off64_t _lseek64(int fd, off64_t offset, int whence)
 {
     return virt_lseek64(fd, offset, whence, 1);
 }
+#endif
 
 off_t lseek(int fd, off_t offset, int whence)
 {
@@ -383,6 +457,7 @@ ssize_t _write(int fd, const void *buf, size_t nbyte)
     return virt_write(fd, buf, nbyte, 1);
 }
 
+#ifdef HAVE_GETDENTS64
 int getdents64(int fd, struct dirent64 *buf, size_t nbyte)
 {
     return virt_getdents64(fd, buf, nbyte, 0);
@@ -391,4 +466,15 @@ int getdents64(int fd, struct dirent64 *buf, size_t nbyte)
 int _getdents64(int fd, struct dirent64 *buf, size_t nbyte)
 {
     return virt_getdents64(fd, buf, nbyte, 1);
+}
+#endif
+
+int getdents(int fd, struct dirent *buf, size_t nbyte)
+{
+    return virt_getdents(fd, buf, nbyte, 0);
+}
+
+int _getdents(int fd, struct dirent *buf, size_t nbyte)
+{
+    return virt_getdents(fd, buf, nbyte, 1);
 }

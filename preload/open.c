@@ -7,6 +7,8 @@
 */
 
 #include "utils.h"
+#include "config.h"
+
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -14,6 +16,7 @@
 
 #define CREATFLAGS (O_WRONLY | O_CREAT | O_TRUNC)
 
+#ifdef HAVE_OPEN64
 static int real_open64(const char *path, int flags, mode_t mode, int undersc)
 {
     int res;
@@ -38,6 +41,7 @@ static int real_open64(const char *path, int flags, mode_t mode, int undersc)
 
     return res;
 }
+#endif
 
 static int real_open32(const char *path, int flags, mode_t mode, int undersc)
 {
@@ -64,7 +68,7 @@ static int real_open32(const char *path, int flags, mode_t mode, int undersc)
     return res;
 }
 
-
+#ifdef HAVE_CREAT64
 static int real_creat64(const char *path, mode_t mode, int undersc)
 {
     int res;
@@ -88,7 +92,7 @@ static int real_creat64(const char *path, mode_t mode, int undersc)
 
     return res;
 }
-
+#endif
 
 static int real_creat32(const char *path, mode_t mode, int undersc)
 {
@@ -114,22 +118,27 @@ static int real_creat32(const char *path, mode_t mode, int undersc)
     return res;
 }
 
-
 static int real_open(const char *path, int flags, mode_t mode, int undersc,
-                       int open64, int creat)
+                       int is64, int creat)
 {
     int res;
     
+    is64 = is64; /* Possibly unused arg */
+
     if(creat) {
-        if(open64)
+#ifdef HAVE_CREAT64            
+        if(is64)
             res = real_creat64(path, mode, undersc);
         else
+#endif
             res = real_creat32(path, mode, undersc);
     }
     else {
-        if(open64)
+#ifdef HAVE_OPEN64
+        if(is64)
             res = real_open64(path, flags, mode, undersc);
         else
+#endif
             res = real_open32(path, flags, mode, undersc);
     }
     
@@ -172,7 +181,8 @@ static int get_handle()
         strcpy(dummyfile, "/tmp/.avfs_dummyfile_XXXXXX");
         mktemp(dummyfile);
         if(dummyfile[0] != '\0') {
-            fh = real_open64(dummyfile, O_RDONLY | O_CREAT | O_EXCL, 0600, 1);
+            fh = real_open(dummyfile, O_RDONLY | O_CREAT | O_EXCL, 0600, 1,
+                           1, 0);
             real_unlink(dummyfile);
         }
         if(fh != -1)
@@ -319,13 +329,13 @@ static int do_open(const char *path, int flags, mode_t mode, char *pathbuf)
 }
 
 static int virt_open(const char *path, int flags, mode_t mode, int undersc,
-                     int open64, int creat)
+                     int is64, int creat)
 {
     int res = 0;
     int local = 0;
 
     if(__av_maybe_local(path)) {
-        res = real_open(path, flags, mode, undersc, open64, creat);
+        res = real_open(path, flags, mode, undersc, is64, creat);
         local = __av_is_local(res, path);
     }
     
@@ -337,7 +347,7 @@ static int virt_open(const char *path, int flags, mode_t mode, int undersc,
         res = do_open(path, flags, mode, pathbuf);
         errno = errnosave;
         if(pathbuf[0])
-            res = real_open(pathbuf, flags, mode, undersc, open64, creat);
+            res = real_open(pathbuf, flags, mode, undersc, is64, creat);
         else if(res < 0)
             errno = -res, res = -1;
     }
@@ -365,6 +375,7 @@ static int virt_close(int fd, int undersc)
     return res;
 }
 
+#ifdef HAVE_OPEN64
 int open64(const char *path, int flags, ...)
 {
     va_list ap;
@@ -381,6 +392,7 @@ int _open64(const char *path, int flags, mode_t mode)
 {
     return virt_open(path, flags, mode, 1, 1, 0);
 }
+#endif
 
 int open(const char *path, int flags, ...)
 {
@@ -399,6 +411,7 @@ int _open(const char *path, int flags, mode_t mode)
     return virt_open(path, flags, mode, 1, 0, 0);
 }
 
+#ifdef HAVE_CREAT64
 int creat64(const char *path, mode_t mode)
 {
     return virt_open(path, CREATFLAGS, mode, 0, 1, 1);
@@ -408,6 +421,7 @@ int _creat64(const char *path, mode_t mode)
 {
     return virt_open(path, CREATFLAGS, mode, 1, 1, 1);
 }
+#endif
 
 int creat(const char *path, mode_t mode)
 {

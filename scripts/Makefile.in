@@ -13,9 +13,11 @@ rcscriptdir    = @rcscriptdir@
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 sbindir = @sbindir@
+bindir = @bindir@
 
 i_profiledir   = $(install_root)@profiledir@
 i_sbindir = $(install_root)$(sbindir)
+i_bindir = $(install_root)$(bindir)
 
 absrcscriptdir = $(i_rcdir)/$(rcscriptdir)
 startname = S$(start_prio)avfscoda
@@ -62,6 +64,8 @@ install_flushredir:
 	$(INSTALL) -m 755 flushredir $(i_sbindir)/flushredir
 
 install: $(install_scriptcomps)
+	$(INSTALL) -m 755 ftppass $(i_bindir)/ftppass
+	$(INSTALL) -m 755 davpass $(i_bindir)/davpass
 
 start:
 	$(absrcscriptdir)/avfscoda start

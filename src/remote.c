@@ -18,68 +18,68 @@
 #define REM_ST_VALID 20
 #define REM_DIR_VALID 10
 
-struct signature {
+struct remsig {
     avtimestruc_t modif;
     avoff_t size;
 };
 
-struct direntry {
+struct rementry {
     char *name;
     int type;
-    struct direntry *next;
+    struct rementry *next;
 };
 
-struct dir {
+struct remdir {
     avtime_t valid;
-    struct direntry *dirlist;
+    struct rementry *dirlist;
 };
 
-struct attr {
+struct remattr {
     avtime_t valid;
     int negative;
     struct avstat st;
     char *linkname;
 };
 
-struct file {
-    struct signature sig;
+struct remfile {
+    struct remsig sig;
     char *localname;
     void *data;
 };
 
-struct node {
+struct remnode {
     avmutex lock;
     avmutex filelock;
-    struct node *next;
-    struct node *prev;
+    struct remnode *next;
+    struct remnode *prev;
     struct entry *ent;
     avino_t ino;
-    struct attr attr;
-    struct dir dir;
+    struct remattr attr;
+    struct remdir dir;
     struct cacheobj *file;
 };
 
-struct filesys {
+struct remfs {
     struct namespace *ns;
-    struct node list;
+    struct remnode list;
     struct remote *rem;
     struct avfs *avfs;
 };
 
 static AV_LOCK_DECL(rem_lock);
 
-static void rem_free_dir(struct dir *dir)
+static void rem_free_dir(struct remdir *dir)
 {
-    struct direntry *de;
+    struct rementry *re;
     
-    while((de = dir->dirlist) != NULL) {
-        dir->dirlist = de->next;
-        av_free(de->name);
-        av_free(de);
+    while((re = dir->dirlist) != NULL) {
+        dir->dirlist = re->next;
+        av_free(re->name);
+        av_free(re);
     }
 }
 
-static void rem_free_node(struct node *nod)
+static void rem_free_node(struct remnode *nod)
 {
     av_namespace_set(nod->ent, NULL);
     av_unref_obj(nod->ent);
@@ -91,9 +91,9 @@ static void rem_free_node(struct node *nod)
     AV_FREELOCK(nod->filelock);
 }
 
-static struct node *rem_new_node(struct filesys *fs)
+static struct remnode *rem_new_node(struct remfs *fs)
 {
-    struct node *nod;
+    struct remnode *nod;
 
     AV_NEW_OBJ(nod, rem_free_node);
     AV_INITLOCK(nod->lock);
@@ -107,19 +107,19 @@ static struct node *rem_new_node(struct filesys *fs)
     return nod;
 }
 
-static void rem_remove_node(struct node *nod)
+static void rem_remove_node(struct remnode *nod)
 {
-    struct node *next = nod->next;
-    struct node *prev = nod->prev;
+    struct remnode *next = nod->next;
+    struct remnode *prev = nod->prev;
     
     next->prev = prev;
     prev->next = next;
 }
 
-static void rem_insert_node(struct filesys *fs, struct node *nod)
+static void rem_insert_node(struct remfs *fs, struct remnode *nod)
 {
-    struct node *next = fs->list.next;
-    struct node *prev = &fs->list;
+    struct remnode *next = fs->list.next;
+    struct remnode *prev = &fs->list;
     
     next->prev = nod;
     prev->next = nod;
@@ -127,12 +127,12 @@ static void rem_insert_node(struct filesys *fs, struct node *nod)
     nod->next = next;
 }
 
-static struct node *rem_get_node(struct filesys *fs, struct entry *ent)
+static struct remnode *rem_get_node(struct remfs *fs, struct entry *ent)
 {
-    struct node *nod;
+    struct remnode *nod;
 
     AV_LOCK(rem_lock);
-    nod = (struct node *) av_namespace_get(ent);
+    nod = (struct remnode *) av_namespace_get(ent);
     if(nod != NULL)
         rem_remove_node(nod);
     else {
@@ -150,11 +150,12 @@ static struct node *rem_get_node(struct filesys *fs, struct entry *ent)
     return nod;
 }
 
-static void rem_get_locked_node(struct filesys *fs, struct entry *ent,
-                                struct node **nodep, struct node **parentp)
+static void rem_get_locked_node(struct remfs *fs, struct entry *ent,
+                                struct remnode **nodep,
+                                struct remnode **parentp)
 {
-    struct node *nod;
-    struct node *parent;
+    struct remnode *nod;
+    struct remnode *parent;
     struct entry *pent;
 
     pent = av_namespace_lookup(fs->ns, ent, NULL);
@@ -175,7 +176,7 @@ static void rem_get_locked_node(struct filesys *fs, struct entry *ent,
     *parentp = parent;
 }
 
-static void rem_put_locked_node(struct node *nod, struct node *parent)
+static void rem_put_locked_node(struct remnode *nod, struct remnode *parent)
 {
     AV_UNLOCK(nod->lock);
     if(parent != NULL)
@@ -186,7 +187,7 @@ static void rem_put_locked_node(struct node *nod, struct node *parent)
 }
 
 
-static void rem_free_dirlist(struct dirlist *dl)
+static void rem_free_dirlist(struct remdirlist *dl)
 {
     int i;
 
@@ -200,10 +201,10 @@ static void rem_free_dirlist(struct dirlist *dl)
     av_free(dl->hostpath.path);
 }
 
-static void rem_fill_attr(struct filesys *fs, struct node *nod,
-                          struct direlement *de, avtime_t now)
+static void rem_fill_attr(struct remfs *fs, struct remnode *nod,
+                          struct remdirent *de, avtime_t now)
 {
-    struct attr *attr = &nod->attr;
+    struct remattr *attr = &nod->attr;
 
     attr->valid = now + REM_ST_VALID;
     attr->negative = 0;
@@ -214,9 +215,9 @@ static void rem_fill_attr(struct filesys *fs, struct node *nod,
     attr->linkname = av_strdup(de->linkname);
 }
 
-static void rem_fill_root(struct filesys *fs, struct node *nod)
+static void rem_fill_root(struct remfs *fs, struct remnode *nod)
 {
-    struct attr *attr = &nod->attr;
+    struct remattr *attr = &nod->attr;
     
     attr->valid = AV_MAXTIME;
     attr->negative = 0;
@@ -235,13 +236,13 @@ static void rem_fill_root(struct filesys *fs, struct node *nod)
     attr->st.ctime = attr->st.atime;
 }
 
-static int rem_list_single(struct filesys *fs, struct node *nod,
-                           struct dirlist *dl)
+static int rem_list_single(struct remfs *fs, struct remnode *nod,
+                           struct remdirlist *dl)
 {
     int i;
 
     for(i = 0; i < dl->num; i++) {
-        struct direlement *de = &dl->ents[i];
+        struct remdirent *de = &dl->ents[i];
 
         if(strcmp(de->name, dl->hostpath.path) == 0) {
             rem_fill_attr(fs, nod, de, av_time());
@@ -252,36 +253,36 @@ static int rem_list_single(struct filesys *fs, struct node *nod,
     return -ENOENT;
 }
 
-static void rem_dir_add(struct dir *dir, struct direlement *dire)
+static void rem_dir_add(struct remdir *dir, struct remdirent *de)
 {
-    struct direntry **dp;
-    struct direntry *de;
+    struct rementry **rep;
+    struct rementry *re;
     
-    for(dp = &dir->dirlist; *dp != NULL; dp = &(*dp)->next);
+    for(rep = &dir->dirlist; *rep != NULL; rep = &(*rep)->next);
     
-    AV_NEW(de);
-    de->name = av_strdup(dire->name);
-    de->type = AV_TYPE(dire->attr.mode);
-    de->next = NULL;
+    AV_NEW(re);
+    re->name = av_strdup(de->name);
+    re->type = AV_TYPE(de->attr.mode);
+    re->next = NULL;
     
-    *dp = de;
+    *rep = re;
 }
 
-static void rem_dir_add_beg(struct dir *dir, const char *name, int type)
+static void rem_dir_add_beg(struct remdir *dir, const char *name, int type)
 {
-    struct direntry *de;
+    struct rementry *re;
 
-    AV_NEW(de);
-    de->name = av_strdup(name);
-    de->type = type;
-    de->next = dir->dirlist;
+    AV_NEW(re);
+    re->name = av_strdup(name);
+    re->type = type;
+    re->next = dir->dirlist;
 
-    dir->dirlist = de;
+    dir->dirlist = re;
 }
 
-static int rem_list_dir(struct filesys *fs, struct node *nod,
-                         struct node *child,  struct dirlist *dl,
-                         struct node *need)
+static int rem_list_dir(struct remfs *fs, struct remnode *nod,
+                         struct remnode *child,  struct remdirlist *dl,
+                         struct remnode *need)
 {
     int i;
     avtime_t now = av_time();
@@ -290,7 +291,7 @@ static int rem_list_dir(struct filesys *fs, struct node *nod,
 
     rem_free_dir(&nod->dir);
     for(i = 0; i < dl->num; i++) {
-        struct direlement *de = &dl->ents[i];
+        struct remdirent *de = &dl->ents[i];
         
         rem_dir_add(&nod->dir, de);
         if(strcmp(de->name, ".") == 0) {
@@ -304,7 +305,7 @@ static int rem_list_dir(struct filesys *fs, struct node *nod,
             gotdots = 1;
         else {
             struct entry *cent;
-            struct node *cnod;
+            struct remnode *cnod;
 
             cent = av_namespace_lookup(fs->ns, nod->ent, de->name);
             cnod = rem_get_node(fs, cent);
@@ -337,7 +338,7 @@ static int rem_list_dir(struct filesys *fs, struct node *nod,
         return -ENOENT;
 }
 
-static void rem_get_hostpath(struct entry *ent, struct hostpath *hp)
+static void rem_get_hostpath(struct entry *ent, struct remhostpath *hp)
 {
     char *hostpath = av_namespace_getpath(ent);
     char *s;
@@ -356,7 +357,7 @@ static void rem_get_hostpath(struct entry *ent, struct hostpath *hp)
     av_free(hostpath);
 }
 
-static void rem_dir_only(struct dirlist *dl)
+static void rem_dir_only(struct remdirlist *dl)
 {
     if((dl->flags & REM_LIST_SINGLE) != 0) {
         char *dir = dl->hostpath.path;
@@ -373,12 +374,12 @@ static void rem_dir_only(struct dirlist *dl)
     }
 }
 
-static int rem_get_attr(struct filesys *fs, struct node *nod,
-                        struct node *parent)
+static int rem_get_attr(struct remfs *fs, struct remnode *nod,
+                        struct remnode *parent)
 {
     int res;
     struct remote *rem = fs->rem;
-    struct dirlist dl;
+    struct remdirlist dl;
     
     dl.flags = REM_LIST_SINGLE;
     dl.num = 0;
@@ -413,8 +414,8 @@ static int rem_get_attr(struct filesys *fs, struct node *nod,
     return res;
 }
 
-static int rem_check_node(struct filesys *fs, struct node *nod,
-                          struct node *parent)
+static int rem_check_node(struct remfs *fs, struct remnode *nod,
+                          struct remnode *parent)
 {
     int res;
     avtime_t now = av_time();
@@ -433,7 +434,7 @@ static int rem_check_node(struct filesys *fs, struct node *nod,
     return res;
 }
 
-static int rem_signature_valid(struct signature *sig, struct avstat *stbuf)
+static int rem_signature_valid(struct remsig *sig, struct avstat *stbuf)
 {
     if(sig->modif.sec != stbuf->mtime.sec ||
        sig->modif.nsec != stbuf->mtime.nsec ||
@@ -443,11 +444,11 @@ static int rem_signature_valid(struct signature *sig, struct avstat *stbuf)
         return 1;
 }
 
-static int rem_get_dir(struct filesys *fs, struct node *nod)
+static int rem_get_dir(struct remfs *fs, struct remnode *nod)
 {
     int res;
     struct remote *rem = fs->rem;
-    struct dirlist dl;
+    struct remdirlist dl;
     
     dl.flags = 0;
     dl.num = 0;
@@ -463,7 +464,7 @@ static int rem_get_dir(struct filesys *fs, struct node *nod)
     return res;
 }
 
-static int rem_check_dir(struct filesys *fs, struct node *nod)
+static int rem_check_dir(struct remfs *fs, struct remnode *nod)
 {
     int res;
     avtime_t now = av_time();
@@ -476,11 +477,11 @@ static int rem_check_dir(struct filesys *fs, struct node *nod)
     return res;
 }
 
-static int rem_node_type(struct filesys *fs, struct entry *ent)
+static int rem_node_type(struct remfs *fs, struct entry *ent)
 {
     int res;
-    struct node *nod;
-    struct node *parent;
+    struct remnode *nod;
+    struct remnode *parent;
 
     rem_get_locked_node(fs, ent, &nod, &parent);
     if(nod->attr.valid != 0 && !nod->attr.negative)
@@ -505,14 +506,14 @@ static struct entry *rem_vfile_entry(vfile *vf)
     return (struct entry *) vf->data;
 }
 
-static struct filesys *rem_ventry_filesys(ventry *ve)
+static struct remfs *rem_ventry_filesys(ventry *ve)
 {
-    return (struct filesys *) ve->mnt->avfs->data;
+    return (struct remfs *) ve->mnt->avfs->data;
 }
 
-static struct filesys *rem_vfile_filesys(vfile *vf)
+static struct remfs *rem_vfile_filesys(vfile *vf)
 {
-    return (struct filesys *) vf->mnt->avfs->data;
+    return (struct remfs *) vf->mnt->avfs->data;
 }
 
 static int rem_lookup(ventry *ve, const char *name, void **newp)
@@ -520,7 +521,7 @@ static int rem_lookup(ventry *ve, const char *name, void **newp)
     int res;
     int type;
     struct entry *prev = rem_ventry_entry(ve);
-    struct filesys *fs = rem_ventry_filesys(ve);
+    struct remfs *fs = rem_ventry_filesys(ve);
     struct entry *ent;
  
     if(prev != NULL) {
@@ -575,12 +576,12 @@ static int rem_copyent(ventry *ve, void **resp)
     return 0;
 }
 
-static void rem_check_file(struct filesys * fs, struct entry *ent)
+static void rem_check_file(struct remfs * fs, struct entry *ent)
 {
     int res;
-    struct node *nod;
-    struct node *parent;
-    struct file *fil;
+    struct remnode *nod;
+    struct remnode *parent;
+    struct remfile *fil;
 
     rem_get_locked_node(fs, ent, &nod, &parent);
     fil = av_cacheobj_get(nod->file);
@@ -599,7 +600,7 @@ static int rem_open(ventry *ve, int flags, avmode_t mode, void **resp)
 {
     int res;
     struct entry *ent = rem_ventry_entry(ve);
-    struct filesys *fs = rem_ventry_filesys(ve);
+    struct remfs *fs = rem_ventry_filesys(ve);
     int accmode = (flags & AVO_ACCMODE);
 
     res = rem_node_type(fs, ent);
@@ -637,35 +638,35 @@ static struct entry *rem_dirent_lookup(struct namespace *ns,
     return ent;
 }
 
-static struct direntry *rem_nth_entry(struct dir *dir, int n)
+static struct rementry *rem_nth_entry(struct remdir *dir, int n)
 {
-    struct direntry *de;
+    struct rementry *re;
     int i;
 
-    de = dir->dirlist;
-    for(i = 0; i < n && de != NULL; i++)
-        de = de->next;
+    re = dir->dirlist;
+    for(i = 0; i < n && re != NULL; i++)
+        re = re->next;
     
-    return de;
+    return re;
 }
 
-static int rem_get_direntry(struct filesys *fs, struct node *nod,
+static int rem_get_direntry(struct remfs *fs, struct remnode *nod,
                             vfile *vf, struct avdirent *buf)
 {
-    struct direntry *de;
+    struct rementry *re;
     struct entry *cent;
-    struct node *cnod;
+    struct remnode *cnod;
 
-    de = rem_nth_entry(&nod->dir, vf->ptr);
-    if(de == NULL)
+    re = rem_nth_entry(&nod->dir, vf->ptr);
+    if(re == NULL)
         return 0;
     
-    cent = rem_dirent_lookup(fs->ns, nod->ent, de->name);
+    cent = rem_dirent_lookup(fs->ns, nod->ent, re->name);
     cnod = rem_get_node(fs, cent);
     av_unref_obj(cent);
     
-    buf->name = av_strdup(de->name);
-    buf->type = de->type;
+    buf->name = av_strdup(re->name);
+    buf->type = re->type;
     buf->ino = cnod->ino;
     av_unref_obj(cnod);
     
@@ -678,8 +679,8 @@ static int rem_readdir(vfile *vf, struct avdirent *buf)
 {
     int res;
     struct entry *ent = rem_vfile_entry(vf);
-    struct filesys *fs = rem_vfile_filesys(vf);
-    struct node *nod;
+    struct remfs *fs = rem_vfile_filesys(vf);
+    struct remnode *nod;
 
     nod = rem_get_node(fs, ent);
     AV_LOCK(nod->lock);
@@ -701,12 +702,12 @@ static int rem_close(vfile *vf)
     return 0;
 }
 
-static void rem_get_signature(struct filesys *fs, struct entry *ent,
-                              struct signature *sig)
+static void rem_get_signature(struct remfs *fs, struct entry *ent,
+                              struct remsig *sig)
 {
     int res;
-    struct node *nod;
-    struct node *parent;
+    struct remnode *nod;
+    struct remnode *parent;
 
     rem_get_locked_node(fs, ent, &nod, &parent);
     res = rem_check_node(fs, nod, parent);
@@ -719,7 +720,7 @@ static void rem_get_signature(struct filesys *fs, struct entry *ent,
     rem_put_locked_node(nod, parent);
 }
 
-static void rem_delete_file(struct file *fil)
+static void rem_delete_file(struct remfile *fil)
 {
     av_del_tmpfile(fil->localname);
     av_unref_obj(fil->data);
@@ -738,16 +739,16 @@ static avoff_t rem_local_size(const char *localname)
     
 }
 
-static int rem_get_file(struct filesys *fs, struct node *nod,
-                        struct file **resp)
+static int rem_get_file(struct remfs *fs, struct remnode *nod,
+                        struct remfile **resp)
 {
     int res;
-    struct file *fil;
+    struct remfile *fil;
     struct remote *rem = fs->rem;
-    struct getparam gp;
+    struct remgetparam gp;
     char *objname;
     
-    fil = (struct file *) av_cacheobj_get(nod->file);
+    fil = (struct remfile *) av_cacheobj_get(nod->file);
     if(fil != NULL) {
         *resp = fil;
         return 0;
@@ -786,8 +787,8 @@ static int rem_get_file(struct filesys *fs, struct node *nod,
     return 0;
 }
 
-static int rem_wait_data(struct filesys *fs, struct node *nod,
-                         struct file *fil, avoff_t end)
+static int rem_wait_data(struct remfs *fs, struct remnode *nod,
+                         struct remfile *fil, avoff_t end)
 {
     int res;
     struct remote *rem = fs->rem;
@@ -808,7 +809,7 @@ static int rem_wait_data(struct filesys *fs, struct node *nod,
     return 0;
 }
 
-static avssize_t rem_real_read(struct file *fil, vfile *vf, char *buf,
+static avssize_t rem_real_read(struct remfile *fil, vfile *vf, char *buf,
                                avsize_t nbyte)
 {
     avssize_t res;
@@ -837,10 +838,10 @@ static avssize_t rem_real_read(struct file *fil, vfile *vf, char *buf,
 static avssize_t rem_read(vfile *vf, char *buf, avsize_t nbyte)
 {
     avssize_t res;
-    struct filesys *fs = rem_vfile_filesys(vf);
+    struct remfs *fs = rem_vfile_filesys(vf);
     struct entry *ent = rem_vfile_entry(vf);
-    struct node *nod;
-    struct file *fil = NULL;
+    struct remnode *nod;
+    struct remfile *fil = NULL;
 
     nod = rem_get_node(fs, ent);
     AV_LOCK(nod->filelock);
@@ -866,10 +867,10 @@ static avssize_t rem_read(vfile *vf, char *buf, avsize_t nbyte)
 static int rem_getattr(vfile *vf, struct avstat *buf, int attrmask)
 {
     int res;
-    struct filesys *fs = rem_vfile_filesys(vf);
+    struct remfs *fs = rem_vfile_filesys(vf);
     struct entry *ent = rem_vfile_entry(vf);
-    struct node *nod;
-    struct node *parent;
+    struct remnode *nod;
+    struct remnode *parent;
 
     rem_get_locked_node(fs, ent, &nod, &parent);
     res = rem_check_node(fs, nod, parent);
@@ -883,7 +884,7 @@ static int rem_getattr(vfile *vf, struct avstat *buf, int attrmask)
 static int rem_access(ventry *ve, int amode)
 {
     int res;
-    struct filesys *fs = rem_ventry_filesys(ve);
+    struct remfs *fs = rem_ventry_filesys(ve);
     struct entry *ent = rem_ventry_entry(ve);
 
     res = rem_node_type(fs, ent);
@@ -900,10 +901,10 @@ static int rem_access(ventry *ve, int amode)
 static int rem_readlink(ventry *ve, char **bufp)
 {
     int res;
-    struct filesys *fs = rem_ventry_filesys(ve);
+    struct remfs *fs = rem_ventry_filesys(ve);
     struct entry *ent = rem_ventry_entry(ve);
-    struct node *nod;
-    struct node *parent;
+    struct remnode *nod;
+    struct remnode *parent;
 
     rem_get_locked_node(fs, ent, &nod, &parent);
     res = rem_check_node(fs, nod, parent);
@@ -936,15 +937,15 @@ static void rem_log_tree(struct namespace *ns, struct entry *ent)
 
 static void rem_destroy(struct avfs *avfs)
 {
-    struct filesys *fs = (struct filesys *) avfs->data;
+    struct remfs *fs = (struct remfs *) avfs->data;
     struct remote *rem = fs->rem;
-    struct node *nod;
+    struct remnode *nod;
     struct entry *root;
 
     AV_LOCK(rem_lock);
     nod = fs->list.next;
     while(nod != &fs->list) {
-        struct node *next = nod->next;
+        struct remnode *next = nod->next;
         
         av_unref_obj(nod);
         nod = next;
@@ -962,10 +963,10 @@ static void rem_destroy(struct avfs *avfs)
     av_free(fs);
 }
 
-void av_remote_add(struct dirlist *dl, const char *name,
+void av_remote_add(struct remdirlist *dl, const char *name,
                      const char *linkname, struct avstat *attr)
 {
-    struct direlement *de;
+    struct remdirent *de;
 
     dl->ents = av_realloc(dl->ents, sizeof(*dl->ents) * (dl->num + 1));
     de = &dl->ents[dl->num];
@@ -982,7 +983,7 @@ int av_remote_init(struct vmodule *module, struct remote *rem,
 {
     int res;
     struct avfs *avfs;
-    struct filesys *fs;
+    struct remfs *fs;
 
     res = av_new_avfs(rem->name, NULL, AV_VER, AVF_ONLYROOT | AVF_NOLOCK,
                         module, &avfs);

@@ -539,6 +539,50 @@ static void process_readlink(struct cmdinfo *ci)
     av_free(buf);
 }
 
+static void process_access(struct cmdinfo *ci)
+{
+    int res;
+    char *path = ci->inmsg.seg[1].buf;
+    int amode = ci->cmd.u.access.amode;
+    ventry *ve;
+    struct avfs_out_message outmsg;
+    struct avfs_result result;
+
+    av_log(AVLOG_SYSCALL, "access(\"%s\", 0%o)", path, amode);
+    
+    outmsg.num = 2;
+    outmsg.seg[0].len = sizeof(result);
+    outmsg.seg[0].buf = &result;
+    outmsg.seg[1].len = 0;
+
+    res = av_get_ventry(path, 1, &ve);
+    if(res < 0)
+        result.result = res;
+    else {
+        if(entry_local(ve)) {
+            result.result = -EPERM;
+            outmsg.seg[1].buf = (char *) ve->data;
+            outmsg.seg[1].len = strlen(outmsg.seg[1].buf) + 1;
+            if(outmsg.seg[1].len > PATHBUF_LEN) {
+                outmsg.seg[1].len = 0;
+                result.result = -ENAMETOOLONG;
+            }
+        }
+        else
+            result.result =  av_access(ve, amode);
+    }
+
+    av_log(AVLOG_SYSCALL, "   access(\"%s\", 0%o) = %i (%s)",
+           path, amode, result.result, 
+           outmsg.seg[1].len ? (char *) ve->data : "");
+
+    res = __av_write_message(ci->fd, &outmsg);
+    if(res == -1)
+        av_log(AVLOG_ERROR, "Error sending message\n");
+
+    av_free_ventry(ve);    
+}
+
 
 static void *process_message(void *arg)
 {
@@ -583,6 +627,10 @@ static void *process_message(void *arg)
         
     case CMD_READLINK:
         process_readlink(ci);
+        break;
+
+    case CMD_ACCESS:
+        process_access(ci);
         break;
         
     default:

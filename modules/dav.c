@@ -64,7 +64,7 @@ davlocalfile_to_string (struct davlocalfile *lf)
 /* ---------------------------------------------------------------------- */
 
 static char *dav_hostpath_to_url (char *urlbuf, int buflen,
-                                        const struct hostpath *hp)
+                                        const struct remhostpath *hp)
 {
     const char *rawp, *pathp;
     int len;
@@ -446,7 +446,7 @@ static int dav_res_stat_to_avstat (struct av_dav_resource *res,
 /* ---------------------------------------------------------------------- */
 
 static int
-populate_av_tree_from_reslist (struct dirlist *dl, struct av_dav_conn *conn,
+populate_av_tree_from_reslist (struct remdirlist *dl, struct av_dav_conn *conn,
                                struct av_dav_resource *reslist)
 {
   struct av_dav_resource *current, *next;
@@ -502,7 +502,7 @@ populate_av_tree_from_reslist (struct dirlist *dl, struct av_dav_conn *conn,
 
 /* ---------------------------------------------------------------------- */
 
-static int dav_list(struct remote *rem, struct dirlist *dl)
+static int dav_list(struct remote *rem, struct remdirlist *dl)
 {
     char urlbuf[512];
     int res;
@@ -554,7 +554,7 @@ error:
 
 /* ---------------------------------------------------------------------- */
 
-static int dav_get(struct remote *rem, struct getparam *gp)
+static int dav_get(struct remote *rem, struct remgetparam *gp)
 {
     int res;
     char urlbuf[512];

@@ -213,7 +213,7 @@ static int process_dir_line(const char *buf, int vollabel, struct avstat *st,
     return 0;
 }
 
-static void floppy_parse_line(const char *line, struct dirlist *dl)
+static void floppy_parse_line(const char *line, struct remdirlist *dl)
 {
     int res;
     char *filename;
@@ -241,7 +241,7 @@ static void floppy_parse_line(const char *line, struct dirlist *dl)
     av_free(filename);
 }
 
-static int floppy_read_list(struct program *pr, struct dirlist *dl)
+static int floppy_read_list(struct program *pr, struct remdirlist *dl)
 {
     int res;
 
@@ -259,7 +259,7 @@ static int floppy_read_list(struct program *pr, struct dirlist *dl)
     }
 }
 
-static int floppy_get_path(struct remote *rem, struct hostpath *hp,
+static int floppy_get_path(struct remote *rem, struct remhostpath *hp,
                            char **resp)
 {
     char drive[2];
@@ -281,7 +281,7 @@ static int floppy_get_path(struct remote *rem, struct hostpath *hp,
 }
 
 
-static int floppy_list(struct remote *rem, struct dirlist *dl)
+static int floppy_list(struct remote *rem, struct remdirlist *dl)
 {
     int res;
     struct program *pr;
@@ -316,7 +316,7 @@ static void floppy_free_localfile(struct floppylocalfile *lf)
     }
 }
 
-static int floppy_get(struct remote *rem, struct getparam *gp)
+static int floppy_get(struct remote *rem, struct remgetparam *gp)
 {
     int res;
     struct floppylocalfile *lf;

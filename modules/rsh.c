@@ -24,7 +24,7 @@ struct rshlocalfile {
 };
 
 static void rsh_parse_line(struct lscache *lc, const char *line,
-                           struct dirlist *dl)
+                           struct remdirlist *dl)
 {
     int res;
     char *filename;
@@ -42,7 +42,7 @@ static void rsh_parse_line(struct lscache *lc, const char *line,
 }
 
 static int rsh_read_list(struct program *pr, struct lscache *lc,
-                         struct dirlist *dl)
+                         struct remdirlist *dl)
 {
     int res;
 
@@ -92,7 +92,7 @@ static char *rsh_code_name(const char *name)
     return newname;
 }
 
-static int rsh_list(struct remote *rem, struct dirlist *dl)
+static int rsh_list(struct remote *rem, struct remdirlist *dl)
 {
     int res;
     struct program *pr;
@@ -132,7 +132,7 @@ static void rsh_free_localfile(struct rshlocalfile *lf)
     }
 }
 
-static int rsh_get(struct remote *rem, struct getparam *gp)
+static int rsh_get(struct remote *rem, struct remgetparam *gp)
 {
     int res;
     struct rshlocalfile *lf;

@@ -433,6 +433,7 @@ static void open_file(union inputArgs *req, struct openfile *of)
 	
         send_to_kernel(&rep, sizeof(rep.coda_open));
     }
+#ifdef CODA_OPEN_BY_FD
     else {
         if(of->fd == -1) {
             of->fd = open(of->tmpfile, O_RDONLY);
@@ -451,6 +452,7 @@ static void open_file(union inputArgs *req, struct openfile *of)
         }
         send_to_kernel(&rep, sizeof(rep.coda_open_by_fd));
     }
+#endif
 }
 
 static void del_file(const char *tmpname)
@@ -561,8 +563,10 @@ static void process_answer(struct userinfo *user)
         log("Found operation: %i\n", op->req->ih.unique);
 		
         switch(rep->oh.opcode) {
-        case CODA_OPEN:
+#ifdef CODA_OPEN_BY_FD
         case CODA_OPEN_BY_FD:
+#endif
+        case CODA_OPEN:
             if(rep->oh.result == 0) {
                 fi = look_info(&op->req->coda_open.VFid);
 				
@@ -1136,13 +1140,14 @@ static void process_kernel_req()
         send_to_child(req, numread, path, NULL);
         break;
 		
-    case CODA_OPEN:
+#ifdef CODA_OPEN_BY_FD
     case CODA_OPEN_BY_FD:
+        log("CODA_OPEN_BY_FD, flags: 0x%04x\n", req->coda_open.flags);
+#endif
+    case CODA_OPEN:
         if(req->ih.opcode == CODA_OPEN)
             log("CODA_OPEN, flags: 0x%04x\n", req->coda_open.flags);
-        else
-            log("CODA_OPEN_BY_FD, flags: 0x%04x\n", req->coda_open.flags);
-
+        
         fi = look_info(&req->coda_open.VFid);
         path = fi->path;
         log("path: %s\n", path);

@@ -360,8 +360,10 @@ void *process_request(void *arg)
 	    rep->oh.result = errno;
 	break;
 			
-    case CODA_OPEN:
+#ifdef CODA_OPEN_BY_FD
     case CODA_OPEN_BY_FD:
+#endif
+    case CODA_OPEN:
 	size = sizeof(rep->oh);
 	if(strcmp(path1, "/") == 0)
 	    create_empty_dir(path2);

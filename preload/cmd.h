@@ -12,7 +12,6 @@
 #include <dirent.h>
 #include <sys/types.h>
 
-
 enum avfs_cmd_type {
     CMD_GETATTR,
     CMD_OPEN,
@@ -23,7 +22,8 @@ enum avfs_cmd_type {
     CMD_READ,
     CMD_WRITE,
     CMD_RESOLVE,
-    CMD_READLINK
+    CMD_READLINK,
+    CMD_ACCESS
 };
 
 struct avfs_cmd {
@@ -57,6 +57,10 @@ struct avfs_cmd {
         struct {
             avsize_t bufsize;
         } readlink;
+
+        struct {
+            int amode;
+        } access;
     } u;
 };
 
@@ -83,5 +87,3 @@ struct avfs_direntry {
 #ifndef NAME_MAX
 #define NAME_MAX 255
 #endif
-
-#define AVFS_DIR_RECLEN ((size_t)(((struct dirent64 *)0)->d_name)+NAME_MAX+1)

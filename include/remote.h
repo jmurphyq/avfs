@@ -10,26 +10,26 @@
 #define REM_LIST_SINGLE (1 << 0)
 #define REM_LIST_PARENT (1 << 1)
 
-struct direlement {
+struct remdirent {
     char *name;
     char *linkname;
     struct avstat attr;
 };
 
-struct hostpath {
+struct remhostpath {
     char *host;
     char *path;
 };
 
-struct dirlist {
+struct remdirlist {
     int flags;
-    struct hostpath hostpath;
+    struct remhostpath hostpath;
     avsize_t num;
-    struct direlement *ents;
+    struct remdirent *ents;
 };
 
-struct getparam {
-    struct hostpath hostpath;
+struct remgetparam {
+    struct remhostpath hostpath;
     char *localname;
     void *data;
 };
@@ -42,13 +42,13 @@ struct remote {
     char *name;
     int flags;
 
-    int (*list) (struct remote *rem, struct dirlist *dl);
-    int (*get) (struct remote *rem, struct getparam *gp);
+    int (*list) (struct remote *rem, struct remdirlist *dl);
+    int (*get) (struct remote *rem, struct remgetparam *gp);
     int (*wait) (struct remote *rem, void *data, avoff_t end);
     void (*destroy) (struct remote *rem);
 };
 
 int av_remote_init(struct vmodule *module, struct remote *rem,
                      struct avfs **resp);
-void av_remote_add(struct dirlist *dl, const char *name,
+void av_remote_add(struct remdirlist *dl, const char *name,
                      const char *linkname, struct avstat *attr);

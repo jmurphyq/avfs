@@ -16,7 +16,6 @@ static int real_stat64(const char *path, struct stat64 *buf, int deref,
     if(!deref) {
         if(undersc == 0) {
             static int (*prev)(const char *, struct stat64 *);
-            
             if(!prev) 
                 prev = (int (*)(const char *, struct stat64 *))
                     __av_get_real("lstat64");
@@ -25,7 +24,6 @@ static int real_stat64(const char *path, struct stat64 *buf, int deref,
         }
         else {
             static int (*prev)(const char *, struct stat64 *);
-            
             if(!prev) 
                 prev = (int (*)(const char *, struct stat64 *))
                     __av_get_real("_lstat64");
@@ -36,7 +34,6 @@ static int real_stat64(const char *path, struct stat64 *buf, int deref,
     else {
         if(undersc == 0) {
             static int (*prev)(const char *, struct stat64 *);
-        
             if(!prev) 
                 prev = (int (*)(const char *, struct stat64 *)) 
                     __av_get_real("stat64");
@@ -45,7 +42,6 @@ static int real_stat64(const char *path, struct stat64 *buf, int deref,
         }
         else {
             static int (*prev)(const char *, struct stat64 *);
-            
             if(!prev) 
                 prev = (int (*)(const char *, struct stat64 *)) 
                     __av_get_real("_stat64");
@@ -59,7 +55,6 @@ static int real_fstat64(int fd, struct stat64 *buf, int undersc)
 {
     if(undersc == 0) {
         static int (*prev)(int, struct stat64 *);
-        
         if(!prev)
             prev = (int (*)(int, struct stat64 *)) __av_get_real("fstat64");
         
@@ -67,7 +62,6 @@ static int real_fstat64(int fd, struct stat64 *buf, int undersc)
     }
     else {
         static int (*prev)(int, struct stat64 *);
-        
         if(!prev)
             prev = (int (*)(int, struct stat64 *)) __av_get_real("_fstat64");
         
@@ -81,7 +75,6 @@ static int real_stat(const char *path, struct stat *buf, int deref,
     if(!deref) {
         if(undersc == 0) {
             static int (*prev)(const char *, struct stat *);
-            
             if(!prev) 
                 prev = (int (*)(const char *, struct stat *))
                     __av_get_real("lstat");
@@ -90,7 +83,6 @@ static int real_stat(const char *path, struct stat *buf, int deref,
         }
         else {
             static int (*prev)(const char *, struct stat *);
-            
             if(!prev) 
                 prev = (int (*)(const char *, struct stat *))
                     __av_get_real("_lstat");
@@ -101,7 +93,6 @@ static int real_stat(const char *path, struct stat *buf, int deref,
     else {
         if(undersc == 0) {
             static int (*prev)(const char *, struct stat *);
-            
             if(!prev) 
                 prev = (int (*)(const char *, struct stat *))
                     __av_get_real("stat");
@@ -110,7 +101,6 @@ static int real_stat(const char *path, struct stat *buf, int deref,
         }
         else {
             static int (*prev)(const char *, struct stat *);
-            
             if(!prev) 
                 prev = (int (*)(const char *, struct stat *))
                     __av_get_real("_stat");
@@ -124,7 +114,6 @@ static int real_fstat(int fd, struct stat *buf, int undersc)
 {
     if(undersc == 0) {
         static int (*prev)(int, struct stat *);
-        
         if(!prev)
             prev = (int (*)(int, struct stat *)) __av_get_real("fstat");
         
@@ -132,7 +121,6 @@ static int real_fstat(int fd, struct stat *buf, int undersc)
     }
     else {
         static int (*prev)(int, struct stat *);
-        
         if(!prev)
             prev = (int (*)(int, struct stat *)) __av_get_real("_fstat");
         
@@ -145,7 +133,6 @@ static int real_acl(const char *path, int cmd, int nent, aclent_t *aclbuf,
 {
     if(undersc == 0) {
         static int (*prev)(const char *, int, int, aclent_t *);
-        
         if(!prev)
             prev = (int (*)(const char *, int, int, aclent_t *)) 
                 __av_get_real("acl");
@@ -154,12 +141,29 @@ static int real_acl(const char *path, int cmd, int nent, aclent_t *aclbuf,
     }
     else {
         static int (*prev)(const char *, int, int, aclent_t *);
-        
         if(!prev)
             prev = (int (*)(const char *, int, int, aclent_t *)) 
                 __av_get_real("_acl");
         
         return prev(path, cmd, nent, aclbuf);
+    }
+}
+
+static int real_access(const char *path, int amode, int undersc)
+{
+    if(undersc == 0) {
+        static int (*prev)(const char *, int);
+        if(!prev)
+            prev = (int (*)(const char *, int))  __av_get_real("access");
+        
+        return prev(path, amode);
+    }
+    else {
+        static int (*prev)(const char *, int);
+        if(!prev)
+            prev = (int (*)(const char *, int))  __av_get_real("_access");
+        
+        return prev(path, amode);
     }
 }
 
@@ -203,6 +207,42 @@ static int cmd_getattr(const char *path, struct avstat *buf, int deref,
 
     return result.result;
 }
+
+static int cmd_access(const char *path, int amode,  char *pathbuf)
+{
+    int res;
+    struct avfs_out_message outmsg;
+    struct avfs_in_message inmsg;
+    struct avfs_cmd cmd;
+    struct avfs_result result;
+    const char *abspath;
+
+    res = __av_get_abs_path(path, pathbuf, &abspath);
+    if(res < 0)
+        return res;
+    
+    cmd.type = CMD_ACCESS;
+    cmd.u.access.amode = amode;
+    
+    outmsg.num = 2;
+    outmsg.seg[0].len = sizeof(cmd);
+    outmsg.seg[0].buf = &cmd;
+    outmsg.seg[1].len = strlen(abspath) + 1;
+    outmsg.seg[1].buf = abspath;
+
+    inmsg.seg[0].buf = &result;
+    inmsg.seg[1].buf = pathbuf;
+
+    res = __av_send_message(&outmsg, &inmsg, 0);
+    if(res == -1)
+        return -EIO;
+
+    if(inmsg.seg[1].len == 0)
+        pathbuf[0] = '\0';
+
+    return result.result;
+}
+
 
 static int fstat_server(int serverfh, struct avstat *buf)
 {
@@ -452,6 +492,33 @@ static int virt_acl(const char *path, int cmd, int nent, aclent_t *aclbuf,
     return res;
 }
 
+static int virt_access(const char *path, int amode, int undersc)
+{
+    int res = 0;
+    int local = 0;
+
+    if(__av_maybe_local(path)) {
+        res = real_access(path, amode, undersc);
+        local = __av_is_local(res, path);
+    }
+    
+    if(!local) {
+        int errnosave;
+        char pathbuf[PATHBUF_LEN];
+
+        errnosave = errno;
+        res = cmd_access(path, amode, pathbuf);
+        errno = errnosave;
+        if(pathbuf[0])
+            res = real_access(pathbuf, amode, undersc);
+        else if(res < 0)
+            errno = -res, res = -1;
+    }
+
+    return res;
+}
+
+
 int lstat64(const char *path, struct stat64 *buf)
 {
     return virt_stat64(path, buf, 0, 0);
@@ -520,4 +587,14 @@ int acl(const char *path, int cmd, int nent, aclent_t *aclbuf)
 int _acl(const char *path, int cmd, int nent, aclent_t *aclbuf)
 {
     return virt_acl(path, cmd, nent, aclbuf, 1);
+}
+
+int access(const char *path, int amode)
+{
+    return virt_access(path, amode, 0);
+}
+
+int _access(const char *path, int amode)
+{
+    return virt_access(path, amode, 1);
 }

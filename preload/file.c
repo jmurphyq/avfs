@@ -9,6 +9,9 @@
 #include "utils.h"
 #include <dirent.h>
 
+#define AVFS_DIR_RECLEN ((size_t)(((struct dirent64 *)0)->d_name)+NAME_MAX+1)
+
+
 static off64_t real_lseek64(int fd, off64_t offset, int whence, int undersc)
 {
     if(undersc == 0) {

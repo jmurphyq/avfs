@@ -110,6 +110,8 @@ If something doesn't work, then check the section 'Common Problems'.
 Format of an AVFS Path
 ----------------------
 
+(For a full explanation of the format see the file FORMAT)
+
 As you've seen, the '#' magic character makes a virtual file or
 directory from an ordinary file. Actually this is just a shorthand for
 the full specification of an AVFS path:
@@ -120,15 +122,28 @@ Note, the short version will only work if the file-extension is
 recognized (most are), but you can always tell exactly what should be
 done with the file by using the second method.
 
-There are handlers which do not have a "base" file. The floppy handler
-and the 'avfsstat' handler are like this, and ftp, http, etc. will
-also behave this way. For example the
+There are handlers which do not have a "base" file. The following
+handlers are like this: floppy, ftp, rsh, http, dav, avfsstat,
+volatile, rpms.
 
-  /#floppy:a   or   /#a
+Examples
 
-mean the root directory of the A drive.
+  /#floppy:a                                 - a: drive
+  /#a                                        - a: drive (alias for /#floppy:a)
+  /#rsh:otherhost/foo/bar                    - /foo/bar on 'otherhost'
+  /#ftp:ftp.funet.fi/pub/Linux               - anonymous ftp 
+  /#ftp:user@host.domain.org/home/xyz/file   - ftp with username 'user'
+  /#ftp_ctl:user@host.domain.org/password    - write the password to this file
+                                        (ftppass is a nice utility for this)
+  /#http:www.inf.bme.hu|~mszeredi|avfs|      - homepage of AVFS
+  /#http:ftp:||ftp.funet.fi|pub|Linux        - use HTTP to get an ftp URL
+                                        (useful if you use a HTTP-only proxy)
 
-For a full explanation of the format see the file FORMAT.
+The environment variable 'http_proxy' is used to set the default value
+of the proxy server. You can also set it's value by writing to the file
+
+   /#avfsstat/http_proxy
+
 
 The following "handelers" are available now:
 
@@ -152,7 +167,7 @@ The following "handelers" are available now:
   #ftp               ftp                    builtin
   #ftp_ctl           control ftp sessions   
   #dav               webdav                 builtin
-  #dav_ctl           control dav sessions
+  #dav_ctl           control dav sessions   
   #volatile          'memory fs'            mainly for testing
   #local             local filesysem        only for internal use
 

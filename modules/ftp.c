@@ -475,7 +475,7 @@ static int ftp_open_conn(struct ftpconn *conn)
     return 0;
 }
 
-static void ftp_free_dirlist(struct dirlist *dl)
+static void ftp_free_dirlist(struct remdirlist *dl)
 {
     int i;
 
@@ -489,7 +489,7 @@ static void ftp_free_dirlist(struct dirlist *dl)
     dl->num = 0;
 }
 
-static int ftp_read_list(struct filebuf *fb, struct dirlist *dl,
+static int ftp_read_list(struct filebuf *fb, struct remdirlist *dl,
                          struct lscache *lc)
 {
     int res;
@@ -582,7 +582,7 @@ static int ftp_set_cwd(struct ftpconn *conn, const char *dir)
 }
 
 static int ftp_do_list(struct ftpconn *conn, const char *dir, 
-                       struct dirlist *dl)
+                       struct remdirlist *dl)
 {
     int res;
     char *cmd;
@@ -752,7 +752,7 @@ static int ftp_get_conn(struct ftpdata *ftd, const char *userhost,
     return 0;
 }
 
-static int ftp_list(struct remote *rem, struct dirlist *dl)
+static int ftp_list(struct remote *rem, struct remdirlist *dl)
 {
     int res;
     struct ftpdata *ftd = (struct ftpdata *) rem->data;
@@ -805,8 +805,8 @@ static int ftp_init_localfile(struct ftplocalfile *lf, int sock)
 }
 
 
-static int ftp_do_get(struct getparam *gp, const char *dir, const char *file,
-                      struct ftpconn *conn)
+static int ftp_do_get(struct remgetparam *gp, const char *dir,
+                      const char *file, struct ftpconn *conn)
 {
     int res;
     int getsock;
@@ -857,7 +857,7 @@ static int ftp_do_get(struct getparam *gp, const char *dir, const char *file,
     return 0;
 }
 
-static int ftp_get(struct remote *rem, struct getparam *gp)
+static int ftp_get(struct remote *rem, struct remgetparam *gp)
 {
     int res;
     struct ftpdata *ftd = (struct ftpdata *) rem->data;

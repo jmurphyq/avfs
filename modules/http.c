@@ -12,32 +12,35 @@
 #include "filebuf.h"
 #include "socket.h"
 #include "serialfile.h"
+#include "internal.h"
 
 #include <stdlib.h>
 #include <unistd.h>
 
 #define HTTP_READ_TIMEOUT 20000
 
-struct localfile {
+struct httpentry;
+
+struct httplocalfile {
     struct filebuf *sockfb;
-    struct entry *ent;
+    struct httpentry *ent;
 };
 
-struct entry {
+struct httpentry {
     char *url;
     struct cacheobj *cobj;
     avoff_t size;
-    struct entry *next;
+    struct httpentry *next;
 };
 
-struct filesys {
-    struct entry *ents;
+struct httpfs {
+    struct httpentry *ents;
     char *proxyname;
 };
 
-struct file {
-    struct filesys *fs;
-    struct entry *ent;
+struct httpfile {
+    struct httpfs *fs;
+    struct httpentry *ent;
 };
 
 static int write_socket(int sock, const char *buf, avsize_t buflen)
@@ -68,7 +71,7 @@ static void strip_crlf(char *line)
     }
 }
 
-static int http_get_line(struct localfile *lf, char **linep)
+static int http_get_line(struct httplocalfile *lf, char **linep)
 {
     int res;
     char *line;
@@ -118,7 +121,7 @@ static char *http_split_header(char *line)
     return s;
 }
 
-static void http_process_header_line(struct localfile *lf, char *line)
+static void http_process_header_line(struct httplocalfile *lf, char *line)
 {
     char *s;
 
@@ -136,7 +139,7 @@ static void http_process_header_line(struct localfile *lf, char *line)
     }
 }
 
-static int http_check_header_line(struct localfile *lf)
+static int http_check_header_line(struct httplocalfile *lf)
 {
     int res;
     char *line;
@@ -156,7 +159,7 @@ static int http_check_header_line(struct localfile *lf)
     return res;
 }
 
-static int http_ignore_header(struct localfile *lf)
+static int http_ignore_header(struct httplocalfile *lf)
 {
     int res;
     char *line;
@@ -176,7 +179,7 @@ static int http_ignore_header(struct localfile *lf)
     return 0;
 }
 
-static int http_process_status_line(struct localfile *lf, char *line)
+static int http_process_status_line(struct httplocalfile *lf, char *line)
 {
     const char *s;
     int statuscode;
@@ -216,7 +219,7 @@ static int http_process_status_line(struct localfile *lf, char *line)
     return -EIO;
 }
 
-static int http_check_status_line(struct localfile *lf)
+static int http_check_status_line(struct httplocalfile *lf)
 {
     int res;
     char *line;
@@ -236,7 +239,7 @@ static int http_check_status_line(struct localfile *lf)
     return 0;
 }
 
-static int http_wait_response(struct localfile *lf)
+static int http_wait_response(struct httplocalfile *lf)
 {
     int res;
 
@@ -287,7 +290,7 @@ static char *http_url_host(const char *url)
         return av_strndup(s, t - s);
 }
 
-static int http_request_get(int sock, struct file *fil)
+static int http_request_get(int sock, struct httpfile *fil)
 {
     int res;
     char *req;
@@ -320,7 +323,7 @@ static int http_request_get(int sock, struct file *fil)
 }
 
 
-static void http_stop(struct localfile *lf)
+static void http_stop(struct httplocalfile *lf)
 {
     av_unref_obj(lf->sockfb);
 }
@@ -331,8 +334,8 @@ static int http_start(void *data, void **resp)
     int sock;
     int defaultport;
     char *host;
-    struct file *fil = (struct file *) data;
-    struct localfile *lf;
+    struct httpfile *fil = (struct httpfile *) data;
+    struct httplocalfile *lf;
 
     if(fil->fs->proxyname != NULL) {
         host = av_strdup(fil->fs->proxyname);
@@ -377,7 +380,7 @@ static int http_start(void *data, void **resp)
 static avssize_t http_sread(void *data, char *buf, avsize_t nbyte)
 {
     avssize_t res;
-    struct localfile *lf = (struct localfile *) data;
+    struct httplocalfile *lf = (struct httplocalfile *) data;
 
     do {
         res = av_filebuf_read(lf->sockfb, buf, nbyte);
@@ -397,11 +400,11 @@ static avssize_t http_sread(void *data, char *buf, avsize_t nbyte)
     return -EIO;
 }
 
-static struct sfile *http_get_serialfile(struct file *fil)
+static struct sfile *http_get_serialfile(struct httpfile *fil)
 {
     struct sfile *sf;
-    struct file *filcpy;
-    struct entry *ent = fil->ent;
+    struct httpfile *filcpy;
+    struct httpentry *ent = fil->ent;
     static struct sfilefuncs func = {
         http_start,
         http_sread
@@ -422,10 +425,20 @@ static struct sfile *http_get_serialfile(struct file *fil)
     return sf;
 }
 
-static struct entry *http_get_entry(struct filesys *fs, const char *url)
+static void http_set_size(struct httpfile *fil, struct sfile *sf)
 {
-    struct entry **ep;
-    struct entry *ent;
+    struct httpentry *ent = fil->ent;
+    avoff_t du;
+
+    du = av_sfile_diskusage(sf);
+    if(du >= 0)
+        av_cacheobj_setsize(ent->cobj, du);
+}
+
+static struct httpentry *http_get_entry(struct httpfs *fs, const char *url)
+{
+    struct httpentry **ep;
+    struct httpentry *ent;
 
     for(ep = &fs->ents; *ep != NULL; ep = &(*ep)->next) {
         ent = *ep;
@@ -476,8 +489,8 @@ static int http_open(ventry *ve, int flags, avmode_t mode, void **resp)
 {
     int res;
     char *url;
-    struct filesys *fs = (struct filesys *) ve->mnt->avfs->data;
-    struct file *fil;
+    struct httpfs *fs = (struct httpfs *) ve->mnt->avfs->data;
+    struct httpfile *fil;
     struct sfile *sf;
 
     url = http_ventry_url(ve);
@@ -491,6 +504,7 @@ static int http_open(ventry *ve, int flags, avmode_t mode, void **resp)
 
     sf = http_get_serialfile(fil);
     res = av_sfile_startget(sf);
+    http_set_size(fil, sf);
     av_unref_obj(sf);
 
     if(res == 0) 
@@ -503,7 +517,7 @@ static int http_open(ventry *ve, int flags, avmode_t mode, void **resp)
 
 static int http_close(vfile *vf)
 {
-    struct file *fil = (struct file *) vf->data;
+    struct httpfile *fil = (struct httpfile *) vf->data;
 
     av_free(fil);
 
@@ -514,11 +528,12 @@ static int http_close(vfile *vf)
 static avssize_t http_read(vfile *vf, char *buf, avsize_t nbyte)
 {
     avssize_t res;
-    struct file *fil = (struct file *) vf->data;
+    struct httpfile *fil = (struct httpfile *) vf->data;
     struct sfile *sf;
 
     sf = http_get_serialfile(fil);
     res = av_sfile_pread(sf, buf, nbyte, vf->ptr);
+    http_set_size(fil, sf);
     av_unref_obj(sf);
 
     if(res > 0)
@@ -530,7 +545,7 @@ static avssize_t http_read(vfile *vf, char *buf, avsize_t nbyte)
 static int http_getattr(vfile *vf, struct avstat *buf, int attrmask)
 {
     avoff_t size = -1;
-    struct file *fil = (struct file *) vf->data;
+    struct httpfile *fil = (struct httpfile *) vf->data;
 
     if(attrmask & AVA_SIZE) {
         int res;
@@ -544,6 +559,8 @@ static int http_getattr(vfile *vf, struct avstat *buf, int attrmask)
         size = fil->ent->size;
         if(size == -1)
             size = av_sfile_size(sf);
+
+        http_set_size(fil, sf);
         av_unref_obj(sf);
     }
 
@@ -574,9 +591,9 @@ static int http_access(ventry *ve, int amode)
 
 static void http_destroy(struct avfs *avfs)
 {
-    struct entry *ent;
-    struct entry *nextent;
-    struct filesys *fs = (struct filesys *) avfs->data;
+    struct httpentry *ent;
+    struct httpentry *nextent;
+    struct httpfs *fs = (struct httpfs *) avfs->data;
 
     ent = fs->ents;
     while(ent != NULL) {
@@ -591,7 +608,56 @@ static void http_destroy(struct avfs *avfs)
     av_free(fs);
 }
 
-static void http_get_proxy(struct filesys *fs)
+static int http_proxy_get(struct entry *ent, const char *param, char **retp)
+{
+    struct statefile *sf = (struct statefile *) av_namespace_get(ent);
+    struct avfs *avfs = (struct avfs *) sf->data;
+    struct httpfs *fs = (struct httpfs *) avfs->data;
+    char *s;
+    
+    AV_LOCK(avfs->lock);
+    if(fs->proxyname != NULL)
+        s = av_stradd(NULL, fs->proxyname, "\n", NULL);
+    else
+        s = av_strdup("");
+    AV_UNLOCK(avfs->lock);
+
+    *retp = s;
+
+    return 0;
+}
+
+static int http_proxy_set(struct entry *ent, const char *param,
+                          const char *val)
+{
+    struct statefile *sf = (struct statefile *) av_namespace_get(ent);
+    struct avfs *avfs = (struct avfs *) sf->data;
+    struct httpfs *fs = (struct httpfs *) avfs->data;
+    char *s;
+    unsigned int len;
+
+    if(begins_with(val, "http://"))
+        val = http_strip_resource_type(val);
+
+    s = av_strdup(val);
+    len = strlen(s);
+    if(len > 0 && s[len-1] == '\n')
+        s[len-1] = '\0';
+    
+    if(s[0] == '\0') {
+        av_free(s);
+        s = NULL;
+    }
+    
+    AV_LOCK(avfs->lock);
+    av_free(fs->proxyname);
+    fs->proxyname = s;
+    AV_UNLOCK(avfs->lock);
+
+    return 0;
+}
+
+static void http_default_proxy(struct httpfs *fs)
 {
     const char *proxyenv;
 
@@ -613,7 +679,8 @@ int av_init_module_http(struct vmodule *module)
 {
     int res;
     struct avfs *avfs;
-    struct filesys *fs;
+    struct httpfs *fs;
+    struct statefile statf;
 
     res = av_new_avfs("http", NULL, AV_VER, AVF_ONLYROOT, module, &avfs);
     if(res < 0)
@@ -623,7 +690,11 @@ int av_init_module_http(struct vmodule *module)
     fs->ents = NULL;
     fs->proxyname = NULL;
     
-    http_get_proxy(fs);
+    http_default_proxy(fs);
+    statf.get = http_proxy_get;
+    statf.set = http_proxy_set;
+    statf.data = avfs;
+    av_avfsstat_register("http_proxy", &statf);
 
     avfs->data = (void *) fs;
 

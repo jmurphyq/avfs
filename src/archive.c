@@ -145,7 +145,7 @@ static int get_archive(ventry *ve, struct archive **archp)
 {
     int res;
     char *key;
-    struct archive *arch;
+    struct archive *arch = NULL;
     int neednew;
     int tries;
 

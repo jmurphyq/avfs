@@ -11,7 +11,7 @@ few other handlers are implemented with the Midnight Commander's
 external FS.
 
 AVFS is (C) under the GNU GPL (see the file COPYING). The shared
-library supporting AVFS with LD_PRELOAD is (C) unred the GNU LGPL (see
+library supporting AVFS with LD_PRELOAD is (C) under the GNU LGPL (see
 the file COPYING.LIB).
 
 AVFS comes with ABSOLUTELY NO WARRANTY, for details see the file COPYING. 

@@ -426,25 +426,23 @@ static int convert_acl(struct avstat *vbuf, int cmd, int nent,
         break;
 
     case GETACL:
-        if(nent > 0) {
+        if(nent < 4) {
+            errno = ENOSPC;
+            res = -1;
+        }
+        else {
             aclbuf[0].a_type = USER_OBJ;
             aclbuf[0].a_id   = vbuf->uid;
             aclbuf[0].a_perm = (vbuf->mode & 0700) >> 6;
-            res = 1;
-        }
-        if(nent > 1) {
+
             aclbuf[1].a_type = GROUP_OBJ;
             aclbuf[1].a_id   = vbuf->gid;
             aclbuf[1].a_perm = (vbuf->mode & 0070) >> 3;
-            res = 2;
-        }
-        if(nent > 2) {
+
             aclbuf[2].a_type = CLASS_OBJ;
             aclbuf[2].a_id   = -1;
             aclbuf[2].a_perm = 0777;
-            res = 3;
-        }
-        if(nent > 3) {
+
             aclbuf[3].a_type = OTHER_OBJ;
             aclbuf[3].a_id   = -1;
             aclbuf[3].a_perm = (vbuf->mode & 0007);

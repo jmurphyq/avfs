@@ -51,7 +51,9 @@ avfs_preload.so: $(avfs_preload_objs)
 	$(CC) -shared -o avfs_preload.so $(avfs_preload_objs) -lsocket
 
 install-yes:
+	rm -f $(i_serverdir)/avfs_server
 	$(INSTALL) -m 755 avfs_server $(i_serverdir)/avfs_server
+	rm -f $(i_libdir)/avfs_preload.so
 	$(INSTALL) -m 755 avfs_preload.so $(i_libdir)/avfs_preload.so
 
 depend-yes:

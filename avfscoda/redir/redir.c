@@ -31,7 +31,6 @@ typedef asmlinkage int (*access_func)   (const char *, int);
 typedef asmlinkage int (*open_func)     (const char *, int, int);
 typedef asmlinkage int (*readlink_func) (const char *, char *, int);
 typedef asmlinkage int (*getcwd_func)   (char *, unsigned long);
-typedef asmlinkage int (*mkdir_func)    (const char *, int);
 
 static chdir_func    orig_chdir;
 static stat_func     orig_stat;
@@ -40,7 +39,6 @@ static access_func   orig_access;
 static open_func     orig_open;
 static readlink_func orig_readlink;
 static getcwd_func   orig_getcwd;
-static mkdir_func    orig_mkdir;
 
 #if NEWVFS
 typedef asmlinkage long (*stat64_func)   (const char *, struct stat64 *, long);
@@ -678,31 +676,6 @@ asmlinkage int virt_getcwd(char *buf, unsigned long size)
 	return ret;
 }
 
-asmlinkage int virt_mkdir(const char *filename, int mode)
-{
-	int ret;
-	mm_segment_t old_fs;
-	char *newfilename;
-	
-	newfilename = resolve_name(filename, 0, 0);
-	if(!newfilename) 
-		return (*orig_mkdir)(filename, mode);
-	if(IS_ERR(newfilename))
-		return PTR_ERR(newfilename);
-	
-
-	DEB((KERN_INFO "MKDIR: trying '%s'\n", newfilename));
-		
-	old_fs = get_fs();
-	set_fs(get_ds());
-	ret = (*orig_mkdir)(newfilename, mode);
-	set_fs(old_fs);
-	kfree(newfilename);
-
-	DEB((KERN_INFO "MKDIR: result %i\n", ret));
-	
-	return ret;
-}
 
 #if NEWVFS
 static long do_orig_stat64(stat64_func sfunc, const char *filename,
@@ -814,7 +787,6 @@ int init_module(void)
     orig_open     = replace_syscall(__NR_open,     virt_open);
     orig_readlink = replace_syscall(__NR_readlink, virt_readlink);
     orig_getcwd   = replace_syscall(__NR_getcwd,   virt_getcwd);
-    orig_mkdir    = replace_syscall(__NR_mkdir,    virt_mkdir);
 
 #if NEWVFS
     orig_stat64   = replace_syscall(__NR_stat64,   virt_stat64);
@@ -836,7 +808,6 @@ void cleanup_module(void)
     replace_syscall(__NR_open,     orig_open);
     replace_syscall(__NR_readlink, orig_readlink);
     replace_syscall(__NR_getcwd,   orig_getcwd);
-    replace_syscall(__NR_mkdir,    orig_mkdir);
 
 #if NEWVFS
     replace_syscall(__NR_stat64,   orig_stat64);

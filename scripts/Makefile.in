@@ -23,7 +23,8 @@ stopname  = K$(stop_prio)avfscoda
 
 i_overlaydir = $(install_root)/overlay
 i_devdir = $(install_root)/dev
-i_codadev = $(i_devdir)/cfs0
+i_codadev0 = $(i_devdir)/cfs0
+i_codadev1 = $(i_devdir)/cfs1
 
 INSTALL = @INSTALL@
 
@@ -53,7 +54,8 @@ install_profilescripts:
 install_avfscodamisc:
 	@../mkinstalldirs $(i_overlaydir)
 	@../mkinstalldirs $(i_devdir)
-	@if ! test -e $(i_codadev); then mknod -m 600 $(i_codadev) c 67 0; fi
+	@if ! test -e $(i_codadev0); then mknod -m 600 $(i_codadev0) c 67 0; fi
+	@if ! test -e $(i_codadev1); then mknod -m 600 $(i_codadev1) c 67 1; fi
 
 install_flushredir:
 	@../mkinstalldirs $(i_sbindir)

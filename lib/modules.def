@@ -1,3 +1,3 @@
 interface_version = 90
 
-module_objs = volatile.o rsh.o http.o ftp.o ugz.o uz.o gz.o ubz2.o bz2.o # dav.o utar.o urar.o uar.o uzip.o floppy.o extfs.o 
+module_objs = volatile.o rsh.o http.o ftp.o ugz.o uz.o gz.o ubz2.o bz2.o dav.o #utar.o urar.o uar.o uzip.o floppy.o extfs.o 

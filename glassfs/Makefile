@@ -1,3 +1,6 @@
+#CC=gcc
+#CFLAGS=-Wall -W
+
 obj-m := glassfs.o redir2.o
 
 #KERNDIR := /store/linux/uml/linux-2.6.4

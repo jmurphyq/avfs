@@ -4,6 +4,8 @@
 #include <linux/mount.h>
 #include <linux/string.h>
 #include <linux/init.h>
+#include <linux/proc_fs.h>
+#include <asm/uaccess.h>
 
 #define REDIR2_VERSION "0.0"
 
@@ -22,11 +24,13 @@ static struct dentry *(**orig_lookup_ptr)(struct inode *, struct dentry *,
 
 static struct vfsmount *orig_mount;
 static struct semaphore redir2_sem;
+static int mount_pid;
 
-static struct super_operations dummy_super_operations;
-static struct super_block dummy_sb = {
-	.s_op = &dummy_super_operations,
+static struct super_operations redir2_dummy_super_operations;
+static struct super_block redir2_dummy_sb = {
+	.s_op = &redir2_dummy_super_operations,
 };
+
 
 static int is_avfs(const unsigned char *name, unsigned int len)
 {
@@ -46,13 +50,8 @@ static char * my_d_path( struct dentry *dentry, struct vfsmount *vfsmnt,
 
 	*--end = '\0';
 	buflen--;
-	if (!IS_ROOT(dentry) && d_unhashed(dentry)) {
-		buflen -= 10;
-		end -= 10;
-		if (buflen < 0)
-			goto Elong;
-		memcpy(end, " (deleted)", 10);
-	}
+	if (!IS_ROOT(dentry) && d_unhashed(dentry)) 
+		return ERR_PTR(-ENOENT);
 
 	if (buflen < 1)
 		goto Elong;
@@ -104,27 +103,58 @@ Elong:
 	return ERR_PTR(-ENAMETOOLONG);
 }
 
-static int mount_avfs(struct dentry *dentry, char *path, int mode)
+static int redir2_permission(struct inode *inode, int mask,
+			     struct nameidata *nd)
+{
+	return -ENOENT;
+}
+
+static int redir2_getattr(struct vfsmount *mnt, struct dentry *entry,
+			  struct kstat *stat)
+{
+	return -ENOENT;
+}
+
+static struct dentry *redir2_dummy_lookup(struct inode *dir, struct dentry *entry,
+				   struct nameidata *nd)
+{
+	return ERR_PTR(-ENOENT);
+}
+
+
+static struct inode_operations redir2_inode_operations = {
+	.permission	= redir2_permission,
+	.getattr	= redir2_getattr,
+	.lookup		= redir2_dummy_lookup,
+};
+
+static int mount_avfs(struct dentry *dentry, struct vfsmount *mnt,
+		      char *path, int mode)
 {
 	struct inode *inode;
+	struct vfsmount *newmnt;
 
-	inode = new_inode(&dummy_sb);
+	inode = new_inode(&redir2_dummy_sb);
 	if (!inode)
 		return -ENOMEM;
 
 	inode->i_mode = mode;
+	inode->i_op = &redir2_inode_operations;
 	d_instantiate(dentry, inode);
 	
-	char *argv[] = { "/bin/mount", "--bind", path, path + OVERLAY_DIR_LEN,
-			 NULL };
+	char *argv[] = { "/usr/local/bin/redir2mount",
+			 path, path + OVERLAY_DIR_LEN, NULL };
 	char *envp[] = { NULL };
 	int ret;
-	ret = call_usermodehelper("/bin/mount", argv, envp, 1);
+	ret = call_usermodehelper(argv[0], argv, envp, 1);
 	printk("mount ret: %i\n", ret);
 	if (ret) {
 		d_drop(dentry);
 		return -EINVAL;
 	}
+	newmnt = lookup_mnt(mnt, dentry);
+	printk("new mount: %p\n", newmnt);
+	mntput(newmnt);
 
 	return 0;
 }
@@ -178,7 +208,7 @@ static int lookup_avfs(struct dentry *dentry, struct nameidata *nd)
 			memcpy(path, OVERLAY_DIR, OVERLAY_DIR_LEN);
 			
 			if (exists_avfs(path, &mode))
-				err = mount_avfs(dentry, path, mode);
+				err = mount_avfs(dentry, nd->mnt, path, mode);
 			else
 				err = -ENOENT;
 		}
@@ -192,6 +222,9 @@ static int redir2_dentry_revalidate(struct dentry *dentry,
 {
 	//printk("redir2_dentry_revalidate\n");
 	if (dentry->d_flags & DCACHE_AUTOFS_PENDING) {
+		if (current->pid == mount_pid)
+			return 1;
+
 		printk("redir2_dentry_revalidate: still pending\n");
 		down(&redir2_sem);
 		printk("redir2_dentry_revalidate: OK\n");
@@ -224,6 +257,7 @@ static struct dentry *lookup_maybeavfs(struct inode *dir,
 	int err;
 
 	down(&redir2_sem);
+	mount_pid = -1;
 	dentry->d_op = &redir2_dentry_operations;
 	dentry->d_flags |= DCACHE_AUTOFS_PENDING;
 	d_add(dentry, NULL);
@@ -249,11 +283,53 @@ static struct dentry *redir2_lookup(struct inode *dir, struct dentry *dentry,
 	return lookup_maybeavfs(dir, dentry, nd);
 }
 
+static int redir2_flush(struct file *file, const char __user *buffer,
+			unsigned long count, void *data)
+{
+	printk("redir2_flush\n");
+	return count;
+}
+
+static int mount_pid_write(struct file *file, const char __user *buffer,
+			unsigned long count, void *data)
+{
+	char buf[32];
+	if(count > sizeof(buf))
+		return -EINVAL;
+        if(copy_from_user(buf, buffer, count))
+                return -EFAULT;
+        mount_pid = simple_strtol(buf, NULL, 10);
+        return count;
+
+}
+
+static void redir2_init_proc(void)
+{
+	struct proc_dir_entry *dir;
+
+	dir = proc_mkdir("redir2", proc_root_fs);
+	if (dir) {
+		struct proc_dir_entry *e;
+		dir->owner = THIS_MODULE;
+		e = create_proc_entry("mount_pid", S_IFREG | 0200, dir);
+		if (e) {
+			e->owner = THIS_MODULE;
+			e->write_proc = mount_pid_write;
+		}
+		e = create_proc_entry("flush", S_IFREG | 0200, dir);
+		if (e) {
+			e->owner = THIS_MODULE;
+			e->write_proc = redir2_flush;
+		}
+	}
+}
+
 static int __init init_redir2(void)
 {
 	printk(KERN_INFO "redir2 init (version %s)\n", REDIR2_VERSION);
 
 	sema_init(&redir2_sem, 1);
+	redir2_init_proc();
 	read_lock(&current->fs->lock);
 	orig_mount = mntget(current->fs->rootmnt);
 	orig_lookup_ptr = &current->fs->root->d_inode->i_op->lookup;
@@ -271,6 +347,7 @@ static void __exit exit_redir2(void)
 	if(orig_lookup_ptr)
 		*orig_lookup_ptr = orig_lookup;
 	mntput(orig_mount);
+	remove_proc_entry("redir2", proc_root_fs);
 }
 
 

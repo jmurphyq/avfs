@@ -2,8 +2,8 @@
     AVFS: A Virtual File System Library
     Copyright (C) 1998-2001  Miklos Szeredi (mszeredi@inf.bme.hu)
 
-    This file can be distributed either under the GNU LGPL, or under
-    the GNU GPL. See the file COPYING.LIB and COPYING. 
+    This program can be distributed under the terms of the GNU GPL.
+    See the file COPYING.
 */
 
 #ifdef linux
@@ -167,6 +167,8 @@ static avssize_t sfile_cached_pwrite(struct sfile *fil, const char *buf,
         return -EIO;
     }
 
+    /* FIXME: Checking free space is expensive. This should be done in
+       a more clever way */
     if(offset + nbyte > fil->numbytes)
         av_cache_checkspace();
 

@@ -2,8 +2,8 @@
     AVFS: A Virtual File System Library
     Copyright (C) 1998-2001  Miklos Szeredi (mszeredi@inf.bme.hu)
     
-    This file can be distributed either under the GNU LGPL, or under
-    the GNU GPL. See the file COPYING.LIB and COPYING. 
+    This program can be distributed under the terms of the GNU GPL.
+    See the file COPYING.
 */
 
 #include "filter.h"
@@ -265,21 +265,6 @@ static int filt_open_base(ventry *ve, int flags, avmode_t mode, vfile **vfp,
     return res;
 }
 
-static int filt_getkey(ventry *ve, char **resp)
-{
-    int res;
-    char *key;
-
-    res = av_generate_path(ve->mnt->base, &key);
-    if(res < 0)
-        return res;
-
-    key = av_stradd(key, AVFS_SEP_STR, ve->mnt->avfs->name, NULL);
-
-    *resp = key;
-    return 0;
-}
-
 static int filt_open_file(struct filtfile *ff, ventry *ve, int flags,
                           avmode_t mode)
 {
@@ -292,7 +277,7 @@ static int filt_open_file(struct filtfile *ff, ventry *ve, int flags,
     if(res < 0)
         return res;
 
-    res = filt_getkey(ve, &key);
+    res = av_filecache_getkey(ve, &key);
     if(res == 0) {
         if((baseflags & AVO_ACCMODE) == AVO_RDWR)
             ff->iswrite = 1;

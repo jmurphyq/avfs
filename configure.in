@@ -57,6 +57,9 @@ AC_CHECK_FUNCS(vsnprintf strncasecmp strcasecmp mkdtemp)
 AC_CHECK_FUNC(nanosleep, , [AC_CHECK_LIB(posix4, nanosleep)])
 AC_HEADER_MAJOR
 
+dnl For zlib
+AC_CHECK_HEADERS(unistd.h)
+
 AC_CACHE_CHECK([for d_type in struct dirent], my_cv_struct_d_type,
 [AC_TRY_COMPILE([#include <sys/types.h>
 #include <dirent.h>], [struct dirent d; d.d_type;],
@@ -243,7 +246,7 @@ AC_SUBST(install_scriptcomps)
 AC_SUBST(avfscoda_build)
 AC_SUBST(preload_build)
 
-AC_OUTPUT(src/Makefile modules/Makefile lib/Makefile include/Makefile avfscoda/Makefile avfscoda/redir/Makefile preload/Makefile libneon/Makefile extfs/Makefile scripts/Makefile test/Makefile)
+AC_OUTPUT(src/Makefile modules/Makefile zlib/Makefile lib/Makefile include/Makefile avfscoda/Makefile avfscoda/redir/Makefile preload/Makefile libneon/Makefile extfs/Makefile scripts/Makefile test/Makefile)
 
 
 

@@ -1,0 +1,33 @@
+SHELL = /bin/sh
+
+top_srcdir = @top_srcdir@
+
+CC = @CC@
+LD = @LD@
+CFLAGS = -I$(top_srcdir)/include @CFLAGS@ @CPPFLAGS@
+
+zlib_objs = \
+	adler32.o   \
+	crc32.o	    \
+	deflate.o   \
+	infblock.o  \
+	infcodes.o  \
+	inffast.o   \
+	inflate.o   \
+	inftrees.o  \
+	infutil.o   \
+	trees.o	    \
+	zutil.o     \
+	zread.o
+
+all: zlib.o
+
+zlib.o: $(zlib_objs)
+	$(LD) -o zlib.o $(zlib_objs)
+
+depend:
+	cp -f Makefile Makefile.old
+	sed '/^# DO NOT REMOVE THIS LINE/q' < Makefile.old > Makefile
+	gcc -MM $(CFLAGS) *.c >> Makefile
+
+# DO NOT REMOVE THIS LINE, OR "make depend" WILL NOT WORK

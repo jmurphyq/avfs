@@ -1,9 +1,9 @@
 /*
     AVFS: A Virtual File System Library
-    Copyright (C) 2000-2001  Miklos Szeredi (mszeredi@inf.bme.hu)
+    Copyright (C) 1998-2001  Miklos Szeredi (mszeredi@inf.bme.hu)
 
-    This file can be distributed either under the GNU LGPL, or under
-    the GNU GPL. See the file COPYING.LIB and COPYING. 
+    This program can be distributed under the terms of the GNU GPL.
+    See the file COPYING.
 */
 
 #include "archint.h"
@@ -83,22 +83,6 @@ static int arch_same(struct archive *arch, struct avstat *stbuf)
         return 0;
 }
 
-/* FIXME: function common to archive and filter */
-static int arch_getkey(ventry *ve, char **resp)
-{
-    int res;
-    char *key;
-
-    res = av_generate_path(ve->mnt->base, &key);
-    if(res < 0)
-        return res;
-
-    key = av_stradd(key, AVFS_SEP_STR, ve->mnt->avfs->name, NULL);
-
-    *resp = key;
-    return 0;
-}
-
 static struct archive *do_get_archive(const char *key, struct avstat *stbuf)
 {
     struct archive *arch;
@@ -134,7 +118,7 @@ static int get_archive(ventry *ve, struct archive **archp)
     if(res < 0)
         return res;
 
-    res = arch_getkey(ve, &key);
+    res = av_filecache_getkey(ve, &key);
     if(res < 0)
         return res;
 

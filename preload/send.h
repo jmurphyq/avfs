@@ -1,3 +1,12 @@
+/*
+    AVFS: A Virtual File System Library
+    Copyright (C) 1998-2001  Miklos Szeredi (mszeredi@inf.bme.hu)
+
+    This program can be distributed either under the terms of the GNU
+    GPL or under the terms of the GNU LGPL.  See the files COPYING and
+    COPYING.LIB.
+*/
+
 #define MAXSEG 10
 
 struct avfs_out_message_segment {

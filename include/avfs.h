@@ -2,8 +2,8 @@
     AVFS: A Virtual File System Library
     Copyright (C) 1998-2001  Miklos Szeredi (mszeredi@inf.bme.hu)
 
-    This file can be distributed either under the GNU LGPL, or under
-    the GNU GPL. See the file COPYING.LIB and COPYING. 
+    This program can be distributed under the terms of the GNU GPL.
+    See the file COPYING.
 */
 
 #ifndef _AVFS_H
@@ -281,6 +281,7 @@ int        av_check_version(const char *modname, const char *name, int version,
 
 int        av_copy_ventry(ventry *ve, ventry **retp);
 void       av_free_ventry(ventry *ve);
+int        av_generate_path(ventry *ve, char **pathp);
           
 avdev_t    av_mkdev(int major, int minor);
 void       av_splitdev(avdev_t dev, int *majorp, int *minorp);

@@ -4,7 +4,7 @@ LD = @LD@
 
 all: avfs.o
 
-avfs_objs = ../src/core.o ../modules/modules.o
+avfs_objs = ../src/core.o ../modules/modules.o ../zlib/zlib.o
 
 avfs.o: $(avfs_objs)
 	$(LD) -o avfs.o $(avfs_objs)

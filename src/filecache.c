@@ -2,8 +2,8 @@
     AVFS: A Virtual File System Library
     Copyright (C) 1998  Miklos Szeredi (mszeredi@inf.bme.hu)
     
-    This file can be distributed either under the GNU LGPL, or under
-    the GNU GPL. See the file COPYING.LIB and COPYING. 
+    This program can be distributed under the terms of the GNU GPL.
+    See the file COPYING.
 */
 
 #include "filecache.h"
@@ -118,4 +118,19 @@ void av_destroy_filecache()
     while(fclist.next != &fclist)
         filecache_delete(fclist.next);
     AV_UNLOCK(fclock);
+}
+
+int av_filecache_getkey(ventry *ve, char **resp)
+{
+    int res;
+    char *key;
+
+    res = av_generate_path(ve->mnt->base, &key);
+    if(res < 0)
+        return res;
+
+    key = av_stradd(key, AVFS_SEP_STR, ve->mnt->avfs->name, NULL);
+
+    *resp = key;
+    return 0;
 }

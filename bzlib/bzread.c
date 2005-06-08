@@ -260,6 +260,11 @@ static int bzfile_decompress(struct bzfile *fil, struct bzcache *zc)
         res = bzfile_fill_inbuf(fil);
         if(res < 0)
             return res;
+	if(fil->s->avail_in == 0) {
+	  /* still no byte available */
+	  av_log(AVLOG_ERROR, "BZFILE: decompress error");
+	  return -EIO;
+	}
     }
     
     start = fil->s->next_out;

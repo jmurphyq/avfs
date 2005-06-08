@@ -52,4 +52,7 @@ int            virt_closedir  (DIR *dirp);
 struct dirent *virt_readdir   (DIR *dirp);
 void           virt_rewinddir (DIR *dirp);
 
+int            virt_remove    (const char *path);
+int            virt_islocal   (const char *path);
+
 #endif /* _VIRTUAL_H */

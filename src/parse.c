@@ -12,6 +12,7 @@
 #include "version.h"
 #include "local.h"
 #include "mod_static.h"
+#include "operutil.h"
 
 #include <stdio.h>
 #include <ctype.h>
@@ -39,6 +40,7 @@ struct parse_state {
     int resolvelast;
     int nextseg;
     int linkctr;
+    int first_seg;  /* true if no segment was analysed, see segment_len() comment */
 };
 
 static int copyrightstat_get(struct entry *ent, const char *param, char **retp)
@@ -213,6 +215,28 @@ void av_add_avfs(struct avfs *newavfs)
     AV_UNLOCK(avfs_lock);
 }
 
+static int av_copy_parsestate(struct parse_state *ps, struct parse_state *destps)
+{
+    destps->linkctr = ps->linkctr;
+    destps->nextseg = ps->nextseg;
+    destps->resolvelast = ps->resolvelast;
+    destps->islink = ps->islink;
+
+    if(ps->path)
+      destps->path = av_strdup(ps->path);
+    else
+      destps->path = NULL;
+
+    destps->first_seg = ps->first_seg;
+
+    if(ps->prevseg)
+      destps->prevseg = av_strdup(ps->prevseg);
+    else
+      destps->prevseg = NULL;
+
+    av_copy_ventry(ps->ve, &(destps->ve));
+    return 0;
+}
 
 static void set_prevseg(struct parse_state *ps, const char *name)
 {
@@ -475,35 +499,29 @@ static int lookup_avfs(struct parse_state *ps, char *name)
     return res;
 }
 
-static void preprocess_name(char *name)
-{
-    char *s, *d;
-
-    for(s = name, d = name; *s; s++, d++) {
-        if(s[0] == AVFS_SEP_CHAR && s[1] == AVFS_SEP_CHAR)
-            s++;
-	*d = *s;
-    }
-    *d = '\0';
-}
-
-static int lookup_segment(struct parse_state *ps)
+static int lookup_segment(struct parse_state *ps, int noavfs)
 {
     int res;
     char *name = ps->path;
     ventry *ve = ps->ve;
 
-    if(name[0] == AVFS_SEP_CHAR && name[1] != AVFS_SEP_CHAR)
-        res = lookup_avfs(ps, name+1);
+    /* only enter next avfs hierarchie if the magic char is not the
+       very first char (first_seg) and we really want this action
+       (noavfs needed by segment_islocal() test */
+
+    if((name[0] == AVFS_SEP_CHAR) && (noavfs == 0) && (ps->first_seg == 0))
+      res = lookup_avfs(ps, name+1);
     else {
+        /* reset first_seg as we now process a path segment and from now on 
+	   the next magic char is always the magic char and not from a local
+	   filename */
+        ps->first_seg = 0;
+
         for(;*name && *name == AV_DIR_SEP_CHAR; name++);
         set_prevseg(ps, name);
 
 	if((ve->mnt->avfs->flags & AVF_NEEDSLASH) != 0)
 	   name = ps->path;
-        
-        if(ve->mnt->base != NULL)
-            preprocess_name(name);
         
         if(name[0] != '\0')
             res = lookup_virtual(ps, name);
@@ -514,28 +532,98 @@ static int lookup_segment(struct parse_state *ps)
     return res;
 }
 
-static unsigned int segment_len(struct parse_state *ps)
+static int segment_islocal(struct parse_state *ps, unsigned int seglen )
 {
-    const char *s = ps->path;
-    unsigned int seglen;
+    int islocal = 0;
+    char c;
+    struct parse_state tempps;
+    int f;
 
-    if(s[0] == AVFS_SEP_CHAR && s[1] != AVFS_SEP_CHAR)
+    /* we will copy the whole parse_state and try to find a local entry
+       if open succeed there is a local file and we can return true */
+
+    av_copy_parsestate( ps, &tempps );
+    
+    tempps.nextseg = seglen;
+    c = tempps.path[seglen];
+    tempps.path[seglen] = '\0';
+    
+    /* we force lookup_segment() to not enter any avfs hierarchie */
+    lookup_segment(&tempps, 1);
+    f = av_fd_open_entry(tempps.ve, AVO_RDONLY, 0);
+    av_free_ventry(tempps.ve);
+    av_free(tempps.path);
+    av_free(tempps.prevseg);
+    if ( f >= 0 ) {
+      islocal = 1;
+      av_fd_close(f);
+    }
+    return islocal;
+}
+
+static unsigned int segment_len(struct parse_state *ps, int ignoreMagic)
+{
+    const char *s = ps->path,
+               *first_s = ps->path;
+    unsigned int seglen, orig_seglen;
+    int found_magic = 0, search_avfs_key = 0;
+
+    /* this function will find the next segment len by also checking for local files
+       with magic chars inside the filename
+       two cases:
+       1.magic at the beginning:
+         in this case we are searching for an avfs key (#utar, #ugz...)
+	 so we will stop at the next magic char or dir separator
+	 except when this magic char is the very first character
+	 where it makes no sense to accept this as an avfs key
+	 (imagine open("#utar"))
+	 For this case there is a new flag first_seg which takes
+	 care of this
+       2.Otherwise we are searching for the longest path segment
+         starting at the next dir separator skipping any magic char
+	 we stop after first local hit
+	 If no local file was found we return whole segment len to be able
+	 to open new files with magic chars
+       If no magic char was found or we are forced to ignore it
+       we immediately return the whole path segment without any checking
+    */
+
+    if(s[0] == AVFS_SEP_CHAR) {
         s++;
-    else while(*s == AV_DIR_SEP_CHAR)
+	if(ps->first_seg == 0)
+            search_avfs_key = 1;
+    } else while(*s == AV_DIR_SEP_CHAR)
         s++;
     
     while(*s && *s != AV_DIR_SEP_CHAR) {
-        if(s[0] == AVFS_SEP_CHAR) {
-            if(s[1] == AVFS_SEP_CHAR)
-                s++;
-            else
-                break;
+        if(*s == AVFS_SEP_CHAR) {
+            if(found_magic == 0) {
+	        first_s = s;
+	    }
+	    found_magic++;
         }
         s++;
     }
     seglen = s - ps->path;
 
-    return seglen;
+    if((ignoreMagic == 1) || (found_magic == 0)) return seglen;
+
+    /* a magic char was already found so first_s is correct */
+    if(search_avfs_key == 1)
+        return (first_s - ps->path);
+
+    orig_seglen = seglen;
+    /* found magic char so check for existing local file */
+    while(seglen > 0) {
+        if(segment_islocal(ps, seglen) == 1)
+	    break;
+        for(seglen = seglen - 1;
+            (seglen > 0) && ( ps->path[seglen] != AVFS_SEP_CHAR );
+            seglen--);
+    }
+
+    if(seglen > 0) return seglen;
+    else return orig_seglen;
 }
 
 static int is_last(struct parse_state *ps, unsigned int seglen)
@@ -561,7 +649,7 @@ static struct avfs *get_local_avfs()
     return localavfs;
 }
 
-static int parse_path(struct parse_state *ps);
+static int parse_path(struct parse_state *ps, int force_localfile);
 
 static int follow_link(struct parse_state *ps)
 {
@@ -588,7 +676,7 @@ static int follow_link(struct parse_state *ps)
         
         res = lookup_virtual(&linkps, NULL);
         if(res == 0)
-            res = parse_path(&linkps);
+            res = parse_path(&linkps, 0);
     }
     else {
         av_free_ventry(ps->ve);
@@ -597,8 +685,9 @@ static int follow_link(struct parse_state *ps)
         linkps.ve->mnt = new_mount(NULL, get_local_avfs(), NULL);
         linkps.ve->data = av_strdup("");
 
-        res = parse_path(&linkps);
+        res = parse_path(&linkps, 0);
     }
+
     
     av_free(buf);
     ps->ve = linkps.ve;
@@ -606,26 +695,27 @@ static int follow_link(struct parse_state *ps)
     return res;
 }
 
-static int parse_path(struct parse_state *ps)
+static int parse_path(struct parse_state *ps, int force_localfile)
 {
     int res = 0;
     int numseg = 0;
 
     ps->prevseg = av_strdup("");
-
+    ps->first_seg = 1;
     while(ps->path[0]) {
         unsigned int seglen;
         int lastseg;
         char c;
 
-        seglen = segment_len(ps);
+	seglen = segment_len(ps, force_localfile);
+	
         lastseg = is_last(ps, seglen);
         ps->nextseg = seglen;
         c = ps->path[seglen];
         ps->path[seglen] = '\0';
         ps->islink = 0;
         
-        res = lookup_segment(ps);
+        res = lookup_segment(ps,0);
         if(res < 0)
             break;
         
@@ -650,7 +740,6 @@ static int parse_path(struct parse_state *ps)
     return res;
 }
 
-
 int av_get_ventry(const char *path, int resolvelast, ventry **resp)
 {
     int res;
@@ -673,7 +762,23 @@ int av_get_ventry(const char *path, int resolvelast, ventry **resp)
     ps.ve->mnt = new_mount(NULL, get_local_avfs(), NULL);
     ps.ve->data = av_strdup("");
 
-    res = parse_path(&ps);
+    res = parse_path(&ps, 0);
+
+    /* no ventry so force localfile to be able to create files with
+       the magic character inside filename */
+    if(res < 0) {
+        av_free(copypath);
+        copypath = av_strdup(path);
+        av_free_ventry(ps.ve);
+        ps.path = copypath;
+        ps.resolvelast = resolvelast;
+        ps.linkctr = 10;
+        AV_NEW(ps.ve);
+        ps.ve->mnt = new_mount(NULL, get_local_avfs(), NULL);
+        ps.ve->data = av_strdup("");
+        res = parse_path(&ps, 1);
+    }
+
     if(res < 0) {
         av_free_ventry(ps.ve);
         *resp = NULL;
@@ -768,8 +873,7 @@ static int ipath_len(const char *s)
 {
     int cnt;
 
-    for(cnt = 0; *s; s++, cnt++) 
-        if(*s == AVFS_SEP_CHAR) cnt++;
+    for(cnt = 0; *s; s++, cnt++);
 
     return cnt;
 }
@@ -778,8 +882,6 @@ static void ipath_copy(char *dst, const char *src)
 {
     for(; *src; dst++, src++) {
         *dst = *src;
-        if(*src == AVFS_SEP_CHAR)
-            *++dst = AVFS_SEP_CHAR;
     }
     *dst = '\0';
 }

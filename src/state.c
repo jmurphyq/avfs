@@ -273,6 +273,11 @@ static int st_readdir(vfile *vf, struct avdirent *buf)
 
     /* FIXME: Make ino be some hash function of param and entry */
     buf->ino = (int) stf + st_paramhash(sf->stent->param);
+    /* add hash of entry name to hash */
+    buf->ino += st_paramhash( buf->name );
+    /* make sure ino is not 0 or 1 */
+    buf->ino = (avino_t)((((unsigned int)buf->ino) % (~0U - 1)) + 2);
+    
     buf->type = 0;
     av_unref_obj(ent);
     
@@ -285,6 +290,7 @@ static int st_getattr(vfile *vf, struct avstat *buf, int attrmask)
 {
     struct stfile *sf = st_vfile_stfile(vf);
     struct statefile *stf;
+    char *ent_name;
 
     if(sf->stent->ent != NULL)
         stf = (struct statefile *) av_namespace_get(sf->stent->ent);
@@ -294,6 +300,16 @@ static int st_getattr(vfile *vf, struct avstat *buf, int attrmask)
     av_default_stat(buf);
     /* This isn't perfect, but... */
     buf->ino = (int) stf + st_paramhash(sf->stent->param);
+
+    /* add hash of entry name to hash */
+    if( sf->stent->ent != NULL ) {
+      ent_name = av_namespace_name( sf->stent->ent );
+      buf->ino += st_paramhash( ent_name );
+      av_free( ent_name );
+    }
+    /* make sure ino is not 0 or 1 */
+    buf->ino = (avino_t)((((unsigned int)buf->ino) % (~0U - 1)) + 2);
+    
     buf->dev = vf->mnt->avfs->dev;
     if(stf != NULL) {
         if(stf->set != NULL)

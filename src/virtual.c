@@ -671,3 +671,45 @@ int virt_link(const char *path, const char *newpath)
     errno = errno_save;
     return 0;
 }
+
+int virt_remove(const char *path)
+{
+    struct stat stbuf;
+
+    if(path != NULL) {
+        if(virt_lstat(path, &stbuf) == 0) {
+            if(S_ISDIR(stbuf.st_mode)) {
+                return virt_rmdir(path);
+            } else {
+                return virt_unlink(path);
+            }
+        }
+    }
+
+    errno = EFAULT;
+    return -1;
+}
+
+int virt_islocal(const char *path)
+{
+    int res;
+    ventry *ve;
+    int errno_save = errno;
+    int erg = 0;
+
+    res = av_get_ventry(path, 0, &ve);
+    if(res == 0) {
+        if(ve->mnt->base == NULL)
+            erg = 1;
+        else
+            erg = 0;
+        av_free_ventry(ve);
+    }
+    if(res < 0) {
+        errno = -res;
+        return -1;
+    }
+
+    errno = errno_save;
+    return erg;
+}

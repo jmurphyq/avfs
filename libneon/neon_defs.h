@@ -8,3 +8,5 @@
 # define BEGIN_NEON_DECLS /* empty */
 # define END_NEON_DECLS /* empty */
 #endif
+
+#include "neonconf.h"

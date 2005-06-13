@@ -3,12 +3,14 @@
  * For conditions of distribution and use, see copyright notice in zlib.h 
  */
 
-/* @(#) $Id: zconf.h,v 1.3 2002/12/05 15:58:06 mszeredi Exp $ */
+/* @(#) $Id: zconf.h,v 1.4 2005/06/13 21:49:44 hoffmannr Exp $ */
 
 #ifndef _ZCONF_H
 #define _ZCONF_H
 
 #include "config.h"
+
+#define Z_PREFIX 1
 
 /*
  * If you *really* need a unique prefix for all types and library functions,
@@ -48,6 +50,42 @@
 #  define uLongf	z_uLongf
 #  define voidpf	z_voidpf
 #  define voidp		z_voidp
+
+#  define zlibVersion	z_zlibVersion
+#  define zcfree		z_zcfree
+#  define zcalloc	z_zcalloc
+#  define zError	z_zError
+#  define _tr_tally	z__tr_tally
+#  define inflate_blocks		z_inflate_blocks
+#  define inflate_blocks_free		z_inflate_blocks_free
+#  define inflate_blocks_new		z_inflate_blocks_new
+#  define inflate_blocks_reset		z_inflate_blocks_reset
+#  define inflate_blocks_restore		z_inflate_blocks_restore
+#  define inflate_blocks_save		z_inflate_blocks_save
+#  define inflate_blocks_sync_point		z_inflate_blocks_sync_point
+#  define inflate_set_dictionary		z_inflate_set_dictionary
+#  define inflate_codes		z_inflate_codes
+#  define inflate_codes_free		z_inflate_codes_free
+#  define inflate_codes_new		z_inflate_codes_new
+#  define inflate_codes_restore		z_inflate_codes_restore
+#  define inflate_codes_save		z_inflate_codes_save
+#  define inflate_fast		z_inflate_fast
+#  define inflateRestore		z_inflateRestore
+#  define inflateSave		z_inflateSave
+#  define inflate_trees_bits		z_inflate_trees_bits
+#  define inflate_trees_dynamic		z_inflate_trees_dynamic
+#  define inflate_trees_fixed		z_inflate_trees_fixed
+#  define inflate_flush		z_inflate_flush
+#  define _tr_align		z__tr_align
+#  define _tr_flush_block		z__tr_flush_block
+#  define _tr_init		z__tr_init
+#  define _tr_stored_block		z__tr_stored_block
+#  define inflate_mask		z_inflate_mask
+#  define z_errmsg		z_z_errmsg
+#  define deflate_copyright	z_deflate_copyright
+#  define inflate_copyright	z_inflate_copyright
+#  define _dist_code		z__dist_code
+#  define _length_code		z__length_code
 #endif
 
 #if (defined(_WIN32) || defined(__WIN32__)) && !defined(WIN32)

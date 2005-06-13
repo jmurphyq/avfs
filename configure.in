@@ -1,6 +1,7 @@
 dnl Process this file with autoconf to produce a configure script.
 
 AC_INIT(include/avfs.h)
+AM_INIT_AUTOMAKE(avfs, 0.9.5)
 AC_CONFIG_HEADER(include/config.h:config.h.in)
 AC_PREFIX_DEFAULT(/usr)
 
@@ -24,6 +25,10 @@ VERSION=0.9.4
 AC_SUBST(VERSION)
 
 os=`uname -s`
+kernver=`uname -r | sed -n 's/\([[0-9]]\+\)\.\([[0-9]]\+\)\..*/\1\2/p'`
+if test -z "$kernver"; then
+  kernver="0"
+fi
 
 AC_MSG_CHECKING([whether to build preload, avfscoda and/or shared library])
 
@@ -35,13 +40,18 @@ AC_ARG_ENABLE(avfscoda,
 [  --enable-avfscoda       Compile avfscoda (which uses the coda interface)],
 [if test "$enableval" = yes; then avfscoda=yes; else avfscoda=no; fi])
 
-AC_ARG_ENABLE(shared,
-[  --enable-shared         Compile avfs as shared library],
+AC_ARG_ENABLE(library,
+[  --enable-library      Compile avfs as a shared or static library],
 [if test "$enableval" = yes; then shared=yes; else shared=no; fi])
 
 if test -z "$preload" -a -z "$avfscoda" -a -z "$shared"; then
    if test "$os" = "Linux"; then
-      avfscoda=yes
+       if test "$kernver" -ge "22" \
+               -a "$kernver" -le "24"; then
+           avfscoda=yes
+       else
+           shared=yes
+       fi
    else
       preload=yes
    fi
@@ -79,9 +89,9 @@ AC_MSG_CHECKING([whether debugging is enabled])
 AC_ARG_ENABLE(debug,
 [  --enable-debug          Compile in debug information
   --disable-debug         Do not compile in debug information],
-[if test "$enableval" = yes; then debug=yes; else debug=no; fi],
-debug=yes)
-AC_MSG_RESULT([$debug])
+[if test "$enableval" = yes; then debugmode=yes; else debugmode=no; fi],
+debugmode=yes)
+AC_MSG_RESULT([$debugmode])
 
 AC_MSG_CHECKING([whether building the dav module is enabled])
 AC_ARG_ENABLE(dav,
@@ -95,7 +105,7 @@ cflags="$CFLAGS"
 AC_PROG_CC
 AC_PROG_CPP
 AC_PROG_INSTALL
-AC_PROG_RANLIB
+AC_PROG_LIBTOOL
 AC_SYS_LARGEFILE
 
 
@@ -108,14 +118,14 @@ fi
 
 if test -z "$cflags"; then
    if test "$GCC" = yes; then
-      if test "$debug" = yes; then
+      if test "$debugmode" = yes; then
          CFLAGS="-Wall -g"
       else 
          CFLAGS="-Wall -O3"
       fi
       ZLIB_CFLAGS="-Wall -O3"
    else
-      if test "$debug" = yes; then
+      if test "$debugmode" = yes; then
          CFLAGS="-g"
       else
          CFLAGS="-O"
@@ -163,6 +173,7 @@ AC_SEARCH_LIBS(nanosleep, posix4)
 AC_SEARCH_LIBS(gethostbyname, nsl)
 AC_SEARCH_LIBS(socket, socket inet)
 
+build_neon_lib=no
 if test "$dav" = yes; then
   dnl We require neon 0.12
   NEON_REQUIRE(0,12)
@@ -172,18 +183,25 @@ if test "$dav" = yes; then
       NEON_NORMAL_BUILD
       NEON_XML_PARSER
   ])
-  LIBS=$NEONLIBS
-  DAV=dav.o
-  DAV_LS=dav_ls.o
+#  LIBS=$NEONLIBS
+  DAV=dav.c
+  DAV_LS=dav_ls.c
+  LIBDAV=../libneon/libneon.la
+  build_neon_lib=yes
 else
   NEON_BUILD_BUNDLED=no
   AC_SUBST(NEON_BUILD_BUNDLED)
   DAV=
   DAV_LS=
+  LIBDAV=
 fi
+
+AM_CONDITIONAL(BUILD_NEON_LIB, test x$build_neon_lib = xyes)
+AM_CONDITIONAL(BUILD_DAVSUPPORT, test x$build_neon_lib = xyes)
 
 AC_SUBST(DAV)
 AC_SUBST(DAV_LS)
+AC_SUBST(LIBDAV)
 
 AC_CHECK_LIB(dl, dlopen)
 AC_CHECK_LIB(pthread, pthread_create)
@@ -199,9 +217,7 @@ install_scriptcomps=
 
 AC_CHECK_PROG(EMACS, emacs, yes, no)
 
-if test $EMACS = yes; then
-	install_scriptcomps="$install_scriptcomps install_emacsscript"
-fi
+AM_CONDITIONAL(INSTALL_EMACS, test x$EMACS = xyes)
 
 dnl ================================================================
 dnl == Now comes the stuff that is only for preload               ==
@@ -217,10 +233,17 @@ if test $preload_build = yes; then
 	AC_SUBST(PRELOAD_LIBS)
 	LIBS=$origlibs
 fi
+AM_CONDITIONAL(INSTALL_PRELOAD, test x$preload_build = xyes)
 
 dnl ================================================================
 dnl == Now comes the stuff that is only for avfscoda              ==
 dnl ================================================================
+
+install_profilescripts=no
+install_avfscoda=no
+install_initscript=no
+install_scriptlinks=no
+install_codadev=no
 
 if test $avfscoda_build = yes; then
 
@@ -293,10 +316,10 @@ if test $avfscoda_build = yes; then
 	start_prio=
 	stop_prio=
 
-	install_scriptcomps="$install_scriptcomps install_initscript"
+	install_initscript=yes
 
 	if test "$initstyle" = redhat; then
-		install_scriptcomps="$install_scriptcomps install_scriptlinks"
+		install_scriptlinks=yes
 		rcdir=/etc/rc.d
 		rcscriptdir=init.d
 		start_levels="2 3 4 5"
@@ -304,7 +327,7 @@ if test $avfscoda_build = yes; then
 		start_prio=85
 		stop_prio=25
 	elif test "$initstyle" = suse; then
-		install_scriptcomps="$install_scriptcomps install_scriptlinks"
+		install_scriptlinks=yes
 		rcdir=/sbin/init.d
 		rcscriptdir=
 		start_levels="2 3"
@@ -312,7 +335,7 @@ if test $avfscoda_build = yes; then
 		start_prio=20
 		stop_prio=20
 	elif test "$initstyle" = debian; then
-		install_scriptcomps="$install_scriptcomps install_scriptlinks"
+		install_scriptlinks=yes
 		rcdir=/etc
 		rcscriptdir=init.d
 		start_levels="2 3 4 5"
@@ -333,9 +356,10 @@ if test $avfscoda_build = yes; then
 	AC_SUBST(stop_prio)
 
 	profiledir=
+        newredir=no
 	if test "$newredir" = no; then
 		AC_MSG_CHECKING([for profile directory])
-		install_scriptcomps="$install_scriptcomps install_profilescripts"
+                install_profilescripts=yes
 		if test -d /etc/profile.d; then
 			profiledir=/etc/profile.d
 		else 
@@ -345,20 +369,32 @@ if test $avfscoda_build = yes; then
 	fi
 	AC_SUBST(profiledir)
 
-	install_scriptcomps="$install_scriptcomps install_avfscodamisc"
+	install_codadev=yes
+	install_avfscoda=yes
 fi
+
+AM_CONDITIONAL(INSTALL_AVFSCODA_PROFILE, test x$install_profilescripts = xyes)
+AM_CONDITIONAL(INSTALL_AVFSCODA, test x$install_avfscoda = xyes)
+AM_CONDITIONAL(INSTALL_INITSCRIPT, test x$install_initscript = xyes)
+AM_CONDITIONAL(INSTALL_SCRIPTLINKS, test x$install_scriptlinks = xyes)
+AM_CONDITIONAL(INSTALL_CODADEV, test x$install_codadev = xyes)
 
 dnl ================================================================
 dnl == Now comes the stuff that is only for shared                ==
 dnl ================================================================
 
 if test $shared_build = yes; then
-	install_scriptcomps="$install_scriptcomps install_avfsconfig"
+	install_scriptcomps="$install_scriptcomps avfs-config"
 fi
+AM_CONDITIONAL(BUILD_SHARED, test x$shared_build = xyes)
+
+dnl Test whether linker supports symbol versioning 
+
+CHECK_LD_VERSIONSCRIPT
 
 AC_SUBST(install_scriptcomps)
 AC_SUBST(avfscoda_build)
 AC_SUBST(preload_build)
 AC_SUBST(shared_build)
 
-AC_OUTPUT([src/Makefile modules/Makefile zlib/Makefile bzlib/Makefile lib/Makefile include/Makefile avfscoda/Makefile avfscoda/redir/Makefile preload/Makefile libneon/Makefile extfs/Makefile scripts/Makefile scripts/avfs-config test/Makefile], [chmod +x scripts/avfs-config])
+AC_OUTPUT([Makefile src/Makefile modules/Makefile zlib/Makefile bzlib/Makefile lib/Makefile include/Makefile avfscoda/Makefile avfscoda/redir/Makefile preload/Makefile libneon/Makefile extfs/Makefile scripts/Makefile scripts/avfs-config scripts/init/Makefile test/Makefile spec/Makefile macros/Makefile patch/Makefile doc/Makefile], [chmod +x scripts/avfs-config])

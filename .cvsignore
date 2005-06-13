@@ -4,4 +4,9 @@ config.h.in
 config.log
 config.status
 *.cache
-
+Makefile
+Makefile.in
+compile
+depcomp
+ltmain.sh
+missing

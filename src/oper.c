@@ -431,7 +431,7 @@ int av_symlink(const char *path, ventry *newve)
     return res;
 }
 
-static int compare_mount(struct vmount *mnt1, struct vmount *mnt2)
+static int compare_mount(struct avmount *mnt1, struct avmount *mnt2)
 {
     int res;
     ventry tmpve;

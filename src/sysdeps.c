@@ -28,7 +28,7 @@
 #endif
 
 #ifdef MAJOR_IN_SYSMACROS
-#include <sys/sysmacros>
+#include <sys/sysmacros.h>
 #endif
 
 #define DEFAULT_LOGMASK (AVLOG_ERROR | AVLOG_WARNING)

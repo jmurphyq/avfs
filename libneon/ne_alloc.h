@@ -22,6 +22,8 @@
 #ifndef NE_ALLOC_H
 #define NE_ALLOC_H
 
+#include "neonconf.h"
+
 #ifdef WIN32
 #include <stdlib.h>
 #else

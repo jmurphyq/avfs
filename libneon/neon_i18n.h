@@ -22,6 +22,8 @@
 #ifndef NEON_I18N_H
 #define NEON_I18N_H
 
+#include "neonconf.h"
+
 #undef _
 #ifdef ENABLE_NLS
 #include <libintl.h>

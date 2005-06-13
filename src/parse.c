@@ -275,10 +275,10 @@ static int lookup_virtual(struct parse_state *ps, const char *name)
     return res;
 }
 
-static struct vmount *new_mount(ventry *base, struct avfs *avfs,
-				const char *opts)
+static struct avmount *new_mount(ventry *base, struct avfs *avfs,
+				 const char *opts)
 {
-    struct vmount *mnt;
+    struct avmount *mnt;
 
     AV_NEW(mnt);
 
@@ -791,7 +791,7 @@ int av_get_ventry(const char *path, int resolvelast, ventry **resp)
     return res;
 }
 
-int av_copy_vmount(struct vmount *mnt, struct vmount **resp)
+int av_copy_vmount(struct avmount *mnt, struct avmount **resp)
 {
     int res;
     ventry *newbase;
@@ -815,7 +815,7 @@ int av_copy_ventry(ventry *ve, ventry **resp)
 {
     int res;
     ventry *newve;
-    struct vmount *newmnt;
+    struct avmount *newmnt;
     void *newdata;
     struct avfs *avfs = ve->mnt->avfs;
 
@@ -843,7 +843,7 @@ int av_copy_ventry(ventry *ve, ventry **resp)
     return 0;
 }
 
-void av_free_vmount(struct vmount *mnt)
+void av_free_vmount(struct avmount *mnt)
 {
     av_unref_obj(mnt->avfs);
 

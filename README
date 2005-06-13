@@ -30,21 +30,25 @@ or
 Forms of AVFS
 -------------
 
-AVFS can now be installed in two different ways. These are:
+AVFS can now be installed in three different ways. These are:
 
  - Avfscoda 
         This method in theory works on any Linux system which has the
         'coda' filesystem compiled in the kernel or as a kernel module.
 
         In practice it works best with glibc-6.1 or higher, and it has
-        been tested on 2.2.X and 2.4.X kernels.
+        been tested on 2.2.X and 2.4.X kernels. It currently doesn't
+        work on 2.6.X kernels.
 
  - Preload
         Currently this works on solaris systems. There are problems
         making the preload method work for GLIBC version 6.1 or
         higher, so systems using GLIBC are not supported.
+ - Library
+        This method should work on any system but the support is only
+        available for programs compiled to use this library.
 
-Using AVFS is very similar in both cases. Differences will be indicated.
+Using AVFS is very similar in all cases. Differences will be indicated.
 
 The installation method is different. For installation instructions
 see the files 'INSTALL.preload' and 'INSTALL.avfscoda' respectively.

@@ -21,6 +21,8 @@
 #ifndef NEON_MD5_H
 #define NEON_MD5_H 1
 
+#include "neonconf.h"
+
 #include <stdio.h>
 
 #if defined HAVE_LIMITS_H || _LIBC

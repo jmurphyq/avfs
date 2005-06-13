@@ -20,49 +20,49 @@ struct stfile {
     int modif;
 };
 
-static struct stentry *st_ventry_stentry(ventry *ve)
+static struct stentry *state_ventry_stentry(ventry *ve)
 {
     return (struct stentry *) ve->data;
 }
 
-static struct namespace *st_ventry_namespace(ventry *ve)
+static struct namespace *state_ventry_namespace(ventry *ve)
 {
     return (struct namespace *) ve->mnt->avfs->data;
 }
 
-static struct stfile *st_vfile_stfile(vfile *vf)
+static struct stfile *state_vfile_stfile(vfile *vf)
 {
     return (struct stfile *) vf->data;
 }
 
-static struct namespace *st_vfile_namespace(vfile *vf)
+static struct namespace *state_vfile_namespace(vfile *vf)
 {
     return (struct namespace *) vf->mnt->avfs->data;
 }
 
-static void st_free_stentry(struct stentry *stent)
+static void state_free_stentry(struct stentry *stent)
 {
     av_free(stent->param);
     av_unref_obj(stent->ent);
 }
 
-static int st_lookup(ventry *ve, const char *name, void **newp)
+static int state_lookup(ventry *ve, const char *name, void **newp)
 {
-    struct stentry *stent = st_ventry_stentry(ve);
-    struct namespace *ns = st_ventry_namespace(ve);
+    struct stentry *stent = state_ventry_stentry(ve);
+    struct namespace *ns = state_ventry_namespace(ve);
     struct stentry *newent;
  
     if(stent != NULL) {
         if(stent->ent == NULL && (name == NULL || strcmp(name, "..") == 0))
             newent = NULL;
         else {
-            AV_NEW_OBJ(newent, st_free_stentry);
+            AV_NEW_OBJ(newent, state_free_stentry);
             newent->ent = av_namespace_lookup_all(ns, stent->ent, name);
             newent->param = av_strdup(stent->param);
         }
     }
     else {
-        AV_NEW_OBJ(newent, st_free_stentry);
+        AV_NEW_OBJ(newent, state_free_stentry);
         newent->ent = NULL;
         newent->param = av_strdup(name);
     }
@@ -73,11 +73,11 @@ static int st_lookup(ventry *ve, const char *name, void **newp)
     return 0;
 }
 
-static int st_getpath(ventry *ve, char **resp)
+static int state_getpath(ventry *ve, char **resp)
 {
     char *path;
     char *nspath;
-    struct stentry *stent = st_ventry_stentry(ve);
+    struct stentry *stent = state_ventry_stentry(ve);
 
     path = av_strdup(stent->param);
     if(stent->ent != NULL) {
@@ -91,16 +91,16 @@ static int st_getpath(ventry *ve, char **resp)
     return 0;
 }
 
-static void st_putent(ventry *ve)
+static void state_putent(ventry *ve)
 {
-    struct stentry *stent = st_ventry_stentry(ve);
+    struct stentry *stent = state_ventry_stentry(ve);
 
     av_unref_obj(stent);
 }
 
-static int st_copyent(ventry *ve, void **resp)
+static int state_copyent(ventry *ve, void **resp)
 {
-    struct stentry *stent = st_ventry_stentry(ve);
+    struct stentry *stent = state_ventry_stentry(ve);
 
     av_ref_obj(stent);
     *resp = stent;
@@ -108,11 +108,11 @@ static int st_copyent(ventry *ve, void **resp)
     return 0;
 }
 
-static int st_open(ventry *ve, int flags, avmode_t mode, void **resp)
+static int state_open(ventry *ve, int flags, avmode_t mode, void **resp)
 {
     int res;
-    struct stentry *stent = st_ventry_stentry(ve);
-    struct namespace *ns = st_ventry_namespace(ve);
+    struct stentry *stent = state_ventry_stentry(ve);
+    struct namespace *ns = state_ventry_namespace(ve);
     struct stfile *sf;
     struct entry *subdir;
     struct statefile *stf;
@@ -158,9 +158,9 @@ static int st_open(ventry *ve, int flags, avmode_t mode, void **resp)
 }
 
 
-static int st_close(vfile *vf)
+static int state_close(vfile *vf)
 {
-    struct stfile *sf = st_vfile_stfile(vf);
+    struct stfile *sf = state_vfile_stfile(vf);
     int res = 0;
 
     if(sf->modif && sf->stent->ent != NULL) {
@@ -178,11 +178,11 @@ static int st_close(vfile *vf)
     return res;
 }
 
-static avssize_t st_read(vfile *vf, char *buf, avsize_t nbyte)
+static avssize_t state_read(vfile *vf, char *buf, avsize_t nbyte)
 {
     avoff_t nact;
     avoff_t size;
-    struct stfile *sf = st_vfile_stfile(vf);
+    struct stfile *sf = state_vfile_stfile(vf);
 
     if(sf->contents == NULL)
         return -EISDIR;
@@ -200,10 +200,10 @@ static avssize_t st_read(vfile *vf, char *buf, avsize_t nbyte)
     return nact;
 }
 
-static avssize_t st_write(vfile *vf, const char *buf, avsize_t nbyte)
+static avssize_t state_write(vfile *vf, const char *buf, avsize_t nbyte)
 {
     avoff_t end;
-    struct stfile *sf = st_vfile_stfile(vf);
+    struct stfile *sf = state_vfile_stfile(vf);
     avoff_t size;
 
     size = strlen(sf->contents);
@@ -224,9 +224,9 @@ static avssize_t st_write(vfile *vf, const char *buf, avsize_t nbyte)
     return nbyte;
 }
 
-static int st_truncate(vfile *vf, avoff_t length)
+static int state_truncate(vfile *vf, avoff_t length)
 {
-    struct stfile *sf = st_vfile_stfile(vf);
+    struct stfile *sf = state_vfile_stfile(vf);
     avoff_t size;
 
     size = strlen(sf->contents);
@@ -239,7 +239,7 @@ static int st_truncate(vfile *vf, avoff_t length)
     return 0;
 }
 
-static unsigned int st_paramhash(const char *param)
+static unsigned int state_paramhash(const char *param)
 {
     unsigned long hash = 0;
 
@@ -250,10 +250,10 @@ static unsigned int st_paramhash(const char *param)
     return hash;
 }
 
-static int st_readdir(vfile *vf, struct avdirent *buf)
+static int state_readdir(vfile *vf, struct avdirent *buf)
 {
-    struct stfile *sf = st_vfile_stfile(vf);
-    struct namespace *ns = st_vfile_namespace(vf);
+    struct stfile *sf = state_vfile_stfile(vf);
+    struct namespace *ns = state_vfile_namespace(vf);
     struct statefile *stf;
     struct entry *ent;
     int n;
@@ -272,9 +272,9 @@ static int st_readdir(vfile *vf, struct avdirent *buf)
     stf = av_namespace_get(ent);
 
     /* FIXME: Make ino be some hash function of param and entry */
-    buf->ino = (int) stf + st_paramhash(sf->stent->param);
+    buf->ino = (int) stf + state_paramhash(sf->stent->param);
     /* add hash of entry name to hash */
-    buf->ino += st_paramhash( buf->name );
+    buf->ino += state_paramhash( buf->name );
     /* make sure ino is not 0 or 1 */
     buf->ino = (avino_t)((((unsigned int)buf->ino) % (~0U - 1)) + 2);
     
@@ -286,9 +286,9 @@ static int st_readdir(vfile *vf, struct avdirent *buf)
     return 1;
 }
 
-static int st_getattr(vfile *vf, struct avstat *buf, int attrmask)
+static int state_getattr(vfile *vf, struct avstat *buf, int attrmask)
 {
-    struct stfile *sf = st_vfile_stfile(vf);
+    struct stfile *sf = state_vfile_stfile(vf);
     struct statefile *stf;
     char *ent_name;
 
@@ -299,12 +299,12 @@ static int st_getattr(vfile *vf, struct avstat *buf, int attrmask)
 
     av_default_stat(buf);
     /* This isn't perfect, but... */
-    buf->ino = (int) stf + st_paramhash(sf->stent->param);
+    buf->ino = (int) stf + state_paramhash(sf->stent->param);
 
     /* add hash of entry name to hash */
     if( sf->stent->ent != NULL ) {
       ent_name = av_namespace_name( sf->stent->ent );
-      buf->ino += st_paramhash( ent_name );
+      buf->ino += state_paramhash( ent_name );
       av_free( ent_name );
     }
     /* make sure ino is not 0 or 1 */
@@ -329,10 +329,10 @@ static int st_getattr(vfile *vf, struct avstat *buf, int attrmask)
     return 0;
 }
 
-static int st_access(ventry *ve, int amode)
+static int state_access(ventry *ve, int amode)
 {
-    struct stentry *stent = st_ventry_stentry(ve);
-    struct namespace *ns = st_ventry_namespace(ve);
+    struct stentry *stent = state_ventry_stentry(ve);
+    struct namespace *ns = state_ventry_namespace(ve);
     struct entry *subdir;
     struct statefile *stf;
 
@@ -353,14 +353,14 @@ static int st_access(ventry *ve, int amode)
     return 0;
 }
 
-static void st_free_tree(struct namespace *ns, struct entry *ent)
+static void state_free_tree(struct namespace *ns, struct entry *ent)
 {
     struct entry *next;
     void *data;
 
     ent = av_namespace_subdir(ns, ent);
     while(ent != NULL) {
-        st_free_tree(ns, ent);
+        state_free_tree(ns, ent);
         data = av_namespace_get(ent);
         if(data != NULL) {
             av_free(data);
@@ -373,11 +373,11 @@ static void st_free_tree(struct namespace *ns, struct entry *ent)
 }
 
 
-static void st_destroy(struct avfs *avfs)
+static void state_destroy(struct avfs *avfs)
 {
     struct namespace *ns = (struct namespace *) avfs->data;
 
-    st_free_tree(ns, NULL);
+    state_free_tree(ns, NULL);
 
     av_unref_obj(ns);
 }
@@ -397,21 +397,21 @@ int av_state_new(struct vmodule *module, const char *name,
 
     av_ref_obj(ns);
     avfs->data = ns;
-    avfs->destroy = st_destroy;
+    avfs->destroy = state_destroy;
 
-    avfs->lookup    = st_lookup;
-    avfs->putent    = st_putent;
-    avfs->copyent   = st_copyent;
-    avfs->getpath   = st_getpath;
+    avfs->lookup    = state_lookup;
+    avfs->putent    = state_putent;
+    avfs->copyent   = state_copyent;
+    avfs->getpath   = state_getpath;
 
-    avfs->open      = st_open;
-    avfs->close     = st_close;
-    avfs->read      = st_read;
-    avfs->write     = st_write;
-    avfs->truncate  = st_truncate;
-    avfs->readdir   = st_readdir;
-    avfs->getattr   = st_getattr;
-    avfs->access    = st_access;
+    avfs->open      = state_open;
+    avfs->close     = state_close;
+    avfs->read      = state_read;
+    avfs->write     = state_write;
+    avfs->truncate  = state_truncate;
+    avfs->readdir   = state_readdir;
+    avfs->getattr   = state_getattr;
+    avfs->access    = state_access;
 
     av_add_avfs(avfs);
 

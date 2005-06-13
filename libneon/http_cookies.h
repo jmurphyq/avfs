@@ -22,6 +22,8 @@
 #ifndef COOKIES_H
 #define COOKIES_H
 
+#include "neonconf.h"
+
 struct http_cookie_s;
 typedef struct http_cookie_s http_cookie;
 

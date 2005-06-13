@@ -3,7 +3,7 @@
 modnames=
 for obj
 do
-  bname=`basename $obj .o`
+  bname=`basename $obj .c`
   modnames="$modnames $bname"
 done
 

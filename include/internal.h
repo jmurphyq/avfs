@@ -16,8 +16,8 @@
 #define AVFS_UNLOCK(avfs) if(!(avfs->flags & AVF_NOLOCK)) AV_UNLOCK(avfs->lock)
 
 int av_get_ventry(const char *path, int resolvelast, ventry **retp);
-int av_copy_vmount(struct vmount *mnt, struct vmount **retp);
-void av_free_vmount(struct vmount *mnt);
+int av_copy_vmount(struct avmount *mnt, struct avmount **retp);
+void av_free_vmount(struct avmount *mnt);
 void av_default_avfs(struct avfs *avfs);
 void av_init_dynamic_modules();
 void av_close_all_files();

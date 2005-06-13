@@ -1,7 +1,7 @@
 SHELL = /bin/sh
 
 kmoduledir = @kmoduledir@
-i_kmoduledir = $(install_root)$(kmoduledir)
+i_kmoduledir = $(DESTDIR)$(kmoduledir)
 
 CC = @CC@
 
@@ -22,3 +22,6 @@ install: all
 	@../../mkinstalldirs $(i_kmoduledir)
 	$(INSTALL) -m 644 redir.o $(i_kmoduledir)/redir.o
 	/sbin/depmod -a
+
+uninstall:
+	rm -f $(i_kmoduledir)/redir.o

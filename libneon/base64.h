@@ -22,6 +22,8 @@
 #ifndef BASE64_H
 #define BASE64_H
 
+#include "neonconf.h"
+
 /* Plain->Base64 converter - will malloc the buffer to the correct size,
  * and fill it with the Base64 conversion of the parameter.
  * Base64 specification from RFC 1521. You must free() it. */

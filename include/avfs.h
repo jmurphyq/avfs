@@ -14,6 +14,13 @@
 #include <ctype.h>
 #include <pthread.h>
 
+/* The following 3 includes are not needed except for some
+ * systems which redefine open to open64 etc. (namely Sun)
+ */
+#include <fcntl.h>
+#include <unistd.h>
+#include <dirent.h>
+
 #ifndef __GNUC__
 #define __attribute__(x)
 #endif
@@ -71,19 +78,19 @@ struct avdirent {
 typedef struct _ventry ventry;
 struct _ventry {
     void *data;
-    struct vmount *mnt;
+    struct avmount *mnt;
 };
 
 typedef struct _vfile vfile;
 struct _vfile {
     void *data;
-    struct vmount *mnt;
+    struct avmount *mnt;
     int flags;
     avoff_t ptr;
     avmutex lock;
 };
 
-struct vmount {
+struct avmount {
     ventry *base;
     struct avfs *avfs;
     char *opts;

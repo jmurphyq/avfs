@@ -31,12 +31,12 @@ Linux kernel's 'inode' and 'file' structures, respectively.
 
 struct ventry {
     void *data;
-    struct vmount *mnt;
+    struct avmount *mnt;
 };
 
 struct vfile {
     void *data;
-    struct vmount *mnt;
+    struct avmount *mnt;
     int flags;
     int ptr;
     avmutex lock;
@@ -138,7 +138,7 @@ av_new_obj is almost never called directly.
 
 Of the data structures which have been introduced so far, only struct
 vfile and struct avfs are allocated as reference-counted objects;
-ventry and vmount are allocated and freed using av_* versions of
+ventry and avmount are allocated and freed using av_* versions of
 malloc and free (see avfs.h). 
 
 Because the avfs core is used in long-running processes such as

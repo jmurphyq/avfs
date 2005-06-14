@@ -1,9 +1,14 @@
 /* zconf.h -- configuration of the zlib compression library
  * Copyright (C) 1995-2002 Jean-loup Gailly.
+ * Copyright (C) 2005 Ralf Hoffmann
  * For conditions of distribution and use, see copyright notice in zlib.h 
+ *
+ * Changes:
+ *   2005-06-13 Ralf Hoffmann <ralf@boomerangsworld.de>
+ *      added more symbols to the redefines
  */
 
-/* @(#) $Id: zconf.h,v 1.4 2005/06/13 21:49:44 hoffmannr Exp $ */
+/* @(#) $Id: zconf.h,v 1.5 2005/06/14 18:17:20 hoffmannr Exp $ */
 
 #ifndef _ZCONF_H
 #define _ZCONF_H

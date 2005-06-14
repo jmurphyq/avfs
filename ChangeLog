@@ -1,3 +1,17 @@
+2005-06-13  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* changed build system to automake
+        * fixes to compile on AIX
+	* library (shared or static) should build on every system
+        * avfscoda works fine on linux kernel 2.2 and 2.4
+        * preload works fine on solaris
+
+2005-06-08  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* magic character in filenames is supported without escaping
+        * fix in bzlib to prevent endless loop in corrupt archives
+        * change inode calculation in static. to prevent inode numbers 0 and 1
+
 2004-03-07  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Don't lowercase zipfiles with MSDOS filetype

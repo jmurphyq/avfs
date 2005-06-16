@@ -216,6 +216,7 @@ AC_SUBST(moduledir)
 install_scriptcomps=
 
 AC_CHECK_PROG(EMACS, emacs, yes, no)
+MC_EXTFS_CHECKS
 
 AM_CONDITIONAL(INSTALL_EMACS, test x$EMACS = xyes)
 
@@ -397,4 +398,47 @@ AC_SUBST(avfscoda_build)
 AC_SUBST(preload_build)
 AC_SUBST(shared_build)
 
-AC_OUTPUT([Makefile src/Makefile modules/Makefile zlib/Makefile bzlib/Makefile lib/Makefile include/Makefile avfscoda/Makefile avfscoda/redir/Makefile preload/Makefile libneon/Makefile extfs/Makefile scripts/Makefile scripts/avfs-config scripts/init/Makefile test/Makefile spec/Makefile macros/Makefile patch/Makefile doc/Makefile], [chmod +x scripts/avfs-config])
+AC_OUTPUT([
+Makefile
+src/Makefile
+modules/Makefile
+zlib/Makefile
+bzlib/Makefile
+lib/Makefile
+include/Makefile
+avfscoda/Makefile
+avfscoda/redir/Makefile
+preload/Makefile
+libneon/Makefile
+extfs/Makefile
+scripts/Makefile
+scripts/init/Makefile
+test/Makefile
+spec/Makefile
+macros/Makefile
+patch/Makefile
+doc/Makefile
+
+scripts/avfs-config
+
+extfs/a
+extfs/apt
+extfs/audio
+extfs/deb
+extfs/deba
+extfs/debd
+extfs/dpkg
+extfs/hp48
+extfs/iso9660
+extfs/lslR
+extfs/mailfs
+extfs/patchfs
+extfs/rpms
+extfs/uar
+extfs/uarj
+extfs/uha
+extfs/ulha
+extfs/urar
+extfs/uzip
+extfs/uzoo
+], [chmod +x scripts/avfs-config])

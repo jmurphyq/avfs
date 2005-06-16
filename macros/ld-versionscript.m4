@@ -12,14 +12,14 @@ if test "$ld_shlibs" = yes -a "$enable_shared" = yes; then
   if test "$with_gnu_ld" = yes; then
     if test -n "`$LD --help 2>/dev/null | grep version-script`"; then
       ld_versionscript=yes
-      VERSIONSCRIPT_OPTS="-Wl,--version-script=libavfs.map"
+      VERSIONSCRIPT_OPTS="-Wl,--version-script=\$(srcdir)/libavfs.map"
     fi
   else
     case $host_os in
     solaris*|sunos4*)
       if test -n "`$LD --help 2>&1 | grep "M mapfile"`"; then
         ld_versionscript=yes
-        VERSIONSCRIPT_OPTS="-Wl,-M,libavfs.map"
+        VERSIONSCRIPT_OPTS="-Wl,-M,\$(srcdir)/libavfs.map"
       fi
       ;;
     *)

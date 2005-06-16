@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#! @PERL@
 #
 # Written by Fernando Alegre <alegre@debian.org> 1996
 #
@@ -7,6 +7,13 @@
 #
 # Modified by Fernando Alegre <alegre@debian.org> 1997
 #         (to handle both new and old tar formats)
+#
+# Modified by Patrik Rak <prak@post.cz> 1998
+#         (add by Michael Bramer Debian-mc-maintainer <grisu@debian.org>)
+#         (to allow access to package control files)
+#
+# Modified by Martin Bialasinski <martinb@debian.org> 1999
+#         (deal with change in tar format)
 #
 #
 # Copyright (C) 1997 Free Software Foundation
@@ -24,6 +31,8 @@ sub mcdebfs_list
 	$install_size=length($pressinstall);
 
 	print "dr-xr-xr-x   1 root     root     0 $date CONTENTS\n";
+	# from Patrik Rak
+	print "dr-xr-xr-x   1 root     root     0 $date DEBIAN\n";
 	print "-r--r--r--   1 root     root     $info_size $date INFO\n";
 	print "-r-xr--r--   1 root     root     $install_size $date INSTALL\n";
 
@@ -71,6 +80,30 @@ sub mcdebfs_list
 			print "$perm 1 $owgr $size $month $day $year $time CONTENTS/$path$arrow$link\n";
 		}
 	}
+        # begin from Patrik Rak
+        if ( open(PIPEIN, "dpkg-deb -I $archivename |") )
+        {
+               while(<PIPEIN>)
+               {
+                       split;
+                       $size=$_[0];
+                       last if $size =~ /:/;
+                       next if $size !~ /\d+/;
+                       if($_[4] eq '*')
+                       {
+                           $perm='-r-xr-xr-x';
+                           $name=$_[5];
+                       }
+                       else
+                       {
+                           $perm='-r--r--r--';
+                           $name=$_[4];
+                       }
+                       print "$perm 1 root root $size $date DEBIAN/$name\n";
+               }
+        }
+        # end from Patrik Rak
+
 }
 
 sub mcdebfs_copyout
@@ -80,6 +113,14 @@ sub mcdebfs_copyout
 	if($filename eq "INFO")
 	{
 		system("dpkg-deb -I $archive > $destfile");
+        # begin from Patrik Rak
+        }
+        elsif($filename =~ /^DEBIAN/)
+        {
+               $filename=~s!^DEBIAN/!!;
+               system("dpkg-deb -I $archive $filename > $destfile");
+        # end from Patrik Rak
+
 	}
 	elsif($filename eq "INSTALL")
 	{
@@ -92,8 +133,9 @@ sub mcdebfs_copyout
 	}
 	else
 	{
+	# files can be prepended with ./ or not, depending on the version of tar
 		$filename=~s!^CONTENTS/!!;
-		system("dpkg-deb --fsys-tarfile $archive | tar xOf - $filename > $destfile");
+		system("dpkg-deb --fsys-tarfile $archive | tar xOf - $filename ./$filename > $destfile 2>/dev/null");
 	}
 }
 
@@ -107,19 +149,28 @@ sub mcdebfs_run
 	}
 	else
 	{
-# FIXME: TMP RACE
-		$tmpcmd="/tmp/mcdebfs.run.$$";
+	        $suffix = "aaa";
+		while (1) {
+		    $tmpdir = "/tmp/mcdebfs.run".$$.$suffix;
+		    last if mkdir $tmpdir, 0700;
+		    $suffix++;
+		    # Somebody is being really nasty, give up
+		    exit 1 if $suffix eq "zzz";
+		}
+		
+		$tmpcmd="$tmpdir/run";
 		&mcdebfs_copyout($archive, $filename, $tmpcmd);
 		system("chmod u+x $tmpcmd");
 		system($tmpcmd);
 		unlink($tmpcmd);
+		rmdir($tmpdir);
 	}
 }
 
 $pressinstall=<<EOInstall;
 
                               WARNING
-     Don't use this method if you are not willing to reinstall everything...
+     Don\'t use this method if you are not willing to reinstall everything...
 
 This is not a real file. It is a way to install the package you are browsing.
 

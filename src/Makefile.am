@@ -46,6 +46,6 @@ utils.c: info.h
 
 info.h:
 	rm -f info.h
-	./make_info $(moduledir) > info.h
+	$(srcdir)/make_info $(moduledir) > info.h
 
 CLEANFILES = info.h

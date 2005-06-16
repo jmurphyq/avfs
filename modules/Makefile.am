@@ -28,9 +28,11 @@ modules = \
 	dav.c
 
 libmodules_la_SOURCES = \
-	mod_static.c \
 	dav_ls.c \
 	$(modules)
+
+nodist_libmodules_la_SOURCES = \
+	mod_static.c
 
 else
 
@@ -54,8 +56,10 @@ modules = \
 	extfs.c
 
 libmodules_la_SOURCES = \
-	mod_static.c \
 	$(modules)
+
+nodist_libmodules_la_SOURCES = \
+	mod_static.c
 
 endif
 
@@ -65,6 +69,6 @@ noinst_HEADERS = \
 	zipconst.h
 
 mod_static.c: make_initmod
-	./make_initmod $(modules) > mod_static.c
+	$(srcdir)/make_initmod $(modules) > mod_static.c
 
 CLEANFILES = mod_static.c

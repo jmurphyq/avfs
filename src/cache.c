@@ -175,6 +175,7 @@ struct cacheobj *av_cacheobj_new(void *obj, const char *name)
     if(obj == NULL)
         return NULL;
 
+    av_cache_checkspace();
     AV_NEW_OBJ(cobj, cacheobj_delete);
     cobj->obj = obj;
     cobj->diskusage = 0;
@@ -268,8 +269,6 @@ void av_cacheobj_setsize(struct cacheobj *cobj, avoff_t diskusage)
         disk_usage -= cobj->diskusage;
         cobj->diskusage = diskusage;
         disk_usage += cobj->diskusage;
-        
-        cache_checkspace(0);
     }
     AV_UNLOCK(cachelock);
 }

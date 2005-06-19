@@ -175,7 +175,6 @@ struct cacheobj *av_cacheobj_new(void *obj, const char *name)
     if(obj == NULL)
         return NULL;
 
-    av_cache_checkspace();
     AV_NEW_OBJ(cobj, cacheobj_delete);
     cobj->obj = obj;
     cobj->diskusage = 0;
@@ -189,12 +188,14 @@ struct cacheobj *av_cacheobj_new(void *obj, const char *name)
     return cobj;
 }
 
-static int cache_free_one()
+static int cache_free_one(struct cacheobj *skip_entry)
 {
     struct cacheobj *cobj;
     struct cacheobj tmpcobj;
 
     cobj = cachelist.prev;
+    if(cobj == skip_entry)
+	cobj = cobj->prev;
     if(cobj == &cachelist)
         return 0;
 
@@ -212,13 +213,13 @@ static int cache_free_one()
 static int cache_clear()
 {
     AV_LOCK(cachelock);
-    while(cache_free_one());
+    while(cache_free_one(NULL));
     AV_UNLOCK(cachelock);
     
     return 0;
 }
 
-static void cache_checkspace(int full)
+static void cache_checkspace(int full, struct cacheobj *skip_entry)
 {
     avoff_t tmpfree;
     avoff_t limit;
@@ -242,7 +243,7 @@ static void cache_checkspace(int full)
         limit = disk_cache_limit;
     
     while(disk_usage > limit)
-        if(!cache_free_one())
+        if(!cache_free_one(skip_entry))
             break;        
 }
 
@@ -250,14 +251,14 @@ static void cache_checkspace(int full)
 void av_cache_checkspace()
 {
     AV_LOCK(cachelock);
-    cache_checkspace(0);
+    cache_checkspace(0,NULL);
     AV_UNLOCK(cachelock);
 }
 
 void av_cache_diskfull()
 {
     AV_LOCK(cachelock);
-    cache_checkspace(1);
+    cache_checkspace(1,NULL);
     AV_UNLOCK(cachelock);
 }
 
@@ -269,6 +270,8 @@ void av_cacheobj_setsize(struct cacheobj *cobj, avoff_t diskusage)
         disk_usage -= cobj->diskusage;
         cobj->diskusage = diskusage;
         disk_usage += cobj->diskusage;
+        
+        cache_checkspace(0, cobj);
     }
     AV_UNLOCK(cachelock);
 }

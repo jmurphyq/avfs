@@ -44,6 +44,7 @@ AVFS can now be installed in three different ways. These are:
         Currently this works on solaris systems. There are problems
         making the preload method work for GLIBC version 6.1 or
         higher, so systems using GLIBC are not supported.
+
  - Library
         This method should work on any system but the support is only
         available for programs compiled to use this library.

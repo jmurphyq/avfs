@@ -1,3 +1,7 @@
+2005-06-20  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* updated docs
+
 2005-06-19  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* fixed cache handling: When setting a new size for a cache entry,

@@ -1,3 +1,10 @@
+Changes from 0.9.3 to 0.9.5
+   - improved support for magic character inside filenames
+   - fixed endless loop in bz2 handler
+   - automake is now used for building avfs
+   - updated extfs handlers
+   - other small bugfixes (see ChangeLog for details)
+
 Changes from 0.9.1 to 0.9.3
    - Bugfixes (see ChangeLog for details)
 

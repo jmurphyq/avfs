@@ -21,7 +21,7 @@ if test "$validstring" = invalid; then
   AC_MSG_ERROR([type 'make realclean' before running configure])
 fi
 
-VERSION=0.9.4
+VERSION=0.9.5
 AC_SUBST(VERSION)
 
 os=`uname -s`

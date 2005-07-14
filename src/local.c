@@ -96,7 +96,7 @@ static int local_close(vfile *vf)
     av_free(fi->path);
     av_free(fi);
 
-    return 0;
+    return res;
 }
 
 

@@ -1,3 +1,7 @@
+2005-07-13  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* fixed return value of local_close
+
 2005-06-20  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* updated docs

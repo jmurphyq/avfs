@@ -1,3 +1,8 @@
+Changes from 0.9.5 to 0.9.6
+   - fixed return value of local_close so errors in close() can be detected
+   - updated date parsing in extfs so patchfs handler works again
+   - urar module should be able to read rar archives from newer rar versions
+
 Changes from 0.9.3 to 0.9.5
    - improved support for magic character inside filenames
    - fixed endless loop in bz2 handler

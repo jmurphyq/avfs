@@ -83,10 +83,22 @@ static int is_num (struct columns *col)
 
 static int is_dos_date(const char *str)
 {
-    if (strlen(str) == 8 && str[2] == str[5] && 
-        strchr("\\-/", (int)str[2]) != NULL) return 1;
-  
-    return 0;
+    int len;
+
+    if (!str)
+	return 0;
+
+    len = strlen (str);
+    if (len != 8 && len != 10)
+	return 0;
+
+    if (str[2] != str[5])
+	return 0;
+
+    if (!strchr ("\\-/", (int) str[2]))
+	return 0;
+
+    return 1;
 }
 
 
@@ -283,7 +295,7 @@ static avtime_t parse_filedate(struct columns *col, struct avtm *currtim)
            where Mon is Jan-Dec, DD, MM, YY two digit day, month, year,
            YYYY four digit year, hh, mm, ss two digit hour, minute or second. */
     
-        /* Here just this special case with MM-DD-YY */
+        /* Here just this special case with MM-DD-YY or MM-DD-YYYY */
         if (is_dos_date(p)){
             p[2] = p[5] = '-';
       
@@ -296,12 +308,20 @@ static avtime_t parse_filedate(struct columns *col, struct avtm *currtim)
 	
                 /* Hmm... maybe, next time :)*/
 	
-                /* At last, MM-DD-YY */
-                d[0]--; /* Months are zerobased */
-                /* Y2K madness */
-                if(d[2] < 70)
-                    d[2] += 100;
-	
+                /* At last, MM-DD-YY or MM-DD-YYYY*/
+	      
+	        /* Months are zero based */
+	        if (d[0] > 0)
+		    d[0]--;
+
+		if (d[2] > 1900) {
+		    d[2] -= 1900;
+		} else {
+		    /* Y2K madness */
+		    if (d[2] < 70)
+			d[2] += 100;
+		}
+		
                 tim.mon   = d[0];
                 tim.day   = d[1];
                 tim.year = d[2];

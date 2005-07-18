@@ -1,3 +1,13 @@
+2005-07-16  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* fixed urar module: The CRC calculation now also takes optional
+        header entries of newer rar versions into account
+
+2005-07-15  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* updated dos date parsing in parsels.c to handle years with more than
+        3 digits (from mc-4.6.1-pre1). patchfs from extfs output such dates
+
 2005-07-13  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* fixed return value of local_close

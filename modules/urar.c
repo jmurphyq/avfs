@@ -354,6 +354,38 @@ static void insert_rarentry(struct archive *arch, struct rar_entinfo *ei)
     av_unref_obj(ent);
 }
 
+static int crc_additional_header(vfile *vf, struct rar_entinfo *ei, int bytes_crcd, avuint *crc)
+{
+    /* In the header there are some optional entries (e.g. salt, exttime; see arcread.ccp::ReadHeader
+     * from unrar package). We need to use these bytes for the CRC.
+     * Currently this optional stuff is not supported and I don't want to
+     * add additional code to handle these information so I just read the
+     * remaining bytes up to bh_headsize
+     *
+     * TODO: The salt is needed for crypted files which are not supported right now
+     *       so this is not a problem.
+     *       But perhaps it is a good idea to support the additional time information.
+     */
+    int res, tlen = bytes_crcd;
+    avbyte *tempbuf;
+    
+    tlen = bh_headsize(ei->bh) - 2 - tlen;
+    
+    if(tlen > 0) {
+        tempbuf = av_malloc(tlen);
+	res = av_read_all(vf, tempbuf, tlen);
+	if(res < 0) {
+	    av_free(tempbuf);
+	    return res;
+	}
+	*crc = CRC_string(*crc, tempbuf, tlen);
+	av_free(tempbuf);
+    } else if(tlen < 0) {
+        return -EIO;
+    }
+    return 0;
+}
+
 static int read_rarentry(vfile *vf, struct rar_entinfo *ei)
 {
     int res;
@@ -378,6 +410,13 @@ static int read_rarentry(vfile *vf, struct rar_entinfo *ei)
     crc = CRC_string(CRC_START, ei->bh + 2, LONG_HEAD_SIZE - 2);
     crc = CRC_string(crc, ei->fh, FILE_HEAD_SIZE);
     crc = CRC_string(crc, ei->name, fh_namelen(ei->fh));
+
+    if(crc_additional_header(vf, ei,
+			     LONG_HEAD_SIZE - 2 + FILE_HEAD_SIZE + fh_namelen(ei->fh),
+			     &crc) != 0) {
+        av_log(AVLOG_ERROR, "URAR: bad header");
+        return -EIO;
+    }
     
     if ((avushort)~crc != bh_CRC(ei->bh)) {
         av_log(AVLOG_ERROR, "URAR: bad CRC");

@@ -10,3 +10,5 @@ compile
 depcomp
 ltmain.sh
 missing
+INSTALL
+libtool

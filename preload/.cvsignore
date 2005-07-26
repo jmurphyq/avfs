@@ -1,3 +1,7 @@
 Makefile
 Makefile.in
 avfs_server
+.deps
+.libs
+*.lo
+*.la

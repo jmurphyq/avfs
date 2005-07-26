@@ -1,3 +1,7 @@
 Makefile
 Makefile.in
 runtest
+.deps
+.libs
+*.lo
+*.la

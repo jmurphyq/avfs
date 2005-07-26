@@ -1,3 +1,7 @@
 Makefile
 Makefile.in
 info.h
+.deps
+.libs
+*.lo
+*.la

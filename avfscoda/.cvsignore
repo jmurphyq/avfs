@@ -4,3 +4,4 @@ avfscoda
 .deps
 .libs
 *.lo
+*.la

@@ -13,7 +13,8 @@
 #include <sys/mount.h>
 #include <sys/types.h>
 #include <mntent.h>
-#include <linux/coda.h>
+
+#include CODAINCLUDE
 
 
 int mount_coda(const char *dev, const char *dir, int devfd, int quiet)

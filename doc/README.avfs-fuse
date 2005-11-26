@@ -1,17 +1,58 @@
 November 2005
 
 This version of AVFS includes support for fuse (Filesystems
-in userspace). The other versions of AVFS, preload, shared,
-and coda, are NOT installed since they are not supported by
-applications and are unsupported in kernels >2.6.x or glibc
-> 2.1.
+in userspace). The other versions of AVFS, preload, library,
+and coda, do NOT have to be installed since they are not supported
+by applications and are unsupported in kernels >2.6.x or 
+glibc > 2.1. Any user wishing to install the library may do so 
+but will have to write his/her own program interface to it.
 
+Fuse support consists of a single daemon file and startup 
+script. In order to compile fuse support, the avfs library must 
+be compiled. However, it does NOT have to be installed. The 
+following steps should be followed prior to building the fuse 
+daemon.
+
+SETUP:
+------
+Change to the cvs download directory. You do NOT need to be root.
+You DO need to have write permissions to the download directory.
+
+user avfsdldir> ./autogen.sh
+user avfsdldir> ./configure --enable-library
+user avfsdldir> make
+(no need to run make install)
+
+If there are no errors, then make fuse:
+
+user avfsdldir> cd fuse
+user avfsdldir/fuse> ./compile.sh
+(compile.sh is the self-contained program to make the fuse daemon)
+
+IF THERE ARE ERRORS perhaps review the compile steps above and 
+determine what the errors are and correct. Perhaps a library 
+is missing?
+
+When this is done, only two files are needed. To complete the
+setup, you may copy the two files to any directory -- preferably
+one in the path. If you wish to copy them to system directories
+(such as /usr/bin), you must be root.
+
+INSTALLATION OF FUSE DAEMON AND STARTUP SCRIPT:
+-----------------------------------------------
+In this example, I copy the two files to the $HOME/bin directory.
+
+user avfsdldir/fuse> cd ..
+user avfsdldir> cp fuse/avfsd scripts/mountafvs ~/bin
+
+IMPLEMENTATION:
+---------------
 AVFS can entirely be implemented by any user. To do so requires
 that:
 
 1) fuse support is compiled into the kernel or is a kernel
 module and loaded
-2) the sys-fs/fuse package is installed
+2) the fuse package is installed (http://fuse.sf.net)
 3) the user create a directory called .avfs in his/her home
 directory (mkdir ~/.avfs).
 4) the user run the program mountavfs
@@ -31,7 +72,11 @@ AVFS, try:
 ls ~/.avfs/#avfsstat
 
 Anytime the docs say /#avfsstat or filename#, always prepend
-~/.avfs/
+~/.avfs/, ex:
+
+ls ~/.avfs/myzipfile.zip#
+- or -
+cat ~/.avfs/README.gz#
 
 Using with ROX:
 ---------------
@@ -42,7 +87,16 @@ since Rox still expects AVFS to use the preload or coda methods.
 To get around this, the user can create a run action for any
 type of compressed file as follows:
 
-rox $HOME/.avfs/$PWD/$@#
+rox $HOME/.avfs/$@#
+
+If you wish to use a Shell command within ROX, press BANG (!)
+and type similar to the above except a $PWD needs to be inserted
+before the $@ shell variable (don't know why, but with !, ROX 
+does not expand $@ to a full pathname/filename).
+
+!rox $HOME/.avfs/$PWD/$@#
+
+Of course, $HOME can be replaced with ~ if desired.
 
 Thanks to Jonatan Liljedahl, rox developer, for the tip and
 workaround AND for alerting me that fuse CAN work with AVFS.
@@ -63,8 +117,9 @@ proper caution and backup protocols.
 ***** END CAUTION *****
 
 More information can be obtained from:
-http://sourceforge.net/projects/avfs
-http://sourceforge.net/projects/fuse
+http://sourceforge.net/projects/avf
+http://sourceforge.net/projects/fuse or
+http://fuse.sourceforge.net
 http://rox.sourceforge.net
 
 Documentation by

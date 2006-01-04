@@ -1,3 +1,8 @@
+2006-01-02  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Utar module should be able to handle >2G files.  Report from
+	Pete
+
 2005-07-16  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* fixed urar module: The CRC calculation now also takes optional

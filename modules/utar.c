@@ -62,9 +62,9 @@ struct tarnode {
 | (all blank, or nonoctal).						  |
 `------------------------------------------------------------------------*/
 
-static long from_oct(int digs, char *where)
+static long long from_oct(int digs, char *where)
 {
-    long value;
+    long long value;
 
     while (ISSPACE ((int) *where))
     {				/* skip spaces */

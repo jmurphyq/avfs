@@ -658,8 +658,8 @@ int virt_link(const char *path, const char *newpath)
     if(res == 0) {
 	res = av_get_ventry(newpath, 0, &newve);
 	if(res == 0) {
-	    av_free_ventry(newve);
             res = av_link(ve, newve);
+	    av_free_ventry(newve);
 	}
 	av_free_ventry(ve);
     }

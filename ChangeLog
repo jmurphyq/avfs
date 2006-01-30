@@ -1,3 +1,21 @@
+2006-01-30  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* Fixed segfault in extfs when using open on base archive
+	(e.g., open("test.lha#") )
+	
+	* Integrated two patches from the patched avfs version from Zemljanka
+	Commander team (http://sourceforge.net/projects/zemljanka). There was
+	one bug in virt_link and one bug when getting ftp files from the root
+	directory.
+	
+	* av_parse_ls uses now atoll() to parse file size (if available).
+	The ftp module can now supports files larger than 2GB.
+	
+	* Fixed bug in the ulha extfs module which had problems with file
+	names containing spaces
+	
+	*  Updated the other extfs modules to the current mc-4.6.1 versions
+
 2006-01-02  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Utar module should be able to handle >2G files.  Report from

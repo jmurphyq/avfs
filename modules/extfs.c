@@ -187,6 +187,14 @@ static int get_extfs_file(ventry *ve, struct archfile *fil,
     struct extfsnode *enod = (struct extfsnode *) fil->nod->data;
     const char *prog[6];
     struct realfile *rf;
+
+    if(enod == NULL) {
+        /* no extfsnode means someone tries to access the extfs
+	   archive as a file (e.g. open( "test.lha#" ) )
+	   Although open on a directory is not forbidden we cannot
+	   create an appropriate tmpfile so we return EISDIR */
+        return -EISDIR;
+    }
   
     if(info->needbase) {
         res = av_get_realfile(ve->mnt->base, &rf);

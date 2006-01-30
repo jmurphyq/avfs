@@ -20,6 +20,8 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include "config.h"
+
 #define MAXCOLS		30
 
 struct columns {
@@ -468,7 +470,11 @@ int av_parse_ls(struct lscache *cache, const char *line,
         if (!is_num (col))
             goto error;
     
-        stbuf->size = (size_t) atol (INC_COL(col));
+#ifdef HAVE_ATOLL
+        stbuf->size = (avoff_t) atoll (INC_COL(col));
+#else
+        stbuf->size = (avoff_t) atol (INC_COL(col));
+#endif
         stbuf->rdev = 0;
     }
   

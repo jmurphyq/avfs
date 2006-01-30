@@ -152,6 +152,7 @@ fi
 
 AC_CHECK_FUNCS(vsnprintf strncasecmp strcasecmp mkdtemp)
 AC_CHECK_FUNCS(getpwuid_r getpwnam_r getgrgid_r getgrnam_r)
+AC_CHECK_FUNCS(atoll)
 AC_HEADER_MAJOR
 
 dnl For zlib

@@ -875,7 +875,7 @@ static int ftp_get(struct remote *rem, struct remgetparam *gp)
     *s = '\0';
     file = s + 1;
 
-    res = ftp_do_get(gp, dir, file, conn);
+    res = ftp_do_get(gp, ( dir[0] == '\0' ) ? "/" : dir, file, conn);
     av_free(dir);
 
     if(res < 0)

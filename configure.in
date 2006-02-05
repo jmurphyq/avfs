@@ -448,3 +448,21 @@ extfs/urar
 extfs/uzip
 extfs/uzoo
 ], [chmod +x scripts/avfs-config])
+
+echo ""
+echo "Configuration details:"
+if test "$preload_build" = "yes"; then
+  echo " Building preload library: yes"
+else
+  echo " Building preload library: no"
+fi
+if test "$avfscoda_build" = "yes"; then
+  echo " Building avfscoda daemon and kernel module: yes"
+else
+  echo " Building avfscoda daemon and kernel module: no"
+fi
+if test "$shared_build" = "yes"; then
+  echo " Building library: yes"
+else
+  echo " Building library: no"
+fi

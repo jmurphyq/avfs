@@ -607,7 +607,7 @@ static int ftp_do_list(struct ftpconn *conn, const char *dir,
         return res;
         
     listsock = res;
-    cmd = av_strdup("LIST -an");
+    cmd = av_strdup("LIST -al");
     res = ftp_command(conn, cmd);
     av_free(cmd);
     if(res >= 0 && res / 100 != 1)

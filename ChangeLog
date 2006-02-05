@@ -1,3 +1,10 @@
+2006-02-05  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* Changed ftp module to use "LIST -al" instead of "LIST -an" to
+	support ftp servers which don't allow the "-an" argument
+	
+	* The configure script will output some configuration details
+
 2006-01-30  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* Fixed segfault in extfs when using open on base archive

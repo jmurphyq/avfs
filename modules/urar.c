@@ -587,6 +587,11 @@ static int rar_open(ventry *ve, struct archfile *fil)
 {
     struct rarnode *info = (struct rarnode *) fil->nod->data;
 
+    if(info == NULL) {
+        /* access to base rar directory */
+        return -EISDIR;
+    }
+    
     if(info->flags & FF_WITH_PASSWORD) {
         av_log(AVLOG_WARNING, "URAR: File password protected, sorry...");
         return -EACCES;

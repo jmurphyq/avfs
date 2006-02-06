@@ -426,8 +426,14 @@ static int zip_open(ventry *ve, struct archfile *fil)
     struct ldirentry ent;
     int headersize;
     struct zipnode *info = (struct zipnode *) fil->nod->data;
-    avoff_t offset = info->headeroff;
+    avoff_t offset;
 
+    if(info == NULL) {
+        /* no info means accessing base zip directory without any filename */
+        return -EISDIR;
+    }
+  
+    offset = info->headeroff;
     if(offset == -1) {
         av_log(AVLOG_ERROR, "UZIP: Cannot handle multivolume archives");
         return -ENOENT;

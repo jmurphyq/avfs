@@ -515,12 +515,13 @@ static int get_rar_file(ventry *ve, struct archfile *fil, int fd)
     struct realfile *rf;
     const char *prog[7];
     struct proginfo pri;
+    static int rar_available = 1;
 
     res = av_get_realfile(ve->mnt->base, &rf);
     if(res < 0)
         return res;
 
-    /* FIXME: if the program 'rar' doesn't exist, try 'unrar' */
+    /* prepare arguments */
     prog[0] = "rar";
     prog[1] = "p";
     prog[2] = "-c-";
@@ -529,17 +530,46 @@ static int get_rar_file(ventry *ve, struct archfile *fil, int fd)
     prog[5] = info->path;
     prog[6] = NULL;
  
-    av_init_proginfo(&pri);
-    pri.prog = prog;
-    pri.ifd = open("/dev/null", O_RDONLY);
-    pri.ofd = fd;
-    pri.efd = pri.ifd;
+    if(rar_available) {
+        av_init_proginfo(&pri);
+        pri.prog = prog;
+        pri.ifd = open("/dev/null", O_RDONLY);
+        pri.ofd = fd;
+        pri.efd = pri.ifd;
+        
+        res = av_start_prog(&pri);
+        close(pri.ifd);
+        
+        if(res == 0)
+            res = av_wait_prog(&pri, 0, 0);
+    } else {
+        /* force unrar execution */
+        res = -EIO;
+    }
     
-    res = av_start_prog(&pri);
-    close(pri.ifd);
+    if(res == -EIO)
+    {
+        /* rar failed or unavailable, try unrar */
+        rar_available = 0;
+        
+        prog[0] = "unrar";
+        av_init_proginfo(&pri);
+        pri.prog = prog;
+        pri.ifd = open("/dev/null", O_RDONLY);
+        pri.ofd = fd;
+        pri.efd = pri.ifd;
+        
+        res = av_start_prog(&pri);
+        close(pri.ifd);
+        
+        if(res == 0)
+            res = av_wait_prog(&pri, 0, 0);
 
-    if(res == 0)
-        res = av_wait_prog(&pri, 0, 0);
+        if(res == -EIO) {
+            /* unrar failed too so reset rar_available */
+            rar_available = 1;
+        }
+    }
 
     av_unref_obj(rf);
 

@@ -1,3 +1,27 @@
+2006-04-05  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* Extended cache to supply an interface similar to filecache
+	
+	* Used new cache interface in extfs to store tmpfiles
+	
+	* Fixed invisible hidden files for iso9660
+	
+	* Added extfs support for 7zip
+	
+	* Added installation prefix output in configure script
+	
+	* Fuse daemon can now be installed with --enable-fuse
+	
+	* Added symlink rewriting to make absolute symlinks relative
+	
+	* Added avfsstat interface to toggle this symlink rewrite
+	
+	* Added parsing of iso date format in parsels
+
+2006-02-21  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* urar module uses unrar in case of missing rar (based on patch by Mark)
+
 2006-02-06  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* Fixed segfault when using open on base archives (same bug as for

@@ -16,7 +16,8 @@ SUBDIRS =        \
 	patch    \
 	macros   \
 	extfs    \
-	doc
+	doc	\
+	fuse
 
 EXTRA_DIST =                 \
 	glassfs/Makefile     \

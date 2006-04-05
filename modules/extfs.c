@@ -1,6 +1,7 @@
 /*
     AVFS: A Virtual File System Library
     Copyright (C) 1998  Miklos Szeredi (mszeredi@inf.bme.hu)
+    Copyright (C) 2006  Ralf Hoffmann (ralf@boomerangsworld.de)
     
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
@@ -17,9 +18,14 @@
 #include "parsels.h"
 #include "realfile.h"
 #include "runprog.h"
+#include "filecache.h"
+#include "cache.h"
+#include "exit.h"
 
 #include <unistd.h>
 #include <fcntl.h>
+
+static AV_LOCK_DECL(extfslock);
 
 struct extfsdata {
     int needbase;
@@ -30,10 +36,21 @@ struct extfsnode {
     char *fullpath;
 };
 
-struct extfsfile {
+struct extfscacheentry {
     char *tmpfile;
+};
+
+struct extfsfile {
+    struct extfscacheentry *cent;
     int fd;
 };
+
+static void extfscacheentry_delete(struct extfscacheentry *cent)
+{
+    if( cent->tmpfile != NULL ) {
+        av_del_tmpfile(cent->tmpfile);
+    }
+}
 
 static void fill_extfs_link(struct archive *arch, struct entry *ent,
                            char *linkname)
@@ -178,6 +195,25 @@ static int extfs_list(void *data, ventry *ve, struct archive *arch)
     return res;
 }
 
+static int get_key_for_node(ventry *ve, struct archfile *fil, char **resp)
+{
+    struct extfsnode *enod = (struct extfsnode *) fil->nod->data;
+    char *key;
+    int res;
+
+    if(enod == NULL) {
+        return -EISDIR;
+    }
+
+    res = av_filecache_getkey(ve, &key);
+    if(res < 0)
+        return res;
+
+    key = av_stradd(key, "/", enod->fullpath, NULL);
+    *resp = key;
+    return 0;
+}
+
 static int get_extfs_file(ventry *ve, struct archfile *fil,
                           const char *tmpfile)
 {
@@ -275,30 +311,63 @@ static int extfs_open(ventry *ve, struct archfile *fil)
 {
     int res;
     struct extfsfile *efil;
-    char *tmpfile;
     int fd;
-
-    res = av_get_tmpfile(&tmpfile);
+    char *key;
+    struct extfscacheentry *cent;
+    
+    /* get key for extfscache */
+    res = get_key_for_node(ve, fil, &key);
     if(res < 0)
         return res;
 
-    res = get_extfs_file(ve, fil, tmpfile);
-    if(res < 0) {
-        av_del_tmpfile(tmpfile);
-        return res;
-    }
+    AV_LOCK(extfslock);
+    cent = av_cache2_get(key);
+    if (cent == NULL) {
+        char *tmpfile;
+        avoff_t tmpsize;
 
-    fd = open(tmpfile, O_RDONLY);
+	/* no entry in cache so create a temporary file... */
+        res = av_get_tmpfile(&tmpfile);
+        if(res < 0) {
+	    av_free(key);
+	    AV_UNLOCK(extfslock);
+            return res;
+	}
+	res = get_extfs_file(ve, fil, tmpfile);
+	if(res < 0) {
+	    av_free(key);
+	    av_del_tmpfile(tmpfile);
+	    AV_UNLOCK(extfslock);
+	    return res;
+	}
+
+	/* ...create an object to store tmpfile */
+	AV_NEW_OBJ(cent, extfscacheentry_delete);
+	cent->tmpfile = tmpfile;
+
+	/* put it in the extfscache */
+	av_cache2_set(cent,key);
+	AV_UNLOCK(extfslock);
+
+        tmpsize = av_tmpfile_blksize(tmpfile);
+        if(tmpsize > 0)
+            av_cache2_setsize(key, tmpsize);
+    } else {
+	AV_UNLOCK(extfslock);
+    }
+    av_free(key);
+
+    fd = open(cent->tmpfile, O_RDONLY);
     if(fd == -1) {
         res = -errno; 
-        av_log(AVLOG_ERROR, "EXTFS: Could not open %s: %s", tmpfile,
+        av_log(AVLOG_ERROR, "EXTFS: Could not open %s: %s", cent->tmpfile,
                strerror(errno));
-        av_del_tmpfile(tmpfile);
+	av_unref_obj(cent);
         return res;
     }
 
     AV_NEW(efil);
-    efil->tmpfile = tmpfile;
+    efil->cent = cent;
     efil->fd = fd;
 
     fil->data = efil;
@@ -311,7 +380,8 @@ static int extfs_close(struct archfile *fil)
     struct extfsfile *efil = (struct extfsfile *) fil->data;
 
     close(efil->fd);
-    av_del_tmpfile(efil->tmpfile);
+
+    av_unref_obj(efil->cent);
     av_free(efil);
     
     return 0;

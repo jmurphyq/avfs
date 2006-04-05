@@ -103,6 +103,26 @@ static int is_dos_date(const char *str)
     return 1;
 }
 
+static int is_iso_date(const char *str)
+{
+    int len;
+
+    if (!str)
+	return 0;
+
+    len = strlen (str);
+    if (len != 10)
+	return 0;
+
+    if (str[4] != str[7])
+	return 0;
+
+    if (!strchr ("\\-/", (int) str[4]))
+	return 0;
+
+    return 1;
+}
+
 
 static int is_week(const char *str)
 {
@@ -294,6 +314,7 @@ static avtime_t parse_filedate(struct columns *col, struct avtm *currtim)
            Mon DD hh:mm YYYY
            Wek Mon DD hh:mm:ss YYYY
            MM-DD-YY hh:mm
+           YYYY-MM-DD hh:mm (ISO 8601)
            where Mon is Jan-Dec, DD, MM, YY two digit day, month, year,
            YYYY four digit year, hh, mm, ss two digit hour, minute or second. */
     
@@ -327,6 +348,22 @@ static avtime_t parse_filedate(struct columns *col, struct avtm *currtim)
                 tim.mon   = d[0];
                 tim.day   = d[1];
                 tim.year = d[2];
+                got_year = 1;
+            } else
+                return -1; /* sscanf failed */
+        } else if (is_iso_date(p)) {
+            if(sscanf(p, "%4d-%2d-%2d", &d[0], &d[1], &d[2]) == 3){
+                if(d[0] < 1900) return -1;
+                d[0] -= 1900;
+                
+                if(d[1] < 1 || d[1] > 12) return -1;
+                d[1]--; /* Months are zero based */
+
+                if(d[2] < 1 || d[2] > 31) return -1;
+                
+                tim.mon   = d[1];
+                tim.day   = d[2];
+                tim.year = d[0];
                 got_year = 1;
             } else
                 return -1; /* sscanf failed */
@@ -431,7 +468,8 @@ int av_parse_ls(struct lscache *cache, const char *line,
     for (col->idx = 3; col->idx <= 5; col->idx++) 
         if (is_month(CURR_COL(col), NULL) || 
             is_week(CURR_COL(col)) || 
-            is_dos_date(CURR_COL(col)))
+            is_dos_date(CURR_COL(col)) ||
+            is_iso_date(CURR_COL(col)))
             break;
 
     saveidx = col->idx;

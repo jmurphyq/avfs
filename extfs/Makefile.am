@@ -19,6 +19,7 @@ EXTFS_IN =	\
 	mailfs		\
 	patchfs		\
 	rpms		\
+	u7z		\
 	uar		\
 	uarj		\
 	uha		\

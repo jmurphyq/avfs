@@ -56,7 +56,7 @@ BEGIN {
   sub(" $", "", name)
   ## sub(";[0-9]+$", "", name) ## would break copyout
   # skip . and ..
-  if (name ~ /^\.\.?/) next;
+  if (name ~ /^\.\.?$/) next;
   printf "%s%s%s\n", attr, dir, name
 }' 
 }

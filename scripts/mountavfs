@@ -12,5 +12,6 @@ MntDir=${HOME}/.avfs
 grep -q "avfsd ${MntDir}" /proc/mounts || {
    echo Mounting AVFS on $MntDir...
    avfsd $MntDir
+   echo "1" >"$MntDir/#avfsstat/symlink_rewrite"
 }
 

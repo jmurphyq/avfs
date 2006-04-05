@@ -1,6 +1,7 @@
 /*
     AVFS: A Virtual File System Library
     Copyright (C) 1998-2001  Miklos Szeredi (mszeredi@inf.bme.hu)
+    Copyright (C) 2006       Ralf Hoffmann (ralf@boomerangsworld.de)
 
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
@@ -173,4 +174,23 @@ avoff_t av_tmp_free()
 #endif
 
     return freebytes;
+}
+
+avoff_t av_tmpfile_blksize(const char *tmpf)
+{
+    int res;
+    struct stat stbuf;
+    
+    if(tmpf == NULL)
+        return -1;
+
+    res = stat(tmpf, &stbuf);
+    if(res == 0) {
+        /* Ramfs returns 0 diskusage */
+        if(stbuf.st_blocks == 0)
+            return stbuf.st_size;
+        else
+            return stbuf.st_blocks * 512;
+    } else
+        return -1;
 }

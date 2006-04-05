@@ -22,7 +22,7 @@ i_codadev1 = $(i_devdir)/cfs1
 i_emacsstart = $(sysconfdir)/emacs/site-start.d
 #################
 
-EXTRA_DIST = avfscoda.csh avfscoda.sh avfscoda.el davpass ftppass
+EXTRA_DIST = avfscoda.csh avfscoda.sh avfscoda.el davpass ftppass mountavfs umountavfs
 
 bin_SCRIPTS = ftppass davpass @install_scriptcomps@
 EXTRA_SCRIPTS = avfs-config

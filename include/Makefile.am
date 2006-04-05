@@ -29,6 +29,7 @@ noinst_HEADERS = archive.h \
 	serialfile.h \
 	socket.h \
 	state.h \
+	tmpfile.h \
 	ugid.h \
 	version.h \
 	zfile.h \

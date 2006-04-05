@@ -1,6 +1,7 @@
 /*
     AVFS: A Virtual File System Library
     Copyright (C) 2000  Miklos Szeredi (mszeredi@inf.bme.hu)
+    Copyright (C) 2006  Ralf Hoffmann (ralf@boomerangsworld.de)
 
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
@@ -9,6 +10,7 @@
 #include "oper.h"
 #include "operutil.h"
 #include "internal.h"
+#include <stdlib.h>
 
 static int check_file_access(vfile *vf, int access)
 {
@@ -358,6 +360,84 @@ int av_access(ventry *ve, int amode)
     return res;
 }
 
+static int count_components(const char *p)
+{
+    int ctr;
+
+    for (; *p == '/'; p++);
+    for (ctr = 0; *p; ctr++) {
+        for (; *p && *p != '/'; p++);
+        for (; *p == '/'; p++);
+    }
+    return ctr;
+}
+
+static void strip_common(const char **sp, const char **tp)
+{
+    const char *s = *sp;
+    const char *t = *tp;
+    do {
+        for (; *s == '/'; s++);
+        for (; *t == '/'; t++);
+        *tp = t;
+        *sp = s;
+        for (; *s == *t && *s && *s != '/'; s++, t++);
+    } while ((*s == *t && *s) || (!*s && *t == '/') || (*s == '/' && !*t));
+}
+
+static void transform_symlink(const char *path, const char *linkdest, char **linkp)
+{
+    const char *l = linkdest;
+    char *newlink;
+    char *s;
+    int dotdots;
+    int i;
+    
+    /* TODO: possible improvement:
+     * absolute symlinks in archives (mount points in general)
+     * could be interpreted with the mount point as root directory
+     * do make this work the base path should be removed from the path var
+     */
+    /* const char *b = base_path; */
+
+    if (linkp == NULL)
+        return;
+    
+    *linkp = NULL;
+
+    if (l[0] != '/' || path[0] != '/')
+        return;
+
+    /* strip_common(&path, &b);
+       if (*b)
+       return;
+    */
+
+    strip_common(&l, &path);
+
+    dotdots = count_components(path);
+    if (!dotdots)
+        return;
+    dotdots--;
+
+    newlink = malloc(dotdots * 3 + strlen(l) + 2);
+    if (!newlink) {
+        av_log(AVLOG_ERROR, "transform_symlink: memory allocation failed");
+        exit(1);
+    }
+    for (s = newlink, i = 0; i < dotdots; i++, s += 3)
+        strcpy(s, "../");
+
+    if (l[0])
+        strcpy(s, l);
+    else if (!dotdots)
+        strcpy(s, ".");
+    else
+        s[0] = '\0';
+
+    *linkp = newlink;
+}
+
 int av_readlink(ventry *ve, char **bufp)
 {
     int res;
@@ -367,6 +447,24 @@ int av_readlink(ventry *ve, char **bufp)
     res = avfs->readlink(ve, bufp);
     AVFS_UNLOCK(avfs);
     
+    if(res == 0) {
+        if(*bufp[0] == '/' && av_get_symlink_rewrite() == 1) {
+            char *rel_link = NULL;
+            char *path = NULL;
+            int res2;
+            
+            res2 = av_generate_path(ve, &path);
+            if(res2 == 0) {
+                transform_symlink(path, *bufp, &rel_link);
+                if(rel_link != NULL) {
+                    free(*bufp);
+                    *bufp = rel_link;
+                }
+                av_free(path);
+            }
+        }
+    }
+
     return res;
 }
 

@@ -1,6 +1,7 @@
 /*
     AVFS: A Virtual File System Library
     Copyright (C) 1998-2001  Miklos Szeredi (mszeredi@inf.bme.hu)
+    Copyright (C) 2006       Ralf Hoffmann (ralf@boomerangsworld.de)
 
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
@@ -10,10 +11,23 @@
    TODO:
    
    Virtual filesystem where all the cached files can be found.
+
+   There are two interfaces available:
+   The av_cacheobj* functions are built around the cacheobj structure.
+     The user holds the reference to it and can use it to access the
+     stored object. The cache itself creates the cacheobj but doesn't
+     hold a reference to it so it doesn't destroy the cacheobj but
+     will unref the object stored in the cacheobj struct if the space
+     is needed.
+   The av_cache2* functions are built around the name as a key for
+     stored object. The cacheobj is not return and the cache holds the
+     only reference to it and will destroy it at some point.
+
 */
 
 #include "cache.h"
 #include "internal.h"
+#include "exit.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,6 +39,8 @@ struct cacheobj {
 
     struct cacheobj *next;
     struct cacheobj *prev;
+
+    int internal_obj;
 };
 
 #define MBYTE (1024 * 1024)
@@ -97,6 +113,28 @@ static int cache_setoff(struct entry *ent, const char *param, const char *val)
     return 0;
 }
 
+/**
+ * This is the exit handler to remove all temporary file stored
+ * using the V2 interface
+ */
+static void destroy_cache()
+{
+    struct cacheobj *cobj;
+
+    AV_LOCK(cachelock);
+    for(cobj = &cachelist; cobj->next != &cachelist; ) {
+        if(cobj->next->internal_obj) {
+            /* unref the internal objects which will remove it */
+            av_unref_obj(cobj->next);
+        } else {
+            /* this shouldn't happen, there shouldn't be
+             * any external object left at exit */
+            cobj = cobj->next;
+        }
+    }
+    AV_UNLOCK(cachelock);
+}
+
 void av_init_cache()
 {
     struct statefile statf;
@@ -121,6 +159,8 @@ void av_init_cache()
     statf.get = cache_getfunc;
     statf.data = cache_clear;
     av_avfsstat_register("cache/clear", &statf);
+    
+    av_add_exithandler(destroy_cache);
 }
 
 static void cacheobj_remove(struct cacheobj *cobj)
@@ -155,6 +195,10 @@ static void cacheobj_free(struct cacheobj *cobj)
     av_free(cobj->name);
 }
 
+/**
+ * This is the destructor for external cacheobj's created
+ * using the V1 interface
+ */
 static void cacheobj_delete(struct cacheobj *cobj)
 {
     AV_LOCK(cachelock);
@@ -168,6 +212,25 @@ static void cacheobj_delete(struct cacheobj *cobj)
         cacheobj_free(cobj);
 }
 
+/**
+ * This is the destructor for internal cacheobj's created
+ * using the V2 interface
+ * Because of possible race conditions the object can only
+ * by destroyed when holding the lock
+ */
+static void cacheobj_internal_delete(struct cacheobj *cobj)
+{
+    if(cobj->obj != NULL) {
+        cacheobj_remove(cobj);
+        disk_usage -= cobj->diskusage;
+    }
+
+    AV_UNLOCK(cachelock);
+    if(cobj->obj != NULL)
+        cacheobj_free(cobj);
+    AV_LOCK(cachelock);
+}
+
 struct cacheobj *av_cacheobj_new(void *obj, const char *name)
 {
     struct cacheobj *cobj;
@@ -179,6 +242,7 @@ struct cacheobj *av_cacheobj_new(void *obj, const char *name)
     cobj->obj = obj;
     cobj->diskusage = 0;
     cobj->name = av_strdup(name);
+    cobj->internal_obj = 0;
     av_ref_obj(obj);
 
     AV_LOCK(cachelock);
@@ -199,13 +263,17 @@ static int cache_free_one(struct cacheobj *skip_entry)
     if(cobj == &cachelist)
         return 0;
 
-    cacheobj_remove(cobj);
-    disk_usage -= cobj->diskusage;
-    tmpcobj = *cobj;
-    cobj->obj = NULL;
-    AV_UNLOCK(cachelock);
-    cacheobj_free(&tmpcobj);
-    AV_LOCK(cachelock);
+    if(cobj->internal_obj) {
+        av_unref_obj(cobj);
+    } else {
+        cacheobj_remove(cobj);
+        disk_usage -= cobj->diskusage;
+        tmpcobj = *cobj;
+        cobj->obj = NULL;
+        AV_UNLOCK(cachelock);
+        cacheobj_free(&tmpcobj);
+        AV_LOCK(cachelock);
+    }
 
     return 1;
 }
@@ -293,4 +361,83 @@ void *av_cacheobj_get(struct cacheobj *cobj)
     AV_UNLOCK(cachelock);
 
     return obj;
+}
+
+static struct cacheobj *cacheobj2_find(const char *name)
+{
+    struct cacheobj *cobj;
+    
+    for(cobj = cachelist.next; cobj != &cachelist; cobj = cobj->next) {
+        if(cobj->internal_obj == 1)
+            if(strcmp(cobj->name, name) == 0)
+                break;
+    }
+
+    if(cobj->obj == NULL)
+        return NULL;
+
+    return cobj;
+}
+
+int av_cache2_set(void *obj, const char *name)
+{
+    struct cacheobj *cobj, *oldcobj;
+
+    if(obj != NULL) {
+        AV_NEW_OBJ(cobj, cacheobj_internal_delete);
+        cobj->obj = obj;
+        cobj->diskusage = 0;
+        cobj->name = av_strdup(name);
+        cobj->internal_obj = 1;
+        av_ref_obj(obj);
+    } else {
+        cobj = NULL;
+    }
+
+    AV_LOCK(cachelock);
+    oldcobj = cacheobj2_find(name);
+
+    if(oldcobj != NULL )
+        av_unref_obj(oldcobj);
+
+    if(cobj != NULL)
+        cacheobj_insert(cobj);
+
+    AV_UNLOCK(cachelock);
+
+    return 0;
+}
+
+void *av_cache2_get(const char *name)
+{
+    struct cacheobj *cobj;
+    void *obj = NULL;
+    
+    AV_LOCK(cachelock);
+    cobj = cacheobj2_find(name);
+    if(cobj != NULL) {
+        cacheobj_remove(cobj);
+        cacheobj_insert(cobj);
+        obj = cobj->obj;
+        av_ref_obj(obj);
+    }
+    AV_UNLOCK(cachelock);
+
+    return obj;
+}
+
+void av_cache2_setsize(const char *name, avoff_t diskusage)
+{
+    struct cacheobj *cobj;
+
+    AV_LOCK(cachelock);
+    cobj = cacheobj2_find(name);
+    if(cobj->obj != NULL && cobj->diskusage != diskusage) {
+        disk_usage -= cobj->diskusage;
+        cobj->diskusage = diskusage;
+        disk_usage += cobj->diskusage;
+        
+        cache_checkspace(0, cobj);
+    }
+    AV_UNLOCK(cachelock);
 }

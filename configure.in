@@ -30,7 +30,7 @@ if test -z "$kernver"; then
   kernver="0"
 fi
 
-AC_MSG_CHECKING([whether to build preload, avfscoda and/or shared library])
+AC_MSG_CHECKING([whether to build preload, avfscoda, shared library and/or fuse daemon])
 
 AC_ARG_ENABLE(preload,
 [  --enable-preload        Compile the preloaded library and server],
@@ -41,10 +41,14 @@ AC_ARG_ENABLE(avfscoda,
 [if test "$enableval" = yes; then avfscoda=yes; else avfscoda=no; fi])
 
 AC_ARG_ENABLE(library,
-[  --enable-library      Compile avfs as a shared or static library],
+[  --enable-library        Compile avfs as a shared or static library],
 [if test "$enableval" = yes; then shared=yes; else shared=no; fi])
 
-if test -z "$preload" -a -z "$avfscoda" -a -z "$shared"; then
+AC_ARG_ENABLE(fuse,
+[  --enable-fuse           Compile avfsd for fuse],
+[if test "$enableval" = yes; then fuse=yes; else fuse=no; fi])
+
+if test -z "$preload" -a -z "$avfscoda" -a -z "$shared" -a -z "$fuse"; then
    if test "$os" = "Linux"; then
        if test "$kernver" -ge "22" \
                -a "$kernver" -le "24"; then
@@ -62,6 +66,7 @@ fi
 shared_build=no
 avfscoda_build=no
 preload_build=no
+fuse_build=no
 build_result=
 
 if test "$avfscoda" = yes; then
@@ -82,6 +87,14 @@ if test "$shared" = yes; then
       build_result=shared
    else
       build_result="$build_result shared"
+   fi
+fi
+if test "$fuse" = yes; then
+   fuse_build=yes
+   if test -z "$build_result"; then
+      build_result=fuse
+   else
+      build_result="$build_result fuse"
    fi
 fi
 
@@ -251,6 +264,7 @@ install_avfscoda=no
 install_initscript=no
 install_scriptlinks=no
 install_codadev=no
+install_fuse=no
 
 if test $avfscoda_build = yes; then
 
@@ -380,6 +394,21 @@ if test $avfscoda_build = yes; then
 	install_avfscoda=yes
 fi
 
+dnl ================================================================
+dnl == Now comes the stuff for fuse                               ==
+dnl ================================================================
+
+if test $fuse_build = yes; then
+  AC_CHECK_LIB(fuse, fuse_main,[fuse_found=yes],[fuse_found=false])
+  if test x$fuse_found == xyes; then
+    FUSELIBS="-lfuse"
+    AC_SUBST(FUSELIBS)
+    install_fuse=yes
+    install_scriptcomps="$install_scriptcomps mountavfs umountavfs"
+  fi
+fi
+
+AM_CONDITIONAL(INSTALL_FUSE, test x$install_fuse = xyes)
 AM_CONDITIONAL(INSTALL_AVFSCODA_PROFILE, test x$install_profilescripts = xyes)
 AM_CONDITIONAL(INSTALL_AVFSCODA, test x$install_avfscoda = xyes)
 AM_CONDITIONAL(INSTALL_INITSCRIPT, test x$install_initscript = xyes)
@@ -424,6 +453,7 @@ spec/Makefile
 macros/Makefile
 patch/Makefile
 doc/Makefile
+fuse/Makefile
 
 scripts/avfs-config
 
@@ -440,6 +470,7 @@ extfs/lslR
 extfs/mailfs
 extfs/patchfs
 extfs/rpms
+extfs/u7z
 extfs/uar
 extfs/uarj
 extfs/uha
@@ -452,17 +483,24 @@ extfs/uzoo
 echo ""
 echo "Configuration details:"
 if test "$preload_build" = "yes"; then
-  echo " Building preload library: yes"
+  echo "  Building preload library                  : yes"
 else
-  echo " Building preload library: no"
+  echo "  Building preload library                  : no"
 fi
 if test "$avfscoda_build" = "yes"; then
-  echo " Building avfscoda daemon and kernel module: yes"
+  echo "  Building avfscoda daemon and kernel module: yes"
 else
-  echo " Building avfscoda daemon and kernel module: no"
+  echo "  Building avfscoda daemon and kernel module: no"
 fi
 if test "$shared_build" = "yes"; then
-  echo " Building library: yes"
+  echo "  Building library                          : yes"
 else
-  echo " Building library: no"
+  echo "  Building library                          : no"
 fi
+if test "$fuse_build" = "yes"; then
+  echo "  Building avfsd for fuse                   : yes"
+else
+  echo "  Building avfsd for fuse                   : no"
+fi
+echo "  Installation prefix                       : $prefix"
+echo ""

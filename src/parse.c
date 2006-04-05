@@ -1,6 +1,7 @@
 /*
     AVFS: A Virtual File System Library
     Copyright (C) 1998  Miklos Szeredi (mszeredi@inf.bme.hu)
+    Copyright (C) 2006  Ralf Hoffmann (ralf@boomerangsworld.de)
 
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
@@ -13,6 +14,7 @@
 #include "local.h"
 #include "mod_static.h"
 #include "operutil.h"
+#include "oper.h"
 
 #include <stdio.h>
 #include <ctype.h>
@@ -31,6 +33,7 @@ struct avfs_list {
 
 static AV_LOCK_DECL(avfs_lock);
 static struct avfs_list avfs_list;
+static int symlink_rewrite = 0;
 
 struct parse_state {
     ventry *ve;
@@ -122,6 +125,42 @@ static int versionstat_get(struct entry *ent, const char *param, char **retp)
     return 0;
 }
 
+static int symlinkrewrite_get(struct entry *ent, const char *param, char **retp)
+{
+    char buf[32];
+    
+    AV_LOCK(avfs_lock);
+    sprintf(buf, "%d\n", symlink_rewrite);
+    AV_UNLOCK(avfs_lock);
+
+    *retp = av_strdup(buf);
+    return 0;
+}
+
+static int symlinkrewrite_set(struct entry *ent, const char *param, const char *val)
+{
+    int mode;
+
+    if(strlen(val) < 2)
+        return -EINVAL;
+
+    if(val[1] != '\n' && val[1] != ' ') 
+        return -EINVAL;
+
+    if(val[0] == '0')
+        mode = 0;
+    else if(val[0] == '1')
+        mode = 1;
+    else
+        return -EINVAL;
+    
+    AV_LOCK(avfs_lock);
+    symlink_rewrite = mode;
+    AV_UNLOCK(avfs_lock);
+
+    return 0;
+}
+
 static void init_stats()
 {
     struct statefile statf;
@@ -137,6 +176,10 @@ static void init_stats()
 
     statf.get = versionstat_get;
     av_avfsstat_register("version", &statf);
+
+    statf.get = symlinkrewrite_get;
+    statf.set = symlinkrewrite_set;
+    av_avfsstat_register("symlink_rewrite", &statf);
 }
 
 static void destroy()
@@ -656,14 +699,11 @@ static int follow_link(struct parse_state *ps)
     int res;
     struct parse_state linkps;
     char *buf;
-    struct avfs *avfs = ps->ve->mnt->avfs;
 
     if(!ps->linkctr)
         return -ELOOP;
 
-    AVFS_LOCK(avfs);
-    res = avfs->readlink(ps->ve, &buf);
-    AVFS_UNLOCK(avfs);
+    res = av_readlink(ps->ve, &buf);
     if(res < 0)
         return res;
 
@@ -957,3 +997,7 @@ int av_generate_path(ventry *ve, char **pathp)
     return 0;
 }
 
+int av_get_symlink_rewrite()
+{
+    return symlink_rewrite;
+}

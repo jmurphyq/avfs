@@ -30,3 +30,4 @@ void av_init_filecache();
 void av_do_exit();
 
 void av_avfsstat_register(const char *path, struct statefile *func);
+int av_get_symlink_rewrite();

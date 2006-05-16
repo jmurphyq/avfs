@@ -1,3 +1,9 @@
+2006-05-16  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* Updated documentation
+
+	* Bumped version to 0.9.7
+
 2006-04-05  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* Extended cache to supply an interface similar to filecache

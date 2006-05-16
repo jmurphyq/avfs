@@ -1,4 +1,5 @@
 November 2005
+May 2006 (updated)
 
 This version of AVFS includes support for fuse (Filesystems
 in userspace). The other versions of AVFS, preload, library,
@@ -15,35 +16,31 @@ daemon.
 
 SETUP:
 ------
-Change to the cvs download directory. You do NOT need to be root.
-You DO need to have write permissions to the download directory.
+Prior to using the fuse avfs daemon, fuse support MUST be compiled
+into your 2.6 version kernel. In addition, the fuse library >= 2.4
+must be installed.
+
+Change to the cvs or snapshot download directory. You do NOT need
+to be root. You DO need to have write permissions to the download
+directory.
+
+NEW: Beginning with the 0.97pre versions, the configure command
+has a new option: --enable-fuse. Choosing this configure option
+will allow only the fuse daemon to be compiled and installed.
 
 user avfsdldir> ./autogen.sh
-user avfsdldir> ./configure --enable-library
+user avfsdldir> ./configure --enable-fuse
 user avfsdldir> make
-(no need to run make install)
 
-If there are no errors, then make fuse:
+Now, you need to become root and execute
 
-user avfsdldir> cd fuse
-user avfsdldir/fuse> ./compile.sh
-(compile.sh is the self-contained program to make the fuse daemon)
+user avfsdldir> make install
+
+This will install the daemon and startup and shutdown scripts.
 
 IF THERE ARE ERRORS perhaps review the compile steps above and 
 determine what the errors are and correct. Perhaps a library 
 is missing?
-
-When this is done, only two files are needed. To complete the
-setup, you may copy the two files to any directory -- preferably
-one in the path. If you wish to copy them to system directories
-(such as /usr/bin), you must be root.
-
-INSTALLATION OF FUSE DAEMON AND STARTUP SCRIPT:
------------------------------------------------
-In this example, I copy the two files to the $HOME/bin directory.
-
-user avfsdldir/fuse> cd ..
-user avfsdldir> cp fuse/avfsd scripts/mountafvs ~/bin
 
 IMPLEMENTATION:
 ---------------
@@ -65,6 +62,10 @@ pressed files via the pseudo-fs ~/.avfs.
 
 Testing the installation:
 -------------------------
+
+1) type mountavfs
+a message should appear that avfs is loaded.
+
 The README docs indicate that testing can be done as
 ls /#avfsstat. This will not work. Using this version of
 AVFS, try:
@@ -104,6 +105,10 @@ workaround AND for alerting me that fuse CAN work with AVFS.
 Stopping AVFS:
 --------------
 Make sure no files are being accessed via AVFS. Then:
+
+umountavfs
+
+or
 
 fusermount -u ~/.avfs
 

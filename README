@@ -30,8 +30,15 @@ or
 Forms of AVFS
 -------------
 
-AVFS can now be installed in three different ways. These are:
+AVFS can now be installed in four different ways. These are:
 
+ - Fuse
+ 	With fuse support, systems with 2.6 kernels can now use avfs.
+	The requirements are 
+	1) fuse support be compiled into the kernel or fuse modules 
+	   loaded.
+	2) the fuse package and library >= 2.4 be installed.
+	
  - Avfscoda 
         This method in theory works on any Linux system which has the
         'coda' filesystem compiled in the kernel or as a kernel module.
@@ -57,6 +64,9 @@ respectively.
 
 Using AVFS
 ----------
+
+These instructions are not for the fuse installation. Please see the file
+README.avfs-fuse for details on how these commands are applied.
 
 It is quite simple, you just do everything with the virtual files, as
 you would do with real files. Here are some examples:
@@ -159,28 +169,30 @@ The following "handelers" are available now:
 
   name of handler    type of operation      notes
   ---------------    -----------------      -----
-  #ugz               gunzip                 builtin (1)
-  #ugzip             gunzip                 uses gzip
-  #uz                uncompress             uses gzip
-  #gz                gzip                   uses gzip
-  #ubz2              bunzip2                builtin
-  #ubzip2            bunzip2                uses bzip2
-  #bz2               bzip2                  uses bzip2
-  #utar              untar                  builtin
-  #uzip              unzip                  builtin
-  #urar              unrar                  builtin list + uses rar to extract
-  #uar               un-ar                  builtin
-  #avfsstat          meta information       builtin
-  #floppy            floppy                 uses mtools (mdir, mcopy, ...)
   #a                 first floppy drive     alias for #floppy:a
-  #rsh               rsh/rcp                only works if rsh needs no password
-  #ssh               ssh/scp                only works if ssh needs no password
-  #ftp               ftp                    builtin
-  #ftp_ctl           control ftp sessions   
+  #avfsstat          meta information       builtin
+  #bz2               bzip2                  uses bzip2
   #dav               webdav                 builtin
   #dav_ctl           control dav sessions   
-  #volatile          'memory fs'            mainly for testing
+  #floppy            floppy                 uses mtools (mdir, mcopy, ...)
+  #ftp               ftp                    builtin
+  #ftp_ctl           control ftp sessions   
+  #gz                gzip                   uses gzip
+  #iso9660           CD/DVD filesystem      no need to use mount -t iso9660!
   #local             local filesysem        only for internal use
+  #rsh               rsh/rcp                only works if rsh needs no password
+  #ssh               ssh/scp                only works if ssh needs no password
+  #uar               un-ar                  builtin
+  #ubz2              bunzip2                builtin
+  #ubzip2            bunzip2                uses bzip2
+  #ugz               gunzip                 builtin (1)
+  #ugzip             gunzip                 uses gzip
+  #urar              unrar                  builtin list + uses rar to extract
+  #utar              untar                  builtin
+  #uz                uncompress             uses gzip
+  #uzip              unzip                  builtin
+  #volatile          'memory fs'            mainly for testing
+  
 
 (1) With the '-s' option (blala.gz#-s) the gunzip module will use the
 size stored at the end of the gzip file.  This will make some
@@ -194,18 +206,18 @@ on these, see the files in /usr/lib/avfs/extfs.
 
   name of handler    type of operation
   ---------------    -----------------
-  #uzoo              zoo archives
-  #ulha              lha archives
-  #ucpio             cpio archives
-  #rpm               rpm packages
   #deb               debian packages
-  #lslR              directory tree listings
   #ftplist           ?
   #hp48              ?
-  #patchfs           browse patch files
+  #lslR              directory tree listings
   #mailfs            ? 
+  #patchfs           browse patch files
+  #rpm               rpm packages
   #rpms              List of installed rpms
   #trpm              Useful inside #rpms
+  #ucpio             cpio archives
+  #ulha              lha archives
+  #uzoo              zoo archives
 
 
 Writing new modules

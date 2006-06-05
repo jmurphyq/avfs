@@ -127,11 +127,22 @@ if test ! "$preload_build" = "yes"; then
 fi
 
 
+fob_set=no
 if test "x$ac_cv_sys_file_offset_bits" != x -a "$ac_cv_sys_file_offset_bits" != no; then
   CPPFLAGS="$CPPFLAGS -D_FILE_OFFSET_BITS=$ac_cv_sys_file_offset_bits"
+  fob_set=yes
 fi
 if test "x$ac_cv_sys_large_files" != x -a "$ac_cv_sys_large_files" != no; then
   CPPFLAGS="$CPPFLAGS -D_LARGE_FILES=$ac_cv_sys_large_files"
+fi
+
+if test "$enable_largefile" != no -a "$fob_set" != "yes" -a "$fuse_build" = "yes"; then
+  dnl FIXME this is kind of a hack to force the flag _FILE_OFFSET_BITS
+  dnl if large file support was requested but the macro decided not to
+  dnl use it (for example if arch doesn't need it)
+  dnl This is currently required because fuse refuses to work without it
+  CPPFLAGS="$CPPFLAGS -D_FILE_OFFSET_BITS=64"
+  fob_set=yes
 fi
 
 if test -z "$cflags"; then

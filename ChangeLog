@@ -1,3 +1,8 @@
+2006-06-05  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* Added configure.in hack to always set _FILE_OFFSET_BITS because
+	fuse requires this even on 64bit archs
+
 2006-05-16  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* Updated documentation

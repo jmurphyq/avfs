@@ -416,6 +416,8 @@ if test $fuse_build = yes; then
     AC_SUBST(FUSELIBS)
     install_fuse=yes
     install_scriptcomps="$install_scriptcomps mountavfs umountavfs"
+  else
+    fuse_build=no
   fi
 fi
 

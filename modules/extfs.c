@@ -21,6 +21,7 @@
 #include "filecache.h"
 #include "cache.h"
 #include "exit.h"
+#include "tmpfile.h"
 
 #include <unistd.h>
 #include <fcntl.h>

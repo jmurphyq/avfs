@@ -1,3 +1,22 @@
+Changes from 0.9.6 to 0.9.7
+   - Fuse daemon can now be installed with --enable-fuse
+   - added symlink rewriting code to make absolute symlinks relative
+     There is an avfsstat entry to toggle this symlink rewrite
+   - temporary files from extfs are cached which speeds up accessing files
+     inside extfs archives
+   - urar module uses unrar in case of missing rar
+   - changed ftp module to use "LIST -al" instead of "LIST -an" to
+     support ftp servers which don't allow the "-an" argument
+   - fixed bug in ftp module when getting ftp files from the root directory
+   - utar and ftp module should be able to handle >2G files
+   - updated extfs modules
+   - fixed invisible hidden files for iso9660
+   - added extfs support for 7zip
+   - fixed possible segfault in extfs module
+   - fixed bug in the ulha extfs module which had problems with file names
+     containing spaces
+   - updated documentation
+
 Changes from 0.9.5 to 0.9.6
    - fixed return value of local_close so errors in close() can be detected
    - updated date parsing in extfs so patchfs handler works again

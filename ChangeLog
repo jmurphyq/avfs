@@ -1,3 +1,13 @@
+2006-06-14  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* Updated NEWS and AUTHORS
+
+	* Added missing include in extfs module
+
+2006-06-06  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* Set fuse_build to no in configure.in if fuse is not found
+
 2006-06-05  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* Added configure.in hack to always set _FILE_OFFSET_BITS because

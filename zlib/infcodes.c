@@ -261,24 +261,31 @@ z_streamp z;
   char *buf = *bufp;
   inflate_codes_statef *c = s->sub.decode.codes;
   struct inflate_codes_state ccpy = *c;
+  char fixed_tree = 0;
 
   if(c->mode == LEN || c->mode == DIST) {
     assert(c->sub.code.tree >= s->hufts && c->sub.code.tree < s->hufts + MANY);
     ccpy.sub.code.tree = (inflate_huft *) ((long) c->sub.code.tree - (long) s->hufts);
   }
 
-  assert(c->ltree >= s->hufts && c->ltree < s->hufts + MANY);
-  ccpy.ltree = (inflate_huft *) ((long) c->ltree - (long) s->hufts);
-
-  assert(c->dtree >= s->hufts && c->dtree < s->hufts + MANY);
-  ccpy.dtree = (inflate_huft *) ((long) c->dtree - (long) s->hufts);
+  if(c->ltree >= s->hufts && c->ltree < s->hufts + MANY) {
+    ccpy.ltree = (inflate_huft *) ((long) c->ltree - (long) s->hufts);
+    
+    assert(c->dtree >= s->hufts && c->dtree < s->hufts + MANY);
+    ccpy.dtree = (inflate_huft *) ((long) c->dtree - (long) s->hufts);
+  } else {
+    /* this is an assumption, it will be checked in restore */
+    fixed_tree = 1;
+  }
   
-  *bufp = buf = realloc(buf, at + sizeof(struct inflate_codes_state));
+  *bufp = buf = realloc(buf, at + sizeof(struct inflate_codes_state) + 1);
   if(buf == NULL)
     return Z_MEM_ERROR;
   
   memcpy(buf + at, &ccpy, sizeof(struct inflate_codes_state));
   at += sizeof(struct inflate_codes_state);
+
+  buf[at++] = fixed_tree;
   
   return at;
 }
@@ -290,18 +297,48 @@ inflate_codes_statef *inflate_codes_restore(bufp, s, z)
 {
   char *buf = *bufp;
   inflate_codes_statef *c;
+  char fixed_tree = 0;
 
   if ((c = (inflate_codes_statef *)
        ZALLOC(z,1,sizeof(struct inflate_codes_state))) == Z_NULL)
     return c;
   
   memcpy(c, buf, sizeof(struct inflate_codes_state));
-  buf += sizeof(struct inflate_codes_state);
+
+  fixed_tree = buf[sizeof(struct inflate_codes_state)];
+
+  if(fixed_tree == 0) {
+    c->ltree = (inflate_huft *) ((long) s->hufts + (long) c->ltree);
+    c->dtree = (inflate_huft *) ((long) s->hufts + (long) c->dtree);
+  } else if(fixed_tree == 1) {
+    Byte old_lbits = c->lbits;
+    Byte old_dbits = c->dbits;
+    inflate_huft *old_ltree = c->ltree;
+    inflate_huft *old_dtree = c->dtree;
+    uInt bl, bd;
+
+    if(inflate_trees_fixed(&bl, &bd, &c->ltree, &c->dtree, z) != Z_OK) {
+      ZFREE(z, c);
+      return Z_NULL;
+    }
+
+    c->lbits = (Byte)bl;
+    c->dbits = (Byte)bd;
+
+    /* it was an assumption that fixed trees are used
+       if one of the following conditions is false we were wrong */
+    if(c->lbits != old_lbits || c->dbits != old_dbits ||
+       c->ltree != old_ltree || c->dtree != old_dtree) {
+      ZFREE(z, c);
+      return Z_NULL;
+    }
+  } else {
+    return Z_NULL;
+  }
+
+  buf += sizeof(struct inflate_codes_state) + 1;
   
   *bufp = buf;
-
-  c->ltree = (inflate_huft *) ((long) s->hufts + (long) c->ltree);
-  c->dtree = (inflate_huft *) ((long) s->hufts + (long) c->dtree);
 
   if(c->mode == LEN || c->mode == DIST)
     c->sub.code.tree = (inflate_huft *) ((long) s->hufts + (long) c->sub.code.tree);

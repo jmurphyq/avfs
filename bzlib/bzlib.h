@@ -16,7 +16,7 @@
   This file is a part of bzip2 and/or libbzip2, a program and
   library for lossless, block-sorting data compression.
 
-  Copyright (C) 1996-2000 Julian R Seward.  All rights reserved.
+  Copyright (C) 1996-2005 Julian R Seward.  All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
   modification, are permitted provided that the following conditions
@@ -50,7 +50,7 @@
   SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
   Julian Seward, Cambridge, UK.
-  jseward@acm.org
+  jseward@bzip.org
   bzip2/libbzip2 version 1.0 of 21 March 2000
 
   This program is based on (at least) the work of:
@@ -120,8 +120,12 @@ typedef
 #define BZ_EXPORT
 #endif
 
+#ifndef BZ_NO_STDIO
+/* Need a definitition for FILE */
+#include <stdio.h>
+#endif
+
 #ifdef _WIN32
-#   include <stdio.h>
 #   include <windows.h>
 #   ifdef small
       /* windows.h define small to char */

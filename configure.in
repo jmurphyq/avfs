@@ -1,7 +1,7 @@
 dnl Process this file with autoconf to produce a configure script.
 
 AC_INIT(include/avfs.h)
-AM_INIT_AUTOMAKE(avfs, 0.9.7)
+AM_INIT_AUTOMAKE(avfs, 0.9.8)
 AC_CONFIG_HEADER(include/config.h:config.h.in)
 AC_PREFIX_DEFAULT(/usr)
 
@@ -21,7 +21,7 @@ if test "$validstring" = invalid; then
   AC_MSG_ERROR([type 'make realclean' before running configure])
 fi
 
-VERSION=0.9.7
+VERSION=0.9.8
 AC_SUBST(VERSION)
 
 os=`uname -s`

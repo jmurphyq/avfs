@@ -26,8 +26,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-static AV_LOCK_DECL(extfslock);
-
 struct extfsdata {
     int needbase;
     char *progpath;
@@ -35,6 +33,7 @@ struct extfsdata {
 
 struct extfsnode {
     char *fullpath;
+    avmutex lock;
 };
 
 struct extfscacheentry {
@@ -78,6 +77,7 @@ static void fill_extfs_link(struct archive *arch, struct entry *ent,
 static void extfsnode_delete(struct extfsnode *enod)
 {
     av_free(enod->fullpath);
+    AV_FREELOCK(enod->lock);
 }
 
 static void fill_extfs_node(struct archive *arch, struct entry *ent, 
@@ -97,6 +97,9 @@ static void fill_extfs_node(struct archive *arch, struct entry *ent,
     nod->realsize = 0;
 
     AV_NEW_OBJ(enod, extfsnode_delete);
+
+    AV_INITLOCK(enod->lock);
+
     nod->data = enod;
 
     /* Fullpath should be without leading slashes */
@@ -312,6 +315,7 @@ static int extfs_open(ventry *ve, struct archfile *fil)
 {
     int res;
     struct extfsfile *efil;
+    struct extfsnode *enod = (struct extfsnode *) fil->nod->data;
     int fd;
     char *key;
     struct extfscacheentry *cent;
@@ -321,7 +325,7 @@ static int extfs_open(ventry *ve, struct archfile *fil)
     if(res < 0)
         return res;
 
-    AV_LOCK(extfslock);
+    AV_LOCK(enod->lock);
     cent = av_cache2_get(key);
     if (cent == NULL) {
         char *tmpfile;
@@ -331,14 +335,14 @@ static int extfs_open(ventry *ve, struct archfile *fil)
         res = av_get_tmpfile(&tmpfile);
         if(res < 0) {
 	    av_free(key);
-	    AV_UNLOCK(extfslock);
+	    AV_UNLOCK(enod->lock);
             return res;
 	}
 	res = get_extfs_file(ve, fil, tmpfile);
 	if(res < 0) {
 	    av_free(key);
 	    av_del_tmpfile(tmpfile);
-	    AV_UNLOCK(extfslock);
+	    AV_UNLOCK(enod->lock);
 	    return res;
 	}
 
@@ -348,13 +352,13 @@ static int extfs_open(ventry *ve, struct archfile *fil)
 
 	/* put it in the extfscache */
 	av_cache2_set(cent,key);
-	AV_UNLOCK(extfslock);
+	AV_UNLOCK(enod->lock);
 
         tmpsize = av_tmpfile_blksize(tmpfile);
         if(tmpsize > 0)
             av_cache2_setsize(key, tmpsize);
     } else {
-	AV_UNLOCK(extfslock);
+	AV_UNLOCK(enod->lock);
     }
     av_free(key);
 

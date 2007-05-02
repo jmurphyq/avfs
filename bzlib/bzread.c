@@ -134,8 +134,13 @@ static void bzfile_scache_save(int id, bz_stream *s)
 static int bzfile_reset(struct bzfile *fil)
 {
     /* FIXME: Is it a good idea to save the previous state or not? */
-    bzfile_scache_save(fil->id, fil->s);
-    
+    if (fil->iseof || fil->iserror)
+        bz_delete_stream(fil->s);
+    else
+        bzfile_scache_save(fil->id, fil->s);
+
+    fil->iseof = 0;
+    fil->iserror = 0;
     return bz_new_stream(&fil->s);
 }
 

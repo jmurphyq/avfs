@@ -6,6 +6,7 @@
     See the file COPYING.
 */
 
+#define FUSE_USE_VERSION 26
 
 #include <fuse.h>
 #include <virtual.h>
@@ -19,16 +20,12 @@
 
 struct fuse *fuse;
 
-static int fdcache;
-static char *pathcache;
-
-
 static int avfsd_getattr(const char *path, struct stat *stbuf)
 {
     int res;
 
     res = virt_lstat(path, stbuf);
-    if(res == -1)
+    if (res == -1)
         return -errno;
 
     return 0;
@@ -39,7 +36,7 @@ static int avfsd_readlink(const char *path, char *buf, size_t size)
     int res;
 
     res = virt_readlink(path, buf, size - 1);
-    if(res == -1)
+    if (res == -1)
         return -errno;
 
     buf[res] = '\0';
@@ -47,24 +44,29 @@ static int avfsd_readlink(const char *path, char *buf, size_t size)
 }
 
 
-static int avfsd_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
+static int avfsd_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+                         off_t offset, struct fuse_file_info *fi)
 {
     DIR *dp;
     struct dirent *de;
-    int res = 0;
 
+    (void) offset;
+    (void) fi;
     dp = virt_opendir(path);
-    if(dp == NULL)
+    if (dp == NULL)
         return -errno;
 
     while((de = virt_readdir(dp)) != NULL) {
-        res = filler(h, de->d_name, de->d_type);
-        if(res != 0)
+        struct stat st;
+        memset(&st, 0, sizeof(st));
+        st.st_ino = de->d_ino;
+        st.st_mode = de->d_type << 12;
+        if (filler(buf, de->d_name, &st, 0))
             break;
     }
 
     virt_closedir(dp);
-    return res;
+    return 0;
 }
 
 static int avfsd_mknod(const char *path, mode_t mode, dev_t rdev)
@@ -72,7 +74,7 @@ static int avfsd_mknod(const char *path, mode_t mode, dev_t rdev)
     int res;
 
     res = virt_mknod(path, mode, rdev);
-    if(res == -1)
+    if (res == -1)
         return -errno;
 
     return 0;
@@ -83,7 +85,7 @@ static int avfsd_mkdir(const char *path, mode_t mode)
     int res;
 
     res = virt_mkdir(path, mode);
-    if(res == -1)
+    if (res == -1)
         return -errno;
 
     return 0;
@@ -94,7 +96,7 @@ static int avfsd_unlink(const char *path)
     int res;
 
     res = virt_unlink(path);
-    if(res == -1)
+    if (res == -1)
         return -errno;
 
     return 0;
@@ -105,7 +107,7 @@ static int avfsd_rmdir(const char *path)
     int res;
 
     res = virt_rmdir(path);
-    if(res == -1)
+    if (res == -1)
         return -errno;
 
     return 0;
@@ -116,7 +118,7 @@ static int avfsd_symlink(const char *from, const char *to)
     int res;
 
     res = virt_symlink(from, to);
-    if(res == -1)
+    if (res == -1)
         return -errno;
 
     return 0;
@@ -127,7 +129,7 @@ static int avfsd_rename(const char *from, const char *to)
     int res;
 
     res = virt_rename(from, to);
-    if(res == -1)
+    if (res == -1)
         return -errno;
 
     return 0;
@@ -138,7 +140,7 @@ static int avfsd_link(const char *from, const char *to)
     int res;
 
     res = virt_link(from, to);
-    if(res == -1)
+    if (res == -1)
         return -errno;
 
     return 0;
@@ -149,9 +151,9 @@ static int avfsd_chmod(const char *path, mode_t mode)
     int res;
 
     res = virt_chmod(path, mode);
-    if(res == -1)
+    if (res == -1)
         return -errno;
-    
+
     return 0;
 }
 
@@ -160,7 +162,7 @@ static int avfsd_chown(const char *path, uid_t uid, gid_t gid)
     int res;
 
     res = virt_lchown(path, uid, gid);
-    if(res == -1)
+    if (res == -1)
         return -errno;
 
     return 0;
@@ -169,9 +171,9 @@ static int avfsd_chown(const char *path, uid_t uid, gid_t gid)
 static int avfsd_truncate(const char *path, off_t size)
 {
     int res;
-    
+
     res = virt_truncate(path, size);
-    if(res == -1)
+    if (res == -1)
         return -errno;
 
     return 0;
@@ -180,95 +182,88 @@ static int avfsd_truncate(const char *path, off_t size)
 static int avfsd_utime(const char *path, struct utimbuf *buf)
 {
     int res;
-    
+
     res = virt_utime(path, buf);
-    if(res == -1)
+    if (res == -1)
         return -errno;
 
     return 0;
 }
 
 
-static int avfsd_open(const char *path, int flags)
+static int avfsd_open(const char *path, struct fuse_file_info *fi)
 {
     int res;
 
-    res = virt_open(path, flags, 0);
-    if(res == -1) 
+    res = virt_open(path, fi->flags, 0);
+    if (res == -1)
         return -errno;
 
-    virt_close(res);
+    fi->fh = res;
     return 0;
 }
 
-static void pathcache_close()
-{
-    virt_close(fdcache);
-    free(pathcache);
-    pathcache = NULL;
-}
-
-static int avfsd_read(const char *path, char *buf, size_t size, off_t offset)
+static int avfsd_read(const char *path, char *buf, size_t size, off_t offset,
+                      struct fuse_file_info *fi)
 {
     int res;
 
-    if(pathcache == NULL || strcmp(pathcache, path) != 0) {
-        if(pathcache != NULL)
-            pathcache_close();
-        
-        fdcache = virt_open(path, O_RDONLY, 0);
-        if(fdcache == -1)
-            return -errno;
-        
-        pathcache = strdup(path);
-    }
+    (void) path;
+    if (virt_lseek(fi->fh, offset, SEEK_SET) == -1)
+        return -errno;
 
-    if(virt_lseek(fdcache, offset, SEEK_SET) == -1)
-        res = -errno;
-    else {
-        res = virt_read(fdcache, buf, size);
-        if(res == -1)
-            res = -errno;
-    }
+    res = virt_read(fi->fh, buf, size);
+    if (res == -1)
+        return -errno;
 
-    if(res < 0)
-        pathcache_close();
-    
     return res;
 }
 
 static int avfsd_write(const char *path, const char *buf, size_t size,
-                     off_t offset)
+                       off_t offset, struct fuse_file_info *fi)
 {
-    int fd;
     int res;
 
-    fd = virt_open(path, O_WRONLY, 0);
-    if(fd == -1)
+    (void) path;
+    if (virt_lseek(fi->fh, offset, SEEK_SET) == -1)
         return -errno;
 
-    if(virt_lseek(fd, offset, SEEK_SET) == -1)
-        res = -errno;
-    else {
-        res = virt_write(fd, buf, size);
-        if(res == -1)
-            res = -errno;
-    }
-        
-    virt_close(fd);
+    res = virt_write(fi->fh, buf, size);
+    if (res == -1)
+        return -errno;
+
     return res;
+}
+
+static int avfsd_release(const char *path, struct fuse_file_info *fi)
+{
+    (void) path;
+    virt_close(fi->fh);
+
+    return 0;
+}
+
+static int avfsd_access(const char *path, int mask)
+{
+    int res;
+
+    res = virt_access(path, mask);
+    if (res == -1)
+        return -errno;
+
+    return 0;
 }
 
 static struct fuse_operations avfsd_oper = {
     getattr:	avfsd_getattr,
     readlink:	avfsd_readlink,
-    getdir:     avfsd_getdir,
+    readdir:	avfsd_readdir,
     mknod:	avfsd_mknod,
     mkdir:	avfsd_mkdir,
     symlink:	avfsd_symlink,
     unlink:	avfsd_unlink,
     rmdir:	avfsd_rmdir,
-    rename:     avfsd_rename,
+    rename:	avfsd_rename,
     link:	avfsd_link,
     chmod:	avfsd_chmod,
     chown:	avfsd_chown,
@@ -277,13 +272,14 @@ static struct fuse_operations avfsd_oper = {
     open:	avfsd_open,
     read:	avfsd_read,
     write:	avfsd_write,
-    statfs:     NULL,
+    release:	avfsd_release,
+    access:	avfsd_access,
+    statfs:	NULL,
 };
 
 int main(int argc, char *argv[])
 {
-    fuse_main(argc, argv, &avfsd_oper);
-    pathcache_close();
+    fuse_main(argc, argv, &avfsd_oper, NULL);
     return 0;
 }
 

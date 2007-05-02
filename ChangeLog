@@ -1,3 +1,13 @@
+2007-05-02  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Update avfsd to use fuse API version 26.  Fixes bug where
+	access(2) would report a file writable, but opening the file for
+	write would be denied.	Reported by Giuseppe Bilotta
+
+2007-01-24  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix re-reading bzipped files.	 Reported by Andrew Collier
+
 2006-06-14  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* Updated NEWS and AUTHORS
@@ -22,21 +32,21 @@
 2006-04-05  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* Extended cache to supply an interface similar to filecache
-	
+
 	* Used new cache interface in extfs to store tmpfiles
-	
+
 	* Fixed invisible hidden files for iso9660
-	
+
 	* Added extfs support for 7zip
-	
+
 	* Added installation prefix output in configure script
-	
+
 	* Fuse daemon can now be installed with --enable-fuse
-	
+
 	* Added symlink rewriting to make absolute symlinks relative
-	
+
 	* Added avfsstat interface to toggle this symlink rewrite
-	
+
 	* Added parsing of iso date format in parsels
 
 2006-02-21  Ralf Hoffmann <ralf@boomerangsworld.de>
@@ -46,31 +56,31 @@
 2006-02-06  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* Fixed segfault when using open on base archives (same bug as for
-        extfs)
-	
+	extfs)
+
 2006-02-05  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* Changed ftp module to use "LIST -al" instead of "LIST -an" to
 	support ftp servers which don't allow the "-an" argument
-	
+
 	* The configure script will output some configuration details
 
 2006-01-30  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* Fixed segfault in extfs when using open on base archive
 	(e.g., open("test.lha#") )
-	
+
 	* Integrated two patches from the patched avfs version from Zemljanka
 	Commander team (http://sourceforge.net/projects/zemljanka). There was
 	one bug in virt_link and one bug when getting ftp files from the root
 	directory.
-	
+
 	* av_parse_ls uses now atoll() to parse file size (if available).
 	The ftp module can now supports files larger than 2GB.
-	
+
 	* Fixed bug in the ulha extfs module which had problems with file
 	names containing spaces
-	
+
 	*  Updated the other extfs modules to the current mc-4.6.1 versions
 
 2006-01-02  Miklos Szeredi <mszeredi@inf.bme.hu>
@@ -81,12 +91,12 @@
 2005-07-16  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* fixed urar module: The CRC calculation now also takes optional
-        header entries of newer rar versions into account
+	header entries of newer rar versions into account
 
 2005-07-15  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* updated dos date parsing in parsels.c to handle years with more than
-        3 digits (from mc-4.6.1-pre1). patchfs from extfs output such dates
+	3 digits (from mc-4.6.1-pre1). patchfs from extfs output such dates
 
 2005-07-13  Ralf Hoffmann <ralf@boomerangsworld.de>
 
@@ -108,48 +118,48 @@
 
 	* changed build system to automake which should improve
 	portability.  At least the shared (or static) library should build
-	on any system.  The other targets still only works on Solaris
+	on any system.	The other targets still only works on Solaris
 	(for preload) and Linux kernel 2.2 and 2.4 (for avfscoda)
-        
-        * fixes to allow compilation on AIX
+
+	* fixes to allow compilation on AIX
 
 2005-06-08  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* magic character in filenames is supported without escaping
-        
-        * fix in bzlib to prevent endless loop in corrupt archives
-        
-        * change inode calculation in state.c to prevent inode numbers 0
+
+	* fix in bzlib to prevent endless loop in corrupt archives
+
+	* change inode calculation in state.c to prevent inode numbers 0
 	and 1
 
 2004-03-07  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Don't lowercase zipfiles with MSDOS filetype
-	
+
 2004-01-09  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Configure target selection fix
-	
+
 2004-01-05  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	*  Applied FreeBSD support patch by Mikulas Patocka
-	
+
 2003-12-09  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	*  Don't include DAV by default
-	
+
 2003-12-08  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	*  Shared library fix by Miroslav Spousta
-	
+
 2003-05-08  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* avfs-config and logging improvements by Daniel Koukola
-	
+
 2003-04-28  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Added shared lib build and fixes by Daniel Koukola
-	
+
 2003-04-14  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Added API documentation by Frederik Eaton 
@@ -163,11 +173,11 @@
 2002-12-03  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Upgraded to zlib 1.1.4
-	
+
 	* Added .ear and .war extensions to the uzip handler
 
 	* Check for large-file support
-	
+
 2002-11-18  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Fixed bug in runprog, which leaked file descriptors in extfs.
@@ -180,11 +190,11 @@
 
 	* Started merging Frederik Eaton's stuff: spelling fixes, comments
 	and logging to stderr.
-	
+
 Changes from 0.9.1 to 0.9.3
 
 	* Fixed PT_DTRACE bug in redir.c
-	
+
 	* Removed nredir cruft
 
 	* Configure now accepts kernel source directory argument
@@ -194,7 +204,7 @@ Changes from 0.9.1 to 0.9.3
 	* Fix bug in virt_readdir
 
 	* Fix redir compilation so it finds the apropriate kernel headers
-	
+
 	* Fix redir module license tag
 
 	* Emacs tweak installed in /etc/emacs/site-start.d so that
@@ -204,20 +214,20 @@ Changes from 0.9.1 to 0.9.3
 	* Better cross compilation support
 
 	* Ported to Compaq IPAQ (still needs better cache handling)
-	
+
 	* Fix truncation code in cache state (/#avfsstat/cache/*)
 
 	* Support free space handling on filesystems not supporting disk
 	usage and disk free information (e.g. ramfs)
-	
+
 Changes from 0.9.0 to 0.9.1
 
 	* Make preload compile on linux (does not work yet) (Frederik Eaton)
-	
+
 	* Fix bug in module loader (Frederik Eaton)
 
 	* The magic char (#) is escaped when reading a virtual directory
-	
+
 	* Avfscoda correctly returns error codes when reading a file or a
 	directory
 
@@ -230,9 +240,9 @@ Changes from 0.9.0 to 0.9.1
 
 	* Avfscoda uses hash table for lookups. This improves performance
 	for large directories.
-	
+
 	* Namespace uses hash table for lookups. This improves performance
-	for large directories.  TODO: current namespace implementation
+	for large directories.	TODO: current namespace implementation
 	doesn't honor the NSF_NOCASE flag.
 
 	* Removed buggy 'mkdir' from redir.c

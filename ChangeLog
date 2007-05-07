@@ -4,9 +4,22 @@
 	access(2) would report a file writable, but opening the file for
 	write would be denied.	Reported by Giuseppe Bilotta
 
+2007-03-11  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* fixed extfs deadlock
+
+	* bumped version to 0.9.8
+
 2007-01-24  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix re-reading bzipped files.	 Reported by Andrew Collier
+
+2006-11-27  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* fixed crash in save/restore of an inflate state when fixed trees are
+	used
+
+	* updated bzlib to version 1.0.3
 
 2006-06-14  Ralf Hoffmann <ralf@boomerangsworld.de>
 

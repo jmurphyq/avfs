@@ -14,9 +14,8 @@ uni_cat ()
 	;;
     *.cpio.gz)	gzip -dc "$1"
 	;;
-    *.cpio)	cat "$1"
+    *)	cat "$1"
 	;;
-    *)		echo "unknown extension"
     esac
 }
 
@@ -50,7 +49,7 @@ mccpiofs_copyout ()
     TMPDIR=/tmp/mctmpdir.$$
 # FIXME: TMP RACE: when mkdir fails, we go there, anyway
     mkdir $TMPDIR
-    uni_cat "$1" | (cd $TMPDIR; cpio -icumd "$2"; mv "$2" "$3") 2>/dev/null
+    uni_cat "$1" | (cd $TMPDIR; cpio -iumd "$2"; mv "$2" "$3") 2>/dev/null
     rm -rf $TMPDIR
 }
 

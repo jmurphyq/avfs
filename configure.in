@@ -1,6 +1,7 @@
 dnl Process this file with autoconf to produce a configure script.
 
 AC_INIT(include/avfs.h)
+AC_PREREQ([2.50])
 AM_INIT_AUTOMAKE(avfs, 0.9.8)
 AC_CONFIG_HEADER(include/config.h:config.h.in)
 AC_PREFIX_DEFAULT(/usr)
@@ -32,36 +33,34 @@ fi
 
 AC_MSG_CHECKING([whether to build preload, avfscoda, shared library and/or fuse daemon])
 
-AC_ARG_ENABLE(preload,
-[  --enable-preload        Compile the preloaded library and server],
-[if test "$enableval" = yes; then preload=yes; else preload=no; fi])
-
-AC_ARG_ENABLE(avfscoda,
-[  --enable-avfscoda       Compile avfscoda (which uses the coda interface)],
-[if test "$enableval" = yes; then avfscoda=yes; else avfscoda=no; fi])
-
-AC_ARG_ENABLE(library,
-[  --enable-library        Compile avfs as a shared or static library],
-[if test "$enableval" = yes; then shared=yes; else shared=no; fi])
-
-AC_ARG_ENABLE(fuse,
-[  --enable-fuse           Compile avfsd for fuse],
-[if test "$enableval" = yes; then fuse=yes; else fuse=no; fi])
-
-if test -z "$preload" -a -z "$avfscoda" -a -z "$shared" -a -z "$fuse"; then
-   if test "$os" = "Linux"; then
-       if test "$kernver" -ge "22" \
-               -a "$kernver" -le "24"; then
-           avfscoda=yes
-       else
-           shared=yes
-       fi
-   elif test "$os" = "SunOS"; then
-      preload=yes
-   else
-      shared=yes
-   fi
+dnl here come the default values
+shared=yes
+if test "$os" = "Linux"; then
+    if test "$kernver" -ge "22" \
+            -a "$kernver" -le "24"; then
+        avfscoda=yes
+    else
+        fuse=yes
+    fi
+elif test "$os" = "SunOS"; then
+    preload=yes
 fi
+
+AC_ARG_ENABLE([preload],
+              AC_HELP_STRING([--enable-preload],[Compile the preloaded library and server]),
+              [if test "$enableval" = yes; then preload=yes; else preload=no; fi])
+
+AC_ARG_ENABLE([avfscoda],
+              AC_HELP_STRING([--enable-avfscoda],[Compile avfscoda (which uses the coda interface)]),
+              [if test "$enableval" = yes; then avfscoda=yes; else avfscoda=no; fi])
+
+AC_ARG_ENABLE([library],
+              AC_HELP_STRING([--enable-library],[Compile avfs as a shared or static library]),
+              [if test "$enableval" = yes; then shared=yes; else shared=no; fi])
+
+AC_ARG_ENABLE([fuse],
+              AC_HELP_STRING([--enable-fuse],[Compile avfsd for fuse]),
+              [if test "$enableval" = yes; then fuse=yes; else fuse=no; fi])
 
 shared_build=no
 avfscoda_build=no

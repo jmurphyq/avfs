@@ -7,7 +7,12 @@ fi
 
 userhost=$1
 
-if test -r "/#avfsstat" ; then
+
+if test -r "$AVFSBASE/#avfsstat" ; then
+  basedir="$AVFSBASE"
+elif test -r "$HOME/.avfs/#avfsstat" ; then
+  basedir="$HOME/.avfs"
+elif test -r "/#avfsstat" ; then
   basedir=
 elif test -r "/overlay/#avfsstat" ; then
   basedir=/overlay

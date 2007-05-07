@@ -26,9 +26,13 @@ while [ $# -gt 0 ] ; do
   shift
 done
 
-if [ -r /#avfsstat ] ; then
+if test -r "$AVFSBASE/#avfsstat" ; then
+  basedir="$AVFSBASE"
+elif test -r "$HOME/.avfs/#avfsstat" ; then
+  basedir="$HOME/.avfs"
+elif test -r "/#avfsstat" ; then
   basedir=
-elif [ -r /overlay/#avfsstat ] ; then
+elif test -r "/overlay/#avfsstat" ; then
   basedir=/overlay
 else
   echo "AVFS not running" 1>&2

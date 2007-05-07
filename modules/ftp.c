@@ -661,12 +661,13 @@ static int ftp_split_path(struct ftpdata *ftd, char *hostpart,
                            const char **hostp, const char **userp,
                            const char **passp)
 {
-    char *s;
+    char *s, *t;
     const char *host;
     const char *user;
     const char *pass;
 
     for(s = hostpart; *s && *s != USER_SEP_CHAR; s++);
+    for(t = s; *t; t++) if (*t == USER_SEP_CHAR) s = t;
     if(*s != '\0') {
         *s = '\0';
         host = s + 1;

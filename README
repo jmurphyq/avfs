@@ -165,7 +165,7 @@ of the proxy server. You can also set it's value by writing to the file
    /#avfsstat/http_proxy
 
 
-The following "handelers" are available now:
+The following "handlers" are available now:
 
   name of handler    type of operation      notes
   ---------------    -----------------      -----

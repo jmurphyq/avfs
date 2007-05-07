@@ -28,8 +28,10 @@ bin_SCRIPTS = ftppass davpass @install_scriptcomps@
 EXTRA_SCRIPTS = avfs-config
 
 if INSTALL_EMACS
+if INSTALL_AVFSCODA
 emacsscriptdir = $(i_emacsstart)
 emacsscript_SCRIPTS = avfscoda.el
+endif
 endif
 
 if INSTALL_AVFSCODA_PROFILE

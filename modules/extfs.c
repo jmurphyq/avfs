@@ -123,7 +123,9 @@ static void insert_extfs_entry(struct archive *arch, struct avstat *stbuf,
     if(ent == NULL)
         return;
 
-    if(linkname != NULL && !AV_ISDIR(stbuf->mode)) 
+    /* if linkname is not null but mode is not a link
+       then this should be a hard link */
+    if(linkname != NULL && !AV_ISLNK(stbuf->mode)) 
         fill_extfs_link(arch, ent, linkname);
     else
         fill_extfs_node(arch, ent, stbuf, path, linkname);

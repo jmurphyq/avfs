@@ -1,3 +1,21 @@
+Changes from 0.9.7 to 0.9.8
+   - fixed crash in zlib code
+   - fixed deadlock in extfs code
+   - fixed ucpio script
+   - fixed bug in extfs symlink handling
+     (patch from Tanmoy Bhattacharya)
+   - fixed ftplist to output correct symlinks and to support http/ssh
+     (patch from Tanmoy Bhattacharya)
+   - updated bzlib to 1.0.3
+   - updated avfsd to use fuse API version 26
+   - ftppass/davpass checks for additional base avfs directories. Environment
+     variable AVFSBASE can be set for non-default directory.
+     (patch from Tanmoy Bhattacharya)
+   - ftp module supports @ in usernames
+     (patch from Tanmoy Bhattacharya)
+   - the avfs library is built and installed by default additionally to
+     fuse/avfscoda/preload depending on the actual system
+
 Changes from 0.9.6 to 0.9.7
    - Fuse daemon can now be installed with --enable-fuse
    - added symlink rewriting code to make absolute symlinks relative

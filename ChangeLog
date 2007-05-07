@@ -1,3 +1,29 @@
+2007-05-07  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* fixed ucpio to to use default cat command if file ending doesn't match
+	and the cpio option -c is not used when unpacking the archive
+
+	* fixed bug in extfs symlink handling, it was possible that hardlinks were
+	created instead of symlinks (triggered by ftplist and lslR)
+	(patch from Tanmoy Bhattacharya)
+
+	* fixed ftplist to output symlink to /#ftp... and to also support http and
+	ssh handlers
+	(patch from Tanmoy Bhattacharya)
+
+	* added some more directories to test for avfsstat in ftppass/davpass
+	(patch from Tanmoy Bhattacharya)
+
+	* only install avfscoda.el if avfscoda is built
+
+	* fixed typo in README
+
+	* ftp module: search for last @ in username/host so @ in username
+	are supported
+
+	* changed configure script to always build library and additionally
+	fuse/avfscoda/preload depending on the actual system
+
 2007-05-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Update avfsd to use fuse API version 26.  Fixes bug where

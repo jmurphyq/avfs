@@ -67,7 +67,7 @@ struct gzbuf {
 static int gzbuf_getbyte(struct gzbuf *gb)
 {
     if(gb->avail == 0) {
-        avssize_t res = av_read(gb->vf, gb->buf, GZBUFSIZE);
+        avssize_t res = av_read(gb->vf, (char*)( gb->buf ), GZBUFSIZE);
         if(res < 0)
             return res;
 
@@ -122,7 +122,7 @@ static int gz_read_header(vfile *vf, struct gznode *nod)
     gb.avail = 0;
     gb.total = 0;
 
-    res = gzbuf_read(&gb, buf, GZHEADER_SIZE);
+    res = gzbuf_read(&gb, (char*)buf, GZHEADER_SIZE);
     if(res < 0)
         return res;
 
@@ -149,7 +149,7 @@ static int gz_read_header(vfile *vf, struct gznode *nod)
     /* Ignore bytes 8 and 9 */
 
     if((flags & GZFL_CONTINUATION) != 0) {
-        res = gzbuf_read(&gb, buf, 2);
+        res = gzbuf_read(&gb, (char*)buf, 2);
         if(res < 0)
             return res;
     }
@@ -157,7 +157,7 @@ static int gz_read_header(vfile *vf, struct gznode *nod)
     if((flags & GZFL_EXTRA_FIELD) != 0) {
         avsize_t len;
 
-        res = gzbuf_read(&gb, buf, 2);
+        res = gzbuf_read(&gb, (char*)buf, 2);
         if(res < 0)
             return res;
 
@@ -186,7 +186,7 @@ static int gz_read_header(vfile *vf, struct gznode *nod)
     if(sres < 0)
         return sres;
 
-    res = av_read_all(vf, buf, 8);
+    res = av_read_all(vf, (char*)buf, 8);
     if(res < 0)
         return res;
 

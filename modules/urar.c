@@ -163,16 +163,16 @@ static int read_block_header(vfile *vf, block_header bh, int all)
     for(i = SHORT_HEAD_SIZE; i < LONG_HEAD_SIZE; i++) bh[i] = 0;
 
     if(all)
-        res = av_read_all(vf, bh, SHORT_HEAD_SIZE);
+        res = av_read_all(vf, (char*)bh, SHORT_HEAD_SIZE);
     else
-        res = av_read(vf, bh, SHORT_HEAD_SIZE);
+        res = av_read(vf, (char*)bh, SHORT_HEAD_SIZE);
     if(res < 0)
         return res;
     if(res < SHORT_HEAD_SIZE)
         return 0;
 
     if ((bh_flags(bh) & FB_WITH_BODY) != 0) {
-        res = av_read_all(vf, bh+SHORT_HEAD_SIZE, 4);
+        res = av_read_all(vf, (char*) ( bh+SHORT_HEAD_SIZE ), 4);
         if(res < 0)
             return res;
 
@@ -191,7 +191,7 @@ static int read_marker_block(vfile *vf)
     /* An SFX module starts with the extraction header. Skip that part by
        searching for the marker head. */
     while(1) {
-        res = av_read_all(vf, buf + MARKER_HEAD_SIZE - readsize, readsize);
+        res = av_read_all(vf, (char*)( buf + MARKER_HEAD_SIZE - readsize ), readsize);
         if(res < 0)
             return res;
 
@@ -227,7 +227,7 @@ static int read_archive_header(vfile *vf)
     crc = CRC_string(CRC_START, main_head + 2, headlen - 2);
 
     /* Read reserved bytes. */
-    res = av_read_all(vf, tmpbuf, 6);
+    res = av_read_all(vf, (char*)tmpbuf, 6);
     if(res < 0)
         return res;
     crc = CRC_string(crc, tmpbuf, 6);
@@ -373,7 +373,7 @@ static int crc_additional_header(vfile *vf, struct rar_entinfo *ei, int bytes_cr
     
     if(tlen > 0) {
         tempbuf = av_malloc(tlen);
-	res = av_read_all(vf, tempbuf, tlen);
+	res = av_read_all(vf, (char*)tempbuf, tlen);
 	if(res < 0) {
 	    av_free(tempbuf);
 	    return res;
@@ -397,7 +397,7 @@ static int read_rarentry(vfile *vf, struct rar_entinfo *ei)
         return -EIO;
     }
             
-    res = av_read_all(vf, ei->fh, FILE_HEAD_SIZE);
+    res = av_read_all(vf, (char*)( ei->fh ), FILE_HEAD_SIZE);
     if(res < 0)
         return res;
 
@@ -409,7 +409,7 @@ static int read_rarentry(vfile *vf, struct rar_entinfo *ei)
     
     crc = CRC_string(CRC_START, ei->bh + 2, LONG_HEAD_SIZE - 2);
     crc = CRC_string(crc, ei->fh, FILE_HEAD_SIZE);
-    crc = CRC_string(crc, ei->name, fh_namelen(ei->fh));
+    crc = CRC_string(crc, (avbyte*)( ei->name ), fh_namelen(ei->fh));
 
     if(crc_additional_header(vf, ei,
 			     LONG_HEAD_SIZE - 2 + FILE_HEAD_SIZE + fh_namelen(ei->fh),

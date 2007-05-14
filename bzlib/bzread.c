@@ -272,7 +272,7 @@ static int bzfile_decompress(struct bzfile *fil, struct bzcache *zc)
 	}
     }
     
-    start = fil->s->next_out;
+    start = (unsigned char*)( fil->s->next_out );
     BZ2_bzSetBlockEndHandler(fil->s, bz_block_end, zc);
     res = BZ2_bzDecompress(fil->s);
     if(res == BZ_STREAM_END) {

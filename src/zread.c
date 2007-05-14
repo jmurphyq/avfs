@@ -73,9 +73,9 @@ static int zfile_compress_state(char *state, int statelen, char **resp)
     int bufsize = sizeof(int) + statelen + statelen / 1000 + 1 + 12;
     char *cstate = av_malloc(bufsize);
     
-    s.next_in = state;
+    s.next_in = (Bytef*)state;
     s.avail_in = statelen;
-    s.next_out = cstate + sizeof(int);
+    s.next_out = (Bytef*)( cstate + sizeof(int) );
     s.avail_out = bufsize - sizeof(int);
     s.zalloc = NULL;
     s.zfree = NULL;
@@ -114,9 +114,9 @@ static int zfile_uncompress_state(char *cstate, int cstatelen, char **resp)
     int statelen = ((int *) cstate)[0];
     char *state = av_malloc(statelen);
     
-    s.next_in = cstate + sizeof(int);
+    s.next_in = (Bytef*)( cstate + sizeof(int) );
     s.avail_in = cstatelen - sizeof(int);
-    s.next_out = state;
+    s.next_out = (Bytef*)state;
     s.avail_out = statelen;
     s.zalloc = NULL;
     s.zfree = NULL;
@@ -336,7 +336,7 @@ static int zfile_fill_inbuf(struct zfile *fil)
     if(res < 0)
         return res;
     
-    fil->s.next_in = fil->inbuf;
+    fil->s.next_in = (Bytef*)( fil->inbuf );
     fil->s.avail_in = res;
 
     return 0;
@@ -401,7 +401,7 @@ static int zfile_read(struct zfile *fil, struct zcache *zc, char *buf,
 {
     int res;
 
-    fil->s.next_out = buf;
+    fil->s.next_out = (Bytef*)buf;
     fil->s.avail_out = nbyte;
     while(fil->s.avail_out != 0 && !fil->iseof) {
         res = zfile_inflate(fil, zc);
@@ -419,7 +419,7 @@ static int zfile_skip_to(struct zfile *fil, struct zcache *zc, avoff_t offset)
     
     while(fil->s.total_out < offset && !fil->iseof) {
         /* FIXME: Maybe cache some data as well */
-        fil->s.next_out = outbuf;
+        fil->s.next_out = (Bytef*)outbuf;
         fil->s.avail_out = AV_MIN(OUTBUFSIZE, offset - fil->s.total_out);
 
         res = zfile_inflate(fil, zc);

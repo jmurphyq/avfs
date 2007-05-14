@@ -1,6 +1,7 @@
 /*  
     AVFS: A Virtual File System Library
     Copyright (C) 1998  Miklos Szeredi (mszeredi@inf.bme.hu)
+    Copyright (C) 2007  Ralf Hoffmann (ralf@boomerangsworld.de)
 
     Based on the GNU tar sources (C) Free Software Foundation
     
@@ -141,6 +142,23 @@ static int get_next_block(vfile *vf, union block *blk)
     return 0;
 }
 
+static enum archive_format get_header_format( union block *header )
+{
+    enum archive_format f = V7_FORMAT;
+    
+    if ( strncmp( header->header.magic, TMAGIC, TMAGLEN ) == 0 &&
+         strncmp( header->header.version, TVERSION, TVERSLEN ) == 0 ) {
+        /* POSIX header is magic == "ustar\0" and version == "00" */
+        f = POSIX_FORMAT;
+    } else if ( strcmp( header->header.magic, OLDGNU_MAGIC) == 0 ) {
+        /* Old GNU header is magic == "ustar " and version == "0\0" */
+        /* it could be actually a pre-POSIX header */
+        f = OLDGNU_FORMAT;
+    }
+
+    return f;
+}
+
 /* return values: < 0: fatal, 0 eof, 1 bad header, 2 OK */
 static int read_entry(vfile *vf, struct tar_entinfo *tinf)
 {
@@ -210,7 +228,6 @@ static int read_entry(vfile *vf, struct tar_entinfo *tinf)
         else
             tinf->size = from_oct (1 + 12, header->header.size);
 
-        header->header.name[NAME_FIELD_SIZE - 1] = '\0';
         if (header->header.typeflag == GNUTYPE_LONGNAME
             || header->header.typeflag == GNUTYPE_LONGLINK)
 	{
@@ -255,10 +272,38 @@ static int read_entry(vfile *vf, struct tar_entinfo *tinf)
             if(sres < 0)
                 break;
 
-            tinf->name = av_strdup (next_long_name ? next_long_name
-                                      : header->header.name);
-            tinf->linkname = av_strdup (next_long_link ? next_long_link
-                                          : header->header.linkname);
+            if ( get_header_format( header ) == POSIX_FORMAT ) {
+                /* POSIX ustar format uses prefix for long file names
+                   the actual name is prefix/name
+                */
+                if ( header->header.prefix[0] != '\0' ) {
+                    char *tmp_prefix, *tmp_name;
+
+                    tmp_prefix = av_strndup( header->header.prefix, PREFIX_FIELD_SIZE );
+                    tmp_name = av_strndup( header->header.name, NAME_FIELD_SIZE );
+                    
+                    if ( next_long_name )
+                        av_free(next_long_name);
+                    
+                    next_long_name = av_stradd( NULL, tmp_prefix, "/", tmp_name, NULL );
+                    
+                    av_free( tmp_prefix );
+                    av_free( tmp_name );
+                }
+            }
+
+            /* NOTE: header->header.name is not necessarily null-terminated */
+            if ( next_long_name ) {
+                tinf->name = av_strdup (next_long_name);
+            } else {
+                tinf->name = av_strndup( header->header.name, NAME_FIELD_SIZE );
+            }
+
+            if ( next_long_link ) {
+                tinf->linkname = av_strdup (next_long_link);
+            } else {
+                tinf->linkname = av_strndup( header->header.linkname, NAME_FIELD_SIZE );
+            }
             res = 2;
             break; /* HEADER_SUCCESS */
 	}

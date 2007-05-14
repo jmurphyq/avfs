@@ -42,7 +42,7 @@ noinst_HEADERS = \
 	local.h \
 	mod_static.h
 
-utils.c: info.h
+$(srcdir)/utils.c: info.h
 
 info.h:
 	rm -f info.h

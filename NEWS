@@ -1,4 +1,6 @@
 Changes from 0.9.7 to 0.9.8
+   - utar supports long names in POSIX ustar archives
+   - fixed truncation of 100 byte long file names in tar archive
    - fixed crash in zlib code
    - fixed deadlock in extfs code
    - fixed ucpio script

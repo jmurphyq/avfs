@@ -1,3 +1,21 @@
+2007-05-14  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* NEWS: updated
+
+	* zlib/inftrees.c, bzlib/bzread.c, modules/ugz.c, modules/urar.c, src/zread.c:
+	fixed some compiler warnings
+
+	* modules/utar.c:
+	the last byte of the name field in the tar header is no longer overwritten by
+	a null byte, the name field is not necessarily null-terminated
+	support for POSIX ustar long file names (prefix/name)
+
+	* src/zread.c:
+	the eof flag is also stored in zlib streamcache so seeking back from the end
+	of the file works correctly
+
+	* src/Makefile.am: changed utils.c dependency
+
 2007-05-07  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* fixed ucpio to to use default cat command if file ending doesn't match

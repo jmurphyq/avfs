@@ -28,6 +28,7 @@ struct streamcache {
     int id;
     z_stream s;
     int calccrc;
+    int iseof;
 };
 
 static struct streamcache scache;
@@ -150,7 +151,7 @@ static void zfile_scache_cleanup(void)
     inflateEnd(&scache.s);
 }
 
-static void zfile_scache_save(int id, z_stream *s, int calccrc)
+static void zfile_scache_save(int id, z_stream *s, int calccrc, int iseof)
 {
     int res;
 
@@ -176,6 +177,7 @@ static void zfile_scache_save(int id, z_stream *s, int calccrc)
     scache.id = id;
     scache.s = *s;
     scache.calccrc = calccrc;
+    scache.iseof = iseof;
 }
 
 static int zfile_reset(struct zfile *fil)
@@ -183,7 +185,7 @@ static int zfile_reset(struct zfile *fil)
     int res;
 
     /* FIXME: Is it a good idea to save the previous state or not? */
-    zfile_scache_save(fil->id, &fil->s, fil->calccrc);
+    zfile_scache_save(fil->id, &fil->s, fil->calccrc, fil->iseof);
     memset(&fil->s, 0, sizeof(z_stream));
     res = inflateInit2(&fil->s, -MAX_WBITS);
     if(res != Z_OK) {
@@ -272,7 +274,7 @@ static int zfile_seek_index(struct zfile *fil, struct zcache *zc,
     char *state;
 
     /* FIXME: Is it a good idea to save the previous state or not? */
-    zfile_scache_save(fil->id, &fil->s, fil->calccrc);
+    zfile_scache_save(fil->id, &fil->s, fil->calccrc, fil->iseof);
     memset(&fil->s, 0, sizeof(z_stream));
 
     fd = open(zc->indexfile, O_RDONLY, 0);
@@ -452,11 +454,14 @@ static int zfile_seek(struct zfile *fil, struct zcache *zc, avoff_t offset)
         if((dist == -1 || scdist < dist) && scdist < zcdist) {
             z_stream tmp = fil->s;
             int tmpcc = fil->calccrc;
+            int tmpiseof = fil->iseof;
             fil->s = scache.s;
             fil->s.avail_in = 0;
             fil->calccrc = scache.calccrc;
+            fil->iseof = scache.iseof;
             scache.s = tmp;
             scache.calccrc = tmpcc;
+            scache.iseof = tmpiseof;
             return 0;
         }
     }
@@ -556,7 +561,7 @@ int av_zfile_size(struct zfile *fil, struct zcache *zc, avoff_t *sizep)
 static void zfile_destroy(struct zfile *fil)
 {
     AV_LOCK(zread_lock);
-    zfile_scache_save(fil->id, &fil->s, fil->calccrc);
+    zfile_scache_save(fil->id, &fil->s, fil->calccrc, fil->iseof);
     AV_UNLOCK(zread_lock);
 }
 

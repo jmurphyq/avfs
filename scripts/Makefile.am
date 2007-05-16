@@ -46,26 +46,26 @@ endif
 
 install-data-local:
 if INSTALL_INITSCRIPT
-	@../mkinstalldirs $(absrcscriptdir)
+	@$(mkinstalldirs) $(absrcscriptdir)
 	$(INSTALL_SCRIPT) $(srcdir)/init/avfscoda.@initstyle@ $(absrcscriptdir)/avfscoda
 endif
 if INSTALL_SCRIPTLINKS
 	@for i in $(start_levels); do \
-	  ../mkinstalldirs $(i_rcdir)/rc$$i.d; \
+	  $(mkinstalldirs) $(i_rcdir)/rc$$i.d; \
 	  echo Creating start link for runlevel $$i; \
 	  rm -f $(i_rcdir)/rc$$i.d/$(startname); \
 	  ln -s ../$(rcscriptdir)/avfscoda $(i_rcdir)/rc$$i.d/$(startname); \
 	done
 	@for i in $(stop_levels); do \
-	  ../mkinstalldirs $(i_rcdir)/rc$$i.d; \
+	  $(mkinstalldirs) $(i_rcdir)/rc$$i.d; \
 	  echo Creating stop link for runlevel $$i; \
 	  rm -f $(i_rcdir)/rc$$i.d/$(stopname); \
 	  ln -s ../$(rcscriptdir)/avfscoda $(i_rcdir)/rc$$i.d/$(stopname); \
 	done
 endif
 if INSTALL_CODADEV
-	@../mkinstalldirs $(i_overlaydir)
-	@../mkinstalldirs $(i_devdir)
+	@$(mkinstalldirs) $(i_overlaydir)
+	@$(mkinstalldirs) $(i_devdir)
 	@if ! test -e $(i_codadev0); then mknod -m 600 $(i_codadev0) c 67 0; fi
 	@if ! test -e $(i_codadev1); then mknod -m 600 $(i_codadev1) c 67 1; fi
 endif

@@ -2,6 +2,9 @@ aclocal.m4
 configure
 config.h.in
 config.log
+config.guess
+config.sub
+install-sh
 config.status
 *.cache
 Makefile

@@ -1,3 +1,5 @@
 avfsd
 Makefile
 Makefile.in
+.deps
+.libs

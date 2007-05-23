@@ -1,3 +1,12 @@
+2007-05-23  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* spec/Makefile.am, spec/avfsfuse-fc6.spec:
+	added RPM spec file for avfs-fuse (from Tanmoy Bhattacharya)
+
+	* extfs/rpm, extfs/trpm:
+	changed rpm and trpm extfs scripts to output correct file sizes
+	  (patch from Tanmoy Bhattacharya)
+
 2007-05-14  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* NEWS: updated

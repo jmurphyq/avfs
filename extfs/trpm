@@ -10,6 +10,9 @@
 # minor changes by Michele Marziani (marziani@fe.infn.it) 1997
 # slight changes to put rpm to Trpm by Balazs Nagy (julian7@kva.hu) 1998
 # locale bugfix by Michal Svec (rebel@penguin.cz) 2000
+# patch for listing files with correct file size by Tanmoy Bhattacharya (tanmoy@mindspring.com) 2007
+# minor changes by Ralf Hoffmann (ralf@boomerangsworld.de) 2007
+#
 # (C) 1996 The Free Software Foundation.
 #
 #
@@ -35,94 +38,122 @@ mcrpmfs_list ()
     fi
     FILEPREF="-r--r--r--   1 root     root    "
     DESC=`$RPM -qi -- "$1"`
+    if [ $? -ne 0 ]; then
+       echo "$DESC" >&2
+       exit 255
+    fi
     DATE=`$RPM -q --qf "%{BUILDTIME:date}" -- "$1" | cut -c 5-11,21-24`
     HEADERSIZE=`echo "$DESC" | wc -c`
+    f="$1"
+
+    getsize() {
+        $RPM -q --qf "$1" "$f" | wc -c
+    }
+
+    writewithsize() {
+        tempvar="%{$3`echo "$1" | sed -e "s/-/}-%{/g"`}\n"
+        size="`getsize "$tempvar"`"
+        echo "$FILEPREF $size $DATE $2/$1"
+    }
+    
     echo "-r--r--r--   1 root     root  $HEADERSIZE $DATE HEADER"
     echo "-r-xr-xr-x   1 root     root    40 $DATE UNINSTALL"
     echo "dr-xr-xr-x   3 root     root	   0 $DATE INFO"
-    echo "$FILEPREF 0 $DATE INFO/NAME-VERSION-RELEASE"
-    echo "$FILEPREF 0 $DATE INFO/GROUP"
-    echo "$FILEPREF 0 $DATE INFO/BUILDHOST"
-    echo "$FILEPREF 0 $DATE INFO/SOURCERPM"
+    writewithsize NAME-VERSION-RELEASE INFO
+    writewithsize GROUP INFO
+    writewithsize BUILDHOST INFO
+    writewithsize SOURCERPM INFO
     if test "$MCFASTRPM" = 0 ; then
-     test "`$RPM -q --qf \"%{DISTRIBUTION}\" -- "$1"`" = "(none)" ||
- 	 echo "$FILEPREF 0 $DATE INFO/DISTRIBUTION"
-     test "`$RPM -q --qf \"%{VENDOR}\" -- "$1"`" = "(none)" ||
-	 echo "$FILEPREF 0 $DATE INFO/VENDOR"
-     test "`$RPM -q --qf \"%{DESCRIPTION}\" -- "$1"`" = "(none)" ||
-         echo "$FILEPREF 0 $DATE INFO/DESCRIPTION"
-     test "`$RPM -q --qf \"%{SUMMARY}\" -- "$1"`" = "(none)" ||
-         echo "$FILEPREF 0 $DATE INFO/SUMMARY"
-     if test "`$RPM -q --qf \"%{RPMTAG_PREIN}%{RPMTAG_POSTIN}%{RPMTAG_PREUN}%{RPMTAG_POSTUN}%{VERIFYSCRIPT}\" -- "$1"`" != "(none)(none)(none)(none)(none)"; then
-	echo "dr-xr-xr-x   1 root     root     0 $DATE INFO/SCRIPTS"
-	test "`$RPM -q --qf \"%{RPMTAG_PREIN}\" -- "$1"`" = '(none)' ||
-	   echo "$FILEPREF 0 $DATE INFO/SCRIPTS/PREIN"
-	test "`$RPM -q --qf \"%{RPMTAG_POSTIN}\" -- "$1"`" = '(none)' ||
-	   echo "$FILEPREF 0 $DATE INFO/SCRIPTS/POSTIN"
-	test "`$RPM -q --qf \"%{RPMTAG_PREUN}\" -- "$1"`" = '(none)' ||
-	   echo "$FILEPREF 0 $DATE INFO/SCRIPTS/PREUN"
-	test "`$RPM -q --qf \"%{RPMTAG_POSTUN}\" -- "$1"`" = '(none)' ||
-	   echo "$FILEPREF 0 $DATE INFO/SCRIPTS/POSTUN"
-	test "`$RPM -q --qf \"%{VERIFYSCRIPT}\" -- "$1"`" = '(none)' ||
-	   echo "$FILEPREF 0 $DATE INFO/SCRIPTS/VERIFYSCRIPT"
-        echo "$FILEPREF 0 $DATE INFO/SCRIPTS/ALL"
-     fi
+        test "`$RPM -q --qf \"%{DISTRIBUTION}\" \"$f\"`" = "(none)" ||
+        writewithsize DISTRIBUTION INFO
+        test "`$RPM -q --qf \"%{VENDOR}\" \"$f\"`" = "(none)" ||
+        writewithsize VENDOR INFO
+        test "`$RPM -q --qf \"%{DESCRIPTION}\" \"$f\"`" = "(none)" ||
+        writewithsize DESCRIPTION INFO
+        test "`$RPM -q --qf \"%{SUMMARY}\" \"$f\"`" = "(none)" ||
+        writewithsize SUMMARY INFO
+        if test "`$RPM -q --qf \"%{RPMTAG_PREIN}%{RPMTAG_POSTIN}%{RPMTAG_PREUN}%{RPMTAG_POSTUN}%{VERIFYSCRIPT}\" \"$f\"`" != "(none)(none)(none)(none)(none)"; then
+	    echo "dr-xr-xr-x   1 root     root     0 $DATE INFO/SCRIPTS"
+	    test "`$RPM -q --qf \"%{RPMTAG_PREIN}\" \"$f\"`" = '(none)' ||
+	    writewithsize PREIN INFO/SCRIPTS RPMTAG_
+	    test "`$RPM -q --qf \"%{RPMTAG_POSTIN}\" \"$f\"`" = '(none)' ||
+	    writewithsize POSTIN INFO/SCRIPTS RPMTAG_
+	    test "`$RPM -q --qf \"%{RPMTAG_PREUN}\" \"$f\"`" = '(none)' ||
+	    writewithsize PREUN INFO/SCRIPTS RPMTAG_
+	    test "`$RPM -q --qf \"%{RPMTAG_POSTUN}\" \"$f\"`" = '(none)' ||
+	    writewithsize POSTUN INFO/SCRIPTS RPMTAG_
+	    test "`$RPM -q --qf \"%{VERIFYSCRIPT}\" \"$f\"`" = '(none)' ||
+	    writewithsize VERIFYSCRIPT INFO/SCRIPTS
+            size="`$RPM -q --scripts "$f"|wc -c`"
+            echo "$FILEPREF $size $DATE INFO/SCRIPTS/ALL"
+        fi
     else
-     echo "$FILEPREF 0 $DATE INFO/DISTRIBUTION"
-     echo "$FILEPREF 0 $DATE INFO/VENDOR"
-     echo "$FILEPREF 0 $DATE INFO/DESCRIPTION"
-     echo "$FILEPREF 0 $DATE INFO/SUMMARY"
-     echo "dr-xr-xr-x   1 root     root     0 $DATE INFO/SCRIPTS"
-     echo "$FILEPREF 0 $DATE INFO/SCRIPTS/PREIN"
-     echo "$FILEPREF 0 $DATE INFO/SCRIPTS/POSTIN"
-     echo "$FILEPREF 0 $DATE INFO/SCRIPTS/PREUN"
-     echo "$FILEPREF 0 $DATE INFO/SCRIPTS/POSTUN"
-     echo "$FILEPREF 0 $DATE INFO/SCRIPTS/VERIFYSCRIPT"
-     echo "$FILEPREF 0 $DATE INFO/SCRIPTS/ALL"
+        writewithsize DISTRIBUTION INFO
+        writewithsize VENDOR INFO
+        writewithsize DESCRIPTION INFO
+        writewithsize SUMMARY INFO
+        echo "dr-xr-xr-x   1 root     root     0 $DATE INFO/SCRIPTS"
+        writewithsize PREIN INFO/SCRIPTS RPMTAG_
+        writewithsize POSTIN INFO/SCRIPTS RPMTAG_
+        writewithsize PREUN INFO/SCRIPTS RPMTAG_
+        writewithsize POSTUN INFO/SCRIPTS RPMTAG_
+        writewithsize VERIFYSCRIPT INFO/SCRIPTS RPMTAG_
+        size="`$RPM -q --scripts "$f"|wc -c`"
+        echo "$FILEPREF $size $DATE INFO/SCRIPTS/ALL"
     fi
     if test "$MCFASTRPM" = 0 ; then
-     test "`$RPM -q --qf \"%{PACKAGER}\" -- "$1"`" = "(none)" ||
-	 echo "$FILEPREF 0 $DATE INFO/PACKAGER"
-     test "`$RPM -q --qf \"%{URL}\" -- "$1"`" = "(none)" ||
-	 echo "$FILEPREF 0 $DATE INFO/URL"
-     test "`$RPM -q --qf \"%{SERIAL}\" -- "$1"`" = "(none)" ||
-	 echo "$FILEPREF 0 $DATE INFO/SERIAL"
-     test "`$RPM -q --qf \"%{COPYRIGHT}\" -- "$1"`" = "(none)" ||
-	 echo "$FILEPREF 0 $DATE INFO/COPYRIGHT"
-     test "`$RPM -q --qf \"%{LICENSE}\" -- "$1"`" = "(none)" ||
-	 echo "$FILEPREF 0 $DATE INFO/LICENSE"
+        test "`$RPM -q --qf \"%{PACKAGER}\" \"$f\"`" = "(none)" ||
+	writewithsize PACKAGER INFO
+        test "`$RPM -q --qf \"%{URL}\" \"$f\"`" = "(none)" ||
+	writewithsize URL INFO
+        test "`$RPM -q --qf \"%{SERIAL}\" \"$f\"`" = "(none)" ||
+	writewithsize SERIAL INFO
+        test "`$RPM -q --qf \"%{COPYRIGHT}\" \"$f\"`" = "(none)" ||
+	writewithsize COPYRIGHT INFO
+        test "`$RPM -q --qf \"%{LICENSE}\" \"$f\"`" = "(none)" ||
+	writewithsize LICENSE INFO
     else
-	 echo "$FILEPREF 0 $DATE INFO/PACKAGER"
-	 echo "$FILEPREF 0 $DATE INFO/URL"
-	 echo "$FILEPREF 0 $DATE INFO/SERIAL"
-	 echo "$FILEPREF 0 $DATE INFO/COPYRIGHT"
-	 echo "$FILEPREF 0 $DATE INFO/LICENSE"
+	writewithsize PACKAGER INFO
+	writewithsize URL INFO
+	writewithsize SERIAL INFO
+	writewithsize COPYRIGHT INFO
+	writewithsize LICENSE INFO
     fi
-    echo "$FILEPREF 0 $DATE INFO/BUILDTIME"
-    echo "$FILEPREF 0 $DATE INFO/RPMVERSION"
-    echo "$FILEPREF 0 $DATE INFO/OS"
-    echo "$FILEPREF 0 $DATE INFO/SIZE"
+    size="`getsize "%{BUILDTIME:date}\n"`"
+    echo "$FILEPREF $size $DATE INFO/BUILDTIME"
+    writewithsize RPMVERSION INFO
+    writewithsize OS INFO
+    size="`getsize "%{SIZE} bytes\n"`"
+    echo "$FILEPREF $size $DATE INFO/SIZE"
     if test "$MCFASTRPM" != 0 ; then
-    $RPM -q --qf "[%{REQUIRENAME}\n]" -- "$1" | grep "(none)" > /dev/null ||
-	echo "$FILEPREF 0 $DATE INFO/REQUIRENAME"
-    $RPM -q --qf "[%{OBSOLETES}\n]" -- "$1" | grep "(none)" > /dev/null ||
-	echo "$FILEPREF 0 $DATE INFO/OBSOLETES"
-    $RPM -q --qf "[%{PROVIDES}\n]" -- "$1" | grep "(none)" > /dev/null ||
-	echo "$FILEPREF 0 $DATE INFO/PROVIDES"
-    test "`$RPM -q --qf \"%{CHANGELOGTEXT}\" -- "$1"`" = "(none)" ||
-       echo "$FILEPREF 0 $DATE INFO/CHANGELOG"
+        size="`getsize "[%{REQUIRENAME} %{REQUIREFLAGS:depflags} %{REQUIREVERSION}\n]\n"`"
+        $RPM -q --qf "[%{REQUIRENAME}\n]" "$f" | grep "(none)" > /dev/null ||
+	echo "$FILEPREF $size $DATE INFO/REQUIRENAME"
+        size="`getsize "[%{OBSOLETENAME} %|OBSOLETEFLAGS?{%{OBSOLETEFLAGS:depflags} %{OBSOLETEVERSION}}:{}|\n]\n"`"
+        $RPM -q --qf "[%{OBSOLETES}\n]" "$f" | grep "(none)" > /dev/null ||
+	echo "$FILEPREF $size $DATE INFO/OBSOLETES"
+        size="`getsize "[%{PROVIDES}\n]\n"`"
+        $RPM -q --qf "[%{PROVIDES}\n]" "$f" | grep "(none)" > /dev/null ||
+	echo "$FILEPREF $size $DATE INFO/PROVIDES"
+        size="`getsize "[* %{CHANGELOGTIME:date} %{CHANGELOGNAME}\n%{CHANGELOGTEXT}\n\n]\n"`"
+        test "`$RPM -q --qf \"%{CHANGELOGTEXT}\" \"$f\"`" = "(none)" ||
+        echo "$FILEPREF $size $DATE INFO/CHANGELOG"
     else 
-	echo "$FILEPREF 0 $DATE INFO/REQUIRENAME"
-	echo "$FILEPREF 0 $DATE INFO/OBSOLETES"
-	echo "$FILEPREF 0 $DATE INFO/PROVIDES"
-        echo "$FILEPREF 0 $DATE INFO/CHANGELOG"
+	size="`getsize "[%{REQUIRENAME} %{REQUIREFLAGS:depflags} %{REQUIREVERSION}\n]\n"`"
+	echo "$FILEPREF $size $DATE INFO/REQUIRENAME"
+	size="`getsize "[%{OBSOLETENAME} %|OBSOLETEFLAGS?{%{OBSOLETEFLAGS:depflags} %{OBSOLETEVERSION}}:{}|\n]\n"`"
+	echo "$FILEPREF $size $DATE INFO/OBSOLETES"
+	size="`getsize "[%{PROVIDES}\n]\n"`"
+	echo "$FILEPREF $size $DATE INFO/PROVIDES"
+	size="`getsize "[* %{CHANGELOGTIME:date} %{CHANGELOGNAME}\n%{CHANGELOGTEXT}\n\n]\n"`"
+        echo "$FILEPREF $size $DATE INFO/CHANGELOG"
     fi
-
     $RPM -qlv -- "$1" | grep '^[A-Za-z0-9-]'
 }
 
 mcrpmfs_copyout ()
 {
+    $RPM -qi -- "$1" >/dev/null 2>&1 || exit 255
     case "$2" in
 	HEADER) $RPM -qi -- "$1" > "$3"; exit 0;;
 	UNINSTALL) echo "# Run this to uninstall this RPM package" > "$3"; exit 0;;
@@ -141,9 +172,9 @@ mcrpmfs_copyout ()
 	INFO/COPYRIGHT)		$RPM -q --qf "%{COPYRIGHT}\n" -- "$1" > "$3"; exit 0;;
 	INFO/LICENSE)		$RPM -q --qf "%{LICENSE}\n" -- "$1" > "$3"; exit 0;;
 	INFO/RPMVERSION)	$RPM -q --qf "%{RPMVERSION}\n" -- "$1" > "$3"; exit 0;;
-	INFO/REQUIRENAME)	$RPM -q --qf "[%{REQUIRENAME} %{REQUIREFLAGS:depflags} %{REQUIREVERSION}\n]" -- "$1" > "$3"; exit 0;;
-	INFO/OBSOLETES)		$RPM -q --qf "[%{OBSOLETENAME} %|OBSOLETEFLAGS?{%{OBSOLETEFLAGS:depflags} %{OBSOLETEVERSION}}:{}|\n]" -- "$1" > "$3"; exit 0;;
-	INFO/PROVIDES)		$RPM -q --qf "[%{PROVIDES}\n]" -- "$1" > "$3"; exit 0;;
+	INFO/REQUIRENAME)	$RPM -q --qf "[%{REQUIRENAME} %{REQUIREFLAGS:depflags} %{REQUIREVERSION}\n]\n" -- "$1" > "$3"; exit 0;;
+	INFO/OBSOLETES)		$RPM -q --qf "[%{OBSOLETENAME} %|OBSOLETEFLAGS?{%{OBSOLETEFLAGS:depflags} %{OBSOLETEVERSION}}:{}|\n]\n" -- "$1" > "$3"; exit 0;;
+	INFO/PROVIDES)		$RPM -q --qf "[%{PROVIDES}\n]\n" -- "$1" > "$3"; exit 0;;
 	INFO/SCRIPTS/PREIN)	$RPM -q --qf "%{RPMTAG_PREIN}\n" -- "$1" > "$3"; exit 0;;
 	INFO/SCRIPTS/POSTIN)	$RPM -q --qf "%{RPMTAG_POSTIN}\n" -- "$1" > "$3"; exit 0;;
 	INFO/SCRIPTS/PREUN)	$RPM -q --qf "%{RPMTAG_PREUN}\n" -- "$1" > "$3"; exit 0;;
@@ -161,12 +192,13 @@ mcrpmfs_copyout ()
 
 mcrpmfs_run ()
 {
+    $RPM -qi -- "$1" >/dev/null 2>&1 || exit 255
     case "$2" in
 	UNINSTALL) echo "Uninstalling $1"; rpm -e -- "$1"; exit 0;;
     esac
 }
 
-name=`sed 's/.*\///;s/\.trpm$//' "$2"`
+name=`head -n 1 "$2" | sed 's/.*\///;s/\.trpm$//'`
 
 case "$1" in
   list) mcrpmfs_list "$name"; exit 0;;

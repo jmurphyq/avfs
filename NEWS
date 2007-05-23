@@ -17,6 +17,10 @@ Changes from 0.9.7 to 0.9.8
      (patch from Tanmoy Bhattacharya)
    - the avfs library is built and installed by default additionally to
      fuse/avfscoda/preload depending on the actual system
+   - extfs scripts rpm and trpm outputs correct file sizes (important for fuse)
+     (patch from Tanmoy Bhattacharya)
+   - added RPM spec file for avfs-fuse 
+     (patch from Tanmoy Bhattacharya)
 
 Changes from 0.9.6 to 0.9.7
    - Fuse daemon can now be installed with --enable-fuse

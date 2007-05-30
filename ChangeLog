@@ -1,3 +1,12 @@
+2007-05-30  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* NEWS: updated
+
+	* extfs/ulha.in, extfs/u7z.in:
+	fixed trap in some extfs scripts to use single quoted command
+
+	* configure.in: added fuse test using pkg-config
+
 2007-05-23  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* spec/Makefile.am, spec/avfsfuse-fc6.spec:

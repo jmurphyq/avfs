@@ -99,7 +99,7 @@ mc7zfs_copyin ()
 mc7zfs_copyout ()
 {
     TMPDIR=`mktemp -u "${MC_TMPDIR:-/tmp}/mctmpdir-u7z.XXXXXX"` || exit 1
-    trap "rm -rf \"$TMPDIR\"; exit 0" 1 2 3 4 15
+    trap 'rm -rf "$TMPDIR"; exit 0' 1 2 3 4 15
     mkdir -m 0700 "$TMPDIR" || exit 1
 
 #    echo "$1 $2 $3" > hers

@@ -1,15 +1,18 @@
-Changes from 0.9.7 to 0.9.8
+Changes from 0.9.7 to 0.9.8 (2007-05-31)
    - utar supports long names in POSIX ustar archives
    - fixed truncation of 100 byte long file names in tar archive
    - fixed crash in zlib code
    - fixed deadlock in extfs code
-   - fixed ucpio script
-   - fixed bug in extfs symlink handling
-     (patch from Tanmoy Bhattacharya)
-   - fixed ftplist to output correct symlinks and to support http/ssh
-     (patch from Tanmoy Bhattacharya)
    - updated bzlib to 1.0.3
    - updated avfsd to use fuse API version 26
+   - several extfs fixes:
+     - fixed ucpio script
+     - fixed bug in extfs symlink handling
+       (patch from Tanmoy Bhattacharya)
+     - fixed ftplist to output correct symlinks and to support http/ssh
+       (patch from Tanmoy Bhattacharya)
+     - extfs scripts rpm and trpm outputs correct file sizes (important for fuse)
+       (patch from Tanmoy Bhattacharya)
    - ftppass/davpass checks for additional base avfs directories. Environment
      variable AVFSBASE can be set for non-default directory.
      (patch from Tanmoy Bhattacharya)
@@ -17,12 +20,10 @@ Changes from 0.9.7 to 0.9.8
      (patch from Tanmoy Bhattacharya)
    - the avfs library is built and installed by default additionally to
      fuse/avfscoda/preload depending on the actual system
-   - extfs scripts rpm and trpm outputs correct file sizes (important for fuse)
-     (patch from Tanmoy Bhattacharya)
    - added RPM spec file for avfs-fuse 
      (patch from Tanmoy Bhattacharya)
 
-Changes from 0.9.6 to 0.9.7
+Changes from 0.9.6 to 0.9.7 (2006-06-14)
    - Fuse daemon can now be installed with --enable-fuse
    - added symlink rewriting code to make absolute symlinks relative
      There is an avfsstat entry to toggle this symlink rewrite

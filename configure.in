@@ -414,22 +414,23 @@ AC_ARG_ENABLE([fuse-test],
               [if test "$enableval" = yes; then run_fuse_test=yes; else run_fuse_test=no; fi])
 
 if test $fuse_build = yes; then
-
   if test $run_fuse_test = yes; then
     AC_MSG_CHECKING([whether fuse is new enough])
 
     pkg-config --atleast-version=2.6.0 fuse >/dev/null 2>/dev/null
 
     if test $? != 0; then
+      dnl too old fuse or no fuse or no pkg-config
+      dnl in any case disable fuse_build
       AC_MSG_RESULT([no])
-      AC_MSG_ERROR([
-*** The fuse version reported by pkg-config is too old! At least version 2.6.0
-*** is required.])
+      fuse_build=no
     else
       AC_MSG_RESULT([yes])
     fi
   fi
+fi
 
+if test $fuse_build = yes; then
   AC_CHECK_LIB(fuse, fuse_main,[fuse_found=yes],[fuse_found=false])
   if test x$fuse_found == xyes; then
     FUSELIBS="-lfuse"

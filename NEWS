@@ -1,3 +1,6 @@
+Changes from 0.9.8 to 0.9.9 (2009-05-xx)
+   - fixed race condition in avfsd 
+
 Changes from 0.9.7 to 0.9.8 (2007-05-31)
    - utar supports long names in POSIX ustar archives
    - fixed truncation of 100 byte long file names in tar archive

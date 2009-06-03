@@ -1,6 +1,7 @@
 /*
     FUSE: Filesystem in Userspace
     Copyright (C) 2001  Miklos Szeredi (mszeredi@inf.bme.hu)
+    Copyright (C) 2009  Ralf Hoffmann (ralf@boomerangsworld.de)
 
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
@@ -17,8 +18,11 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <pthread.h>
 
 struct fuse *fuse;
+
+static pthread_mutex_t avfsd_mutexlock = PTHREAD_MUTEX_INITIALIZER;
 
 static int avfsd_getattr(const char *path, struct stat *stbuf)
 {
@@ -209,10 +213,16 @@ static int avfsd_read(const char *path, char *buf, size_t size, off_t offset,
     int res;
 
     (void) path;
-    if (virt_lseek(fi->fh, offset, SEEK_SET) == -1)
+
+    pthread_mutex_lock( &avfsd_mutexlock );
+    if (virt_lseek(fi->fh, offset, SEEK_SET) == -1) {
+        pthread_mutex_unlock( &avfsd_mutexlock );
         return -errno;
+    }
 
     res = virt_read(fi->fh, buf, size);
+    pthread_mutex_unlock( &avfsd_mutexlock );
+
     if (res == -1)
         return -errno;
 
@@ -225,10 +235,16 @@ static int avfsd_write(const char *path, const char *buf, size_t size,
     int res;
 
     (void) path;
-    if (virt_lseek(fi->fh, offset, SEEK_SET) == -1)
+
+    pthread_mutex_lock( &avfsd_mutexlock );
+    if (virt_lseek(fi->fh, offset, SEEK_SET) == -1) {
+        pthread_mutex_unlock( &avfsd_mutexlock );
         return -errno;
+    }
 
     res = virt_write(fi->fh, buf, size);
+    pthread_mutex_unlock( &avfsd_mutexlock );
+
     if (res == -1)
         return -errno;
 
@@ -238,7 +254,10 @@ static int avfsd_write(const char *path, const char *buf, size_t size,
 static int avfsd_release(const char *path, struct fuse_file_info *fi)
 {
     (void) path;
+
+    pthread_mutex_lock( &avfsd_mutexlock );
     virt_close(fi->fh);
+    pthread_mutex_unlock( &avfsd_mutexlock );
 
     return 0;
 }

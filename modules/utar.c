@@ -272,6 +272,9 @@ static int read_entry(vfile *vf, struct tar_entinfo *tinf)
             if(sres < 0)
                 break;
 
+            if (header->header.typeflag == 'g')
+                continue;
+
             if ( get_header_format( header ) == POSIX_FORMAT ) {
                 /* POSIX ustar format uses prefix for long file names
                    the actual name is prefix/name

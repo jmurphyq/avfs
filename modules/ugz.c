@@ -463,7 +463,8 @@ static int gz_getattr(vfile *vf, struct avstat *buf, int attrmask)
     int res;
     struct gzfile *fil = (struct gzfile *) vf->data;
     struct gznode *nod = fil->node;
-    const int basemask = AVA_MODE | AVA_UID | AVA_GID | AVA_ATIME | AVA_CTIME;
+    const int basemask = AVA_MODE | AVA_UID | AVA_GID | AVA_ATIME | AVA_CTIME |
+	    AVA_BLKCNT;
 
     res = av_fgetattr(fil->base, buf, basemask);
     if(res < 0)
@@ -481,7 +482,6 @@ static int gz_getattr(vfile *vf, struct avstat *buf, int attrmask)
     buf->dev = vf->mnt->avfs->dev;
     buf->ino = nod->ino;
     buf->nlink = 1;
-    buf->blocks = AV_BLOCKS(buf->size);
     buf->mtime.sec = nod->mtime;
     buf->mtime.nsec = 0;
     

@@ -1,3 +1,10 @@
+2010-02-05  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Ignore "g" type tar headers.
+
+	* Make "du" on gzip files show the disk usage of the underlying
+	file
+
 2009-06-03  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* fuse/avfsd.c, NEWS: fixed race condition in avfsd

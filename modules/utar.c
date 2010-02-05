@@ -1,6 +1,6 @@
 /*  
     AVFS: A Virtual File System Library
-    Copyright (C) 1998  Miklos Szeredi (mszeredi@inf.bme.hu)
+    Copyright (C) 1998  Miklos Szeredi <miklos@szeredi.hu>
     Copyright (C) 2007  Ralf Hoffmann (ralf@boomerangsworld.de)
 
     Based on the GNU tar sources (C) Free Software Foundation

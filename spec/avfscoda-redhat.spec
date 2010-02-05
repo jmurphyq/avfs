@@ -9,7 +9,7 @@ Copyright: LGPL
 Group: System_Environment/Daemons
 Source: http://www.inf.bme.hu/~mszeredi/avfs/avfs-%{avfs_version}.tar.gz
 URL: http://www.inf.bme.hu/~mszeredi/avfs
-Packager: Miklos Szeredi <mszeredi@inf.bme.hu>
+Packager: Miklos Szeredi <miklos@szeredi.hu>
 BuildRoot: /tmp/avfs
 AutoReqProv: no
 Requires: kernel = %{kernel_version}

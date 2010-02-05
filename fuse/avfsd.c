@@ -1,6 +1,6 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2001  Miklos Szeredi (mszeredi@inf.bme.hu)
+    Copyright (C) 2001  Miklos Szeredi <miklos@szeredi.hu>
     Copyright (C) 2009  Ralf Hoffmann (ralf@boomerangsworld.de)
 
     This program can be distributed under the terms of the GNU GPL.

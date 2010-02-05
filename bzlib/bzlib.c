@@ -1,7 +1,7 @@
 /* IMPORTANT NOTE: This is not the original bzip2 distribution.
 
    The modifications are copyright (C) 2001 Miklos Szeredi
-   (mszeredi@inf.bme.hu)
+   <miklos@szeredi.hu>
 
    The modified software can be distributed under the same licence as
    the original software (see bellow).

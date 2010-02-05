@@ -155,7 +155,7 @@ static void zfile_scache_save(int id, z_stream *s, int calccrc, int iseof)
 {
     int res;
 
-    if(id == 0) {
+    if(id == 0 || iseof) {
         res = inflateEnd(s);
         if(res != Z_OK) {
             av_log(AVLOG_ERROR, "ZFILE: inflateEnd: %s (%i)",

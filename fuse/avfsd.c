@@ -293,7 +293,6 @@ static struct fuse_operations avfsd_oper = {
     write:	avfsd_write,
     release:	avfsd_release,
     access:	avfsd_access,
-    statfs:	NULL,
 };
 
 int main(int argc, char *argv[])

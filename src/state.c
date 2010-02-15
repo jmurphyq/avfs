@@ -272,7 +272,7 @@ static int state_readdir(vfile *vf, struct avdirent *buf)
     stf = av_namespace_get(ent);
 
     /* FIXME: Make ino be some hash function of param and entry */
-    buf->ino = (int) stf + state_paramhash(sf->stent->param);
+    buf->ino = (long) stf + state_paramhash(sf->stent->param);
     /* add hash of entry name to hash */
     buf->ino += state_paramhash( buf->name );
     /* make sure ino is not 0 or 1 */
@@ -299,7 +299,7 @@ static int state_getattr(vfile *vf, struct avstat *buf, int attrmask)
 
     av_default_stat(buf);
     /* This isn't perfect, but... */
-    buf->ino = (int) stf + state_paramhash(sf->stent->param);
+    buf->ino = (long) stf + state_paramhash(sf->stent->param);
 
     /* add hash of entry name to hash */
     if( sf->stent->ent != NULL ) {

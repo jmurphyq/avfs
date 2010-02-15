@@ -93,7 +93,7 @@ static unsigned int spaced_primes_closest (unsigned int num)
 static unsigned int namespace_hash(struct entry *parent, const char *name,
 				   unsigned int namelen)
 {
-    unsigned int hash = (unsigned int) parent >> 2;
+    unsigned int hash = (unsigned long) parent >> 2;
     for(; namelen; namelen--, name++) {
 	hash = (hash << 4) | (hash >> 28);
 	hash ^= (unsigned int) *name;

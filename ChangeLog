@@ -1,3 +1,7 @@
+2010-02-12  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix a couple of compiler warnings
+
 2010-02-05  Miklos Szeredi <miklos@szeredi.hu>
 
 	* It is unnecessary to save state on EOF for zip/gzip files

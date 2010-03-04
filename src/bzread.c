@@ -6,6 +6,7 @@
     See the file COPYING.
 */
 
+#include "config.h"
 #include "bzfile.h"
 #include "bzlib.h"
 #include "oper.h"
@@ -144,6 +145,7 @@ static int bzfile_reset(struct bzfile *fil)
     return bz_new_stream(&fil->s);
 }
 
+#ifndef USE_SYSTEM_BZLIB
 static int bzfile_seek_index(struct bzfile *fil, struct bzindex *zi)
 {
     int res;
@@ -200,6 +202,7 @@ static struct bzindex *bzcache_find_index(struct bzcache *zc, avoff_t offset)
     
     return &zc->indexes[i-1];
 }
+#endif
 
 static int bzfile_fill_inbuf(struct bzfile *fil)
 {
@@ -216,6 +219,7 @@ static int bzfile_fill_inbuf(struct bzfile *fil)
     return 0;
 }
 
+#ifndef USE_SYSTEM_BZLIB
 static void bzfile_save_state(struct bzcache *zc, bz_stream *s,
                               unsigned int bitsrem, unsigned int bits,
                               unsigned int crc, unsigned int blocksize)
@@ -255,6 +259,7 @@ static void bz_block_end(void *data, bz_stream *s, unsigned int bitsrem,
     bzfile_save_state(zc, s, bitsrem, bits, crc, blocksize);
     AV_UNLOCK(bzread_lock);
 }
+#endif
 
 static int bzfile_decompress(struct bzfile *fil, struct bzcache *zc)
 {
@@ -273,7 +278,9 @@ static int bzfile_decompress(struct bzfile *fil, struct bzcache *zc)
     }
     
     start = (unsigned char*)( fil->s->next_out );
+#ifndef USE_SYSTEM_BZLIB
     BZ2_bzSetBlockEndHandler(fil->s, bz_block_end, zc);
+#endif
     res = BZ2_bzDecompress(fil->s);
     if(res == BZ_STREAM_END) {
         fil->iseof = 1;
@@ -331,6 +338,7 @@ static int bzfile_skip_to(struct bzfile *fil, struct bzcache *zc,
     return 0;
 }
 
+#ifndef USE_SYSTEM_BZLIB
 static int bzfile_seek(struct bzfile *fil, struct bzcache *zc, avoff_t offset)
 {
     struct bzindex *zi;
@@ -374,6 +382,7 @@ static int bzfile_seek(struct bzfile *fil, struct bzcache *zc, avoff_t offset)
 
     return 0;
 }
+#endif
 
 static avssize_t av_bzfile_do_pread(struct bzfile *fil, struct bzcache *zc,
                                    char *buf, avsize_t nbyte, avoff_t offset)
@@ -386,7 +395,15 @@ static avssize_t av_bzfile_do_pread(struct bzfile *fil, struct bzcache *zc,
     curroff = bz_total_out(fil->s);
     if(offset != curroff) {
         AV_LOCK(bzread_lock);
+#ifndef USE_SYSTEM_BZLIB
         res = bzfile_seek(fil, zc, offset);
+#else
+        if ( curroff > offset ) {
+            res = bzfile_reset( fil );
+        } else {
+            res = 0;
+        }
+#endif
         AV_UNLOCK(bzread_lock);
         if(res < 0)
             return res;
@@ -433,7 +450,11 @@ int av_bzfile_size(struct bzfile *fil, struct bzcache *zc, avoff_t *sizep)
     fil->id = zc->id;
 
     AV_LOCK(bzread_lock);
+#ifndef USE_SYSTEM_BZLIB
     res = bzfile_seek(fil, zc, AV_MAXOFF);
+#else
+    res = bzfile_reset( fil );
+#endif
     AV_UNLOCK(bzread_lock);
     if(res < 0)
         return res;

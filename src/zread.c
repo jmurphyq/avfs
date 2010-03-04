@@ -6,6 +6,7 @@
     See the file COPYING.
 */
 
+#include "config.h"
 #include "zfile.h"
 #include "zlib.h"
 #include "oper.h"
@@ -66,6 +67,7 @@ struct zfile {
     char inbuf[INBUFSIZE];
 };
 
+#ifndef USE_SYSTEM_ZLIB
 static int zfile_compress_state(char *state, int statelen, char **resp)
 {
     int res;
@@ -145,6 +147,7 @@ static int zfile_uncompress_state(char *cstate, int cstatelen, char **resp)
     *resp = state;
     return 0;
 }
+#endif
 
 static void zfile_scache_cleanup(void)
 {
@@ -200,6 +203,7 @@ static int zfile_reset(struct zfile *fil)
     return 0;
 }
 
+#ifndef USE_SYSTEM_ZLIB
 static int zfile_save_state(struct zcache *zc, char *state, int statesize,
                             avoff_t offset)
 {
@@ -326,6 +330,7 @@ static struct zindex *zcache_find_index(struct zcache *zc, avoff_t offset)
 
     return prevzi;
 }
+#endif
 
 static int zfile_fill_inbuf(struct zfile *fil)
 {
@@ -384,10 +389,14 @@ static int zfile_inflate(struct zfile *fil, struct zcache *zc)
     }
     
     AV_LOCK(zread_lock);
+#ifdef USE_SYSTEM_ZLIB
+    res = 0;
+#else
     if(fil->s.total_out >= zc->nextindex)
         res = zfile_save_index(fil, zc);
     else
         res = 0;
+#endif
     AV_UNLOCK(zread_lock);
     if(res < 0)
         return res;
@@ -430,6 +439,7 @@ static int zfile_skip_to(struct zfile *fil, struct zcache *zc, avoff_t offset)
     return 0;
 }
 
+#ifndef USE_SYSTEM_ZLIB
 static int zfile_seek(struct zfile *fil, struct zcache *zc, avoff_t offset)
 {
     struct zindex *zi;
@@ -475,6 +485,7 @@ static int zfile_seek(struct zfile *fil, struct zcache *zc, avoff_t offset)
     
     return 0;
 }
+#endif
 
 static int zfile_goto(struct zfile *fil, struct zcache *zc, avoff_t offset)
 {
@@ -482,7 +493,13 @@ static int zfile_goto(struct zfile *fil, struct zcache *zc, avoff_t offset)
 
     AV_LOCK(zc->lock);
     AV_LOCK(zread_lock);
+#ifdef USE_SYSTEM_ZLIB
+    if ( offset < fil->s.total_out ) {
+        res = zfile_reset(fil);
+    } else res = 0;
+#else
     res = zfile_seek(fil, zc, offset);
+#endif
     AV_UNLOCK(zread_lock);
     if(res == 0)
         res = zfile_skip_to(fil, zc, offset);

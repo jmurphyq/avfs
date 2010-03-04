@@ -114,6 +114,22 @@ AC_ARG_ENABLE(dav,
 dav=no)
 AC_MSG_RESULT([$dav])
 
+AC_ARG_WITH(system-zlib,
+            AC_HELP_STRING([--with-system-zlib],[Use system zlib instead of builtin]),
+            [if test "$withval" = yes; then use_system_zlib=yes; else use_system_zlib=no; fi],
+            [use_system_zlib=no])
+AM_CONDITIONAL(USE_SYSTEM_ZLIB,[test x$use_system_zlib = xyes])
+if test x$use_system_zlib = xyes; then
+    AC_DEFINE(USE_SYSTEM_ZLIB, 1, [Define if you want to use system zlib library])
+    LIBZ=-lz
+    ZLIB_INCLUDE=
+else
+    LIBZ=../zlib/libzlib.la
+    ZLIB_INCLUDE='-I$(top_srcdir)/zlib'
+fi
+AC_SUBST(LIBZ)
+AC_SUBST(ZLIB_INCLUDE)
+
 dnl Checks for programs.
 cflags="$CFLAGS"
 AC_PROG_CC
@@ -516,25 +532,32 @@ extfs/uzoo
 
 echo ""
 echo "Configuration details:"
-if test "$preload_build" = "yes"; then
-  echo "  Building preload library                  : yes"
-else
-  echo "  Building preload library                  : no"
-fi
-if test "$avfscoda_build" = "yes"; then
-  echo "  Building avfscoda daemon and kernel module: yes"
-else
-  echo "  Building avfscoda daemon and kernel module: no"
-fi
 if test "$shared_build" = "yes"; then
-  echo "  Building library                          : yes"
+  echo "  Building library                          : yes (recommended: yes)"
 else
-  echo "  Building library                          : no"
+  echo "  Building library                          : no  (recommended: yes)"
 fi
 if test "$fuse_build" = "yes"; then
-  echo "  Building avfsd for fuse                   : yes"
+  echo "  Building avfsd for fuse                   : yes (recommended: yes)"
 else
-  echo "  Building avfsd for fuse                   : no"
+  echo "  Building avfsd for fuse                   : no  (recommended: yes)"
 fi
+if test "$preload_build" = "yes"; then
+  echo "  Building preload library                  : yes (recommended: no)"
+else
+  echo "  Building preload library                  : no  (recommended: no)"
+fi
+if test "$avfscoda_build" = "yes"; then
+  echo "  Building avfscoda daemon and kernel module: yes (recommended: no)"
+else
+  echo "  Building avfscoda daemon and kernel module: no  (recommended: no)"
+fi
+echo ""
+if test "x$use_system_zlib" = "xyes"; then
+  echo "  Use system zlib                           : yes (recommended: no, slower access)"
+else
+  echo "  Use system zlib                           : no  (recommended: no)"
+fi
+echo ""
 echo "  Installation prefix                       : $prefix"
 echo ""

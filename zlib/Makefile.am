@@ -1,6 +1,10 @@
 AM_CFLAGS = -I$(top_srcdir)/include @ZLIB_CFLAGS@ @CPPFLAGS@
 
+if !USE_SYSTEM_ZLIB
+
 noinst_LTLIBRARIES = libzlib.la
+
+endif
 
 libzlib_la_LDFLAGS = -module
 libzlib_la_SOURCES = adler32.c   \

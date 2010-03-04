@@ -1,0 +1,583 @@
+Notes:
+
+This file contains the differences between the original zlib-1.1.4 version
+and the one used in avfs. The only significant change is the ability to save
+the internal state to an external file to make seeking fast and keep memory
+usage low.
+
+
+diff -purN zlib-1.1.4/infblock.c avfs/infblock.c
+--- zlib-1.1.4/infblock.c	2002-03-11 14:16:01.000000000 +0100
++++ avfs/infblock.c	2006-02-27 20:51:35.000000000 +0100
+@@ -9,6 +9,8 @@
+ #include "infcodes.h"
+ #include "infutil.h"
+ 
++#include <assert.h>
++
+ struct inflate_codes_state {int dummy;}; /* for buggy compilers */
+ 
+ /* simplify the use of the inflate_huft type with some defines */
+@@ -401,3 +403,163 @@ inflate_blocks_statef *s;
+ {
+   return s->mode == LENS;
+ }
++
++int inflate_blocks_save(bufp, at, s, z, w)
++char **bufp;
++int at;
++inflate_blocks_statef *s;
++z_streamp z;
++uInt w;
++{
++  char *buf = *bufp;
++  struct inflate_blocks_state scpy = *s;
++  uInt t;
++  unsigned len = 0;
++
++  len += sizeof(struct inflate_blocks_state);
++  
++  if (s->mode == BTREE || s->mode == DTREE) {
++    assert(s->sub.trees.blens != NULL);
++    scpy.sub.trees.blens = NULL;
++
++    t = s->sub.trees.table;
++    t = 258 + (t & 0x1f) + ((t >> 5) & 0x1f);
++
++    len += t * sizeof(uInt);
++
++    assert(s->sub.trees.tb == NULL || 
++           (s->sub.trees.tb >= s->hufts && s->sub.trees.tb < s->hufts + MANY));
++
++    scpy.sub.trees.tb = (inflate_huft *) 
++      (s->sub.trees.tb == NULL ? -1 : ((long) s->sub.trees.tb - (long) s->hufts));
++  }
++  if (s->mode == CODES) {
++    assert(s->sub.decode.codes != NULL);
++    scpy.sub.decode.codes = NULL;
++  }
++
++  assert(s->hufts != NULL);
++  scpy.hufts = NULL;
++  
++  assert(s->window != NULL);
++  scpy.window = NULL;
++  
++  assert(s->end >= s->window && s->end <= s->window + w);
++  scpy.end = (Bytef *) (s->end - s->window);
++
++  assert(s->read >= s->window && s->read <= s->window + w);
++  scpy.read = (Bytef *) (s->read - s->window);
++
++  assert(s->write >= s->window && s->write <= s->window + w);
++  scpy.write = (Bytef *) (s->write - s->window);
++
++  scpy.checkfn = NULL;
++
++  len += sizeof(inflate_huft) * MANY;
++  len += w;
++
++  *bufp = buf = realloc(buf, at + len);
++  if(buf == NULL)
++      return Z_MEM_ERROR;
++
++  memcpy(buf + at, &scpy, sizeof(struct inflate_blocks_state));
++  at += sizeof(struct inflate_blocks_state);
++
++  if (s->mode == BTREE || s->mode == DTREE) {
++    t = s->sub.trees.table;
++    t = 258 + (t & 0x1f) + ((t >> 5) & 0x1f);
++
++    memcpy(buf + at, s->sub.trees.blens, t * sizeof(uInt));
++    at += t * sizeof(uInt);
++  }
++  
++  memcpy(buf + at, s->hufts, sizeof(inflate_huft) * MANY);
++  at += sizeof(inflate_huft) * MANY;
++
++  memcpy(buf + at, s->window, w);
++  at += w;
++
++  if (s->mode == CODES) {
++    at = inflate_codes_save(bufp, at, s, z);
++    if(at < 0)
++      return at;
++  }
++
++  return at;
++}
++
++inflate_blocks_statef * inflate_blocks_restore(bufp, z, c, w)
++  char **bufp;
++  z_streamp z;
++  check_func c;
++  uInt w;
++{
++  inflate_blocks_statef *s;
++  uInt t;
++  char *buf = *bufp;
++
++  if ((s = (inflate_blocks_statef *)ZALLOC
++       (z,1,sizeof(struct inflate_blocks_state))) == Z_NULL)
++    return s;
++
++  memcpy(s, buf, sizeof(struct inflate_blocks_state));
++  buf += sizeof(struct inflate_blocks_state);
++
++  if ((s->hufts =
++       (inflate_huft *)ZALLOC(z, sizeof(inflate_huft), MANY)) == Z_NULL)
++  {
++    ZFREE(z, s);
++    return Z_NULL;
++  }
++  if ((s->window = (Bytef *)ZALLOC(z, 1, w)) == Z_NULL)
++  {
++    ZFREE(z, s->hufts);
++    ZFREE(z, s);
++    return Z_NULL;
++  }
++  
++  if (s->mode == BTREE || s->mode == DTREE) {
++    t = s->sub.trees.table;
++    t = 258 + (t & 0x1f) + ((t >> 5) & 0x1f);
++
++    if((s->sub.trees.blens = (uIntf*)ZALLOC(z, t, sizeof(uInt))) == Z_NULL)
++    {
++      ZFREE(z, s->window);
++      ZFREE(z, s->hufts);
++      ZFREE(z, s);
++      return Z_NULL;
++    }
++
++    memcpy(s->sub.trees.blens, buf, t * sizeof(uInt));
++    buf += t * sizeof(uInt);
++
++    if(s->sub.trees.tb == (inflate_huft *) -1)
++      s->sub.trees.tb = NULL;
++    else
++      s->sub.trees.tb = (inflate_huft *) ((long) s->hufts + (long) s->sub.trees.tb);
++  }
++
++  memcpy(s->hufts, buf, sizeof(inflate_huft) * MANY);
++  buf += sizeof(inflate_huft) * MANY;
++
++  memcpy(s->window, buf, w);
++  buf += w;
++
++  s->end = s->window + (long) s->end;
++  s->read = s->window + (long) s->read;
++  s->write = s->window + (long) s->write;
++  s->checkfn = c;
++
++  *bufp = buf;
++  
++  if (s->mode == CODES) {
++    s->sub.decode.codes = inflate_codes_restore(bufp, s, z);
++    if(s->sub.decode.codes == Z_NULL) {
++      inflate_blocks_free(s, z);
++      return Z_NULL;
++    }
++  }
++
++  return s;  
++}
++
+diff -purN zlib-1.1.4/infblock.h avfs/infblock.h
+--- zlib-1.1.4/infblock.h	2002-03-11 14:16:01.000000000 +0100
++++ avfs/infblock.h	2006-02-27 20:51:35.000000000 +0100
+@@ -37,3 +37,16 @@ extern void inflate_set_dictionary OF((
+ 
+ extern int inflate_blocks_sync_point OF((
+     inflate_blocks_statef *s));
++
++extern int inflate_blocks_save OF((
++    char **bufp,
++    int at,
++    inflate_blocks_statef *s,
++    z_streamp z,
++    uInt w));
++
++extern inflate_blocks_statef * inflate_blocks_restore OF((
++    char **bufp,
++    z_streamp z,
++    check_func c,
++    uInt w));
+diff -purN zlib-1.1.4/infcodes.c avfs/infcodes.c
+--- zlib-1.1.4/infcodes.c	2002-03-11 14:16:01.000000000 +0100
++++ avfs/infcodes.c	2006-09-17 21:14:27.000000000 +0200
+@@ -10,6 +10,8 @@
+ #include "infutil.h"
+ #include "inffast.h"
+ 
++#include <assert.h>
++
+ /* simplify the use of the inflate_huft type with some defines */
+ #define exop word.what.Exop
+ #define bits word.what.Bits
+@@ -249,3 +251,97 @@ z_streamp z;
+   ZFREE(z, c);
+   Tracev((stderr, "inflate:       codes free\n"));
+ }
++
++int inflate_codes_save(bufp, at, s, z)
++char **bufp;
++int at;
++inflate_blocks_statef *s;
++z_streamp z;
++{
++  char *buf = *bufp;
++  inflate_codes_statef *c = s->sub.decode.codes;
++  struct inflate_codes_state ccpy = *c;
++  char fixed_tree = 0;
++
++  if(c->mode == LEN || c->mode == DIST) {
++    assert(c->sub.code.tree >= s->hufts && c->sub.code.tree < s->hufts + MANY);
++    ccpy.sub.code.tree = (inflate_huft *) ((long) c->sub.code.tree - (long) s->hufts);
++  }
++
++  if(c->ltree >= s->hufts && c->ltree < s->hufts + MANY) {
++    ccpy.ltree = (inflate_huft *) ((long) c->ltree - (long) s->hufts);
++    
++    assert(c->dtree >= s->hufts && c->dtree < s->hufts + MANY);
++    ccpy.dtree = (inflate_huft *) ((long) c->dtree - (long) s->hufts);
++  } else {
++    /* this is an assumption, it will be checked in restore */
++    fixed_tree = 1;
++  }
++  
++  *bufp = buf = realloc(buf, at + sizeof(struct inflate_codes_state) + 1);
++  if(buf == NULL)
++    return Z_MEM_ERROR;
++  
++  memcpy(buf + at, &ccpy, sizeof(struct inflate_codes_state));
++  at += sizeof(struct inflate_codes_state);
++
++  buf[at++] = fixed_tree;
++  
++  return at;
++}
++
++inflate_codes_statef *inflate_codes_restore(bufp, s, z)
++  char **bufp;
++  inflate_blocks_statef *s;
++  z_streamp z;
++{
++  char *buf = *bufp;
++  inflate_codes_statef *c;
++  char fixed_tree = 0;
++
++  if ((c = (inflate_codes_statef *)
++       ZALLOC(z,1,sizeof(struct inflate_codes_state))) == Z_NULL)
++    return c;
++  
++  memcpy(c, buf, sizeof(struct inflate_codes_state));
++
++  fixed_tree = buf[sizeof(struct inflate_codes_state)];
++
++  if(fixed_tree == 0) {
++    c->ltree = (inflate_huft *) ((long) s->hufts + (long) c->ltree);
++    c->dtree = (inflate_huft *) ((long) s->hufts + (long) c->dtree);
++  } else if(fixed_tree == 1) {
++    Byte old_lbits = c->lbits;
++    Byte old_dbits = c->dbits;
++    inflate_huft *old_ltree = c->ltree;
++    inflate_huft *old_dtree = c->dtree;
++    uInt bl, bd;
++
++    if(inflate_trees_fixed(&bl, &bd, &c->ltree, &c->dtree, z) != Z_OK) {
++      ZFREE(z, c);
++      return Z_NULL;
++    }
++
++    c->lbits = (Byte)bl;
++    c->dbits = (Byte)bd;
++
++    /* it was an assumption that fixed trees are used
++       if one of the following conditions is false we were wrong */
++    if(c->lbits != old_lbits || c->dbits != old_dbits ||
++       c->ltree != old_ltree || c->dtree != old_dtree) {
++      ZFREE(z, c);
++      return Z_NULL;
++    }
++  } else {
++    return Z_NULL;
++  }
++
++  buf += sizeof(struct inflate_codes_state) + 1;
++  
++  *bufp = buf;
++
++  if(c->mode == LEN || c->mode == DIST)
++    c->sub.code.tree = (inflate_huft *) ((long) s->hufts + (long) c->sub.code.tree);
++
++  return c;
++}
+diff -purN zlib-1.1.4/infcodes.h avfs/infcodes.h
+--- zlib-1.1.4/infcodes.h	2002-03-11 14:16:01.000000000 +0100
++++ avfs/infcodes.h	2006-02-27 20:51:35.000000000 +0100
+@@ -25,3 +25,13 @@ extern void inflate_codes_free OF((
+     inflate_codes_statef *,
+     z_streamp ));
+ 
++extern int inflate_codes_save OF((
++    char **bufp,
++    int at,
++    inflate_blocks_statef *s,
++    z_streamp z ));
++
++extern inflate_codes_statef * inflate_codes_restore OF((
++    char **bufp,
++    inflate_blocks_statef *s,
++    z_streamp z ));
+diff -purN zlib-1.1.4/inflate.c avfs/inflate.c
+--- zlib-1.1.4/inflate.c	2002-03-11 14:16:01.000000000 +0100
++++ avfs/inflate.c	2006-02-27 20:51:35.000000000 +0100
+@@ -6,6 +6,8 @@
+ #include "zutil.h"
+ #include "infblock.h"
+ 
++#include <assert.h>
++
+ struct inflate_blocks_state {int dummy;}; /* for buggy compilers */
+ 
+ typedef enum {
+@@ -305,7 +307,7 @@ z_streamp z;
+   uInt n;       /* number of bytes to look at */
+   Bytef *p;     /* pointer to bytes */
+   uInt m;       /* number of marker bytes found in a row */
+-  uLong r, w;   /* temporaries to save total_in and total_out */
++  uLongLong r, w;   /* temporaries to save total_in and total_out */
+ 
+   /* set up */
+   if (z == Z_NULL || z->state == Z_NULL)
+@@ -364,3 +366,90 @@ z_streamp z;
+     return Z_STREAM_ERROR;
+   return inflate_blocks_sync_point(z->state->blocks);
+ }
++
++int inflateSave(z_streamp z, char **resultp)
++{
++  int at;
++  char *buf;
++  z_stream zcpy = *z;
++  struct internal_state statecpy = *z->state;
++  
++  buf = malloc(sizeof(z_stream) + sizeof(struct internal_state));
++  if(buf == NULL)
++    return Z_MEM_ERROR;
++  
++  at = 0;
++
++  zcpy.next_in = NULL;
++  zcpy.avail_in = 0;
++  zcpy.next_out = NULL;
++  zcpy.avail_out = 0;
++  zcpy.msg = NULL;
++  zcpy.state = NULL;
++  zcpy.zalloc = NULL;
++  zcpy.zfree = NULL;
++  zcpy.opaque = NULL;
++  memcpy(buf + at, &zcpy, sizeof(z_stream));
++  at += sizeof(z_stream);
++  
++  statecpy.blocks = NULL;
++  memcpy(buf + at, &statecpy, sizeof(struct internal_state));
++  at += sizeof(struct internal_state);
++  
++  at = inflate_blocks_save(&buf, at, z->state->blocks, z,
++                           (uInt)1 << z->state->wbits);
++  if(at < 0) {
++      free(buf);
++      return at;
++  }
++
++  buf = realloc(buf, at + 2);
++  buf[at++] = 'S';
++  buf[at++] = 'Z';
++
++  *resultp = buf;  
++  return at;
++}
++
++int inflateRestore(z_streamp z, char *buf)
++{
++  z_stream zcpy;
++  
++  memcpy(&zcpy, buf, sizeof(z_stream));
++  buf += sizeof(z_stream);
++
++  zcpy.next_in = z->next_in;
++  zcpy.avail_in = z->avail_in;
++  zcpy.next_out = z->next_out;
++  zcpy.avail_out = z->avail_out;
++  zcpy.zalloc = z->zalloc;
++  zcpy.zfree = z->zfree;
++  zcpy.opaque = z->opaque;
++  *z = zcpy;
++
++  z->msg = Z_NULL;
++  if (z->zalloc == Z_NULL)
++  {
++    z->zalloc = zcalloc;
++    z->opaque = (voidpf)0;
++  }
++  if (z->zfree == Z_NULL) z->zfree = zcfree;
++  if ((z->state = (struct internal_state FAR *)
++       ZALLOC(z,1,sizeof(struct internal_state))) == Z_NULL)
++    return Z_MEM_ERROR;
++
++  memcpy(z->state, buf, sizeof(struct internal_state));
++  buf += sizeof(struct internal_state);
++  
++  if((z->state->blocks =
++      inflate_blocks_restore(&buf, z, z->state->nowrap ? Z_NULL : adler32,
++                             (uInt) 1 << z->state->wbits)) == Z_NULL)
++  {
++    inflateEnd(z);
++    return Z_MEM_ERROR;
++  }
++
++  assert(buf[0] == 'S' && buf[1] == 'Z');
++
++  return Z_OK;
++}
+diff -purN zlib-1.1.4/inftrees.c avfs/inftrees.c
+--- zlib-1.1.4/inftrees.c	2002-03-11 14:18:06.000000000 +0100
++++ avfs/inftrees.c	2007-05-15 20:15:35.000000000 +0200
+@@ -251,7 +251,10 @@ uIntf *v;               /* working area:
+       /* set up table entry in r */
+       r.bits = (Byte)(k - w);
+       if (p >= v + n)
++      {
+         r.exop = 128 + 64;      /* out of values--invalid code */
++        r.base = 0;
++      }
+       else if (*p < s)
+       {
+         r.exop = (Byte)(*p < 256 ? 0 : 32 + 64);     /* 256 is end-of-block */
+diff -purN zlib-1.1.4/zconf.h avfs/zconf.h
+--- zlib-1.1.4/zconf.h	2002-03-11 14:16:01.000000000 +0100
++++ avfs/zconf.h	2005-06-14 20:17:20.000000000 +0200
+@@ -1,13 +1,22 @@
+ /* zconf.h -- configuration of the zlib compression library
+  * Copyright (C) 1995-2002 Jean-loup Gailly.
++ * Copyright (C) 2005 Ralf Hoffmann
+  * For conditions of distribution and use, see copyright notice in zlib.h 
++ *
++ * Changes:
++ *   2005-06-13 Ralf Hoffmann <ralf@boomerangsworld.de>
++ *      added more symbols to the redefines
+  */
+ 
+-/* @(#) $Id: avfs-zlib-1.1.4-changes.diff,v 1.1 2010/03/04 18:32:00 hoffmannr Exp $ */
++/* @(#) $Id: avfs-zlib-1.1.4-changes.diff,v 1.1 2010/03/04 18:32:00 hoffmannr Exp $ */
+ 
+ #ifndef _ZCONF_H
+ #define _ZCONF_H
+ 
++#include "config.h"
++
++#define Z_PREFIX 1
++
+ /*
+  * If you *really* need a unique prefix for all types and library functions,
+  * compile with -DZ_PREFIX. The "standard" zlib should be compiled without it.
+@@ -46,6 +55,42 @@
+ #  define uLongf	z_uLongf
+ #  define voidpf	z_voidpf
+ #  define voidp		z_voidp
++
++#  define zlibVersion	z_zlibVersion
++#  define zcfree		z_zcfree
++#  define zcalloc	z_zcalloc
++#  define zError	z_zError
++#  define _tr_tally	z__tr_tally
++#  define inflate_blocks		z_inflate_blocks
++#  define inflate_blocks_free		z_inflate_blocks_free
++#  define inflate_blocks_new		z_inflate_blocks_new
++#  define inflate_blocks_reset		z_inflate_blocks_reset
++#  define inflate_blocks_restore		z_inflate_blocks_restore
++#  define inflate_blocks_save		z_inflate_blocks_save
++#  define inflate_blocks_sync_point		z_inflate_blocks_sync_point
++#  define inflate_set_dictionary		z_inflate_set_dictionary
++#  define inflate_codes		z_inflate_codes
++#  define inflate_codes_free		z_inflate_codes_free
++#  define inflate_codes_new		z_inflate_codes_new
++#  define inflate_codes_restore		z_inflate_codes_restore
++#  define inflate_codes_save		z_inflate_codes_save
++#  define inflate_fast		z_inflate_fast
++#  define inflateRestore		z_inflateRestore
++#  define inflateSave		z_inflateSave
++#  define inflate_trees_bits		z_inflate_trees_bits
++#  define inflate_trees_dynamic		z_inflate_trees_dynamic
++#  define inflate_trees_fixed		z_inflate_trees_fixed
++#  define inflate_flush		z_inflate_flush
++#  define _tr_align		z__tr_align
++#  define _tr_flush_block		z__tr_flush_block
++#  define _tr_init		z__tr_init
++#  define _tr_stored_block		z__tr_stored_block
++#  define inflate_mask		z_inflate_mask
++#  define z_errmsg		z_z_errmsg
++#  define deflate_copyright	z_deflate_copyright
++#  define inflate_copyright	z_inflate_copyright
++#  define _dist_code		z__dist_code
++#  define _length_code		z__length_code
+ #endif
+ 
+ #if (defined(_WIN32) || defined(__WIN32__)) && !defined(WIN32)
+@@ -215,6 +260,7 @@ typedef unsigned char  Byte;  /* 8 bits 
+ #endif
+ typedef unsigned int   uInt;  /* 16 bits or more */
+ typedef unsigned long  uLong; /* 32 bits or more */
++typedef unsigned long long  uLongLong; /* 64 bits */
+ 
+ #ifdef SMALL_MEDIUM
+    /* Borland C/C++ and some old MSC versions ignore FAR inside typedef */
+diff -purN zlib-1.1.4/zlib.h avfs/zlib.h
+--- zlib-1.1.4/zlib.h	2002-03-11 14:56:38.000000000 +0100
++++ avfs/zlib.h	2006-02-27 20:51:35.000000000 +0100
+@@ -1,3 +1,20 @@
++/* IMPORTANT NOTE: This is not the original zlib distribution. The
++   following files have been modified:
++   
++   infblock.c
++   infblock.h
++   infcodes.c
++   infcodes.h
++   inflate.c
++   zlib.h
++
++   The modifications are copyright (C) 2001 Miklos Szeredi
++   (mszeredi@inf.bme.hu)
++
++   The modified software can be distributed under the same licence as
++   the original software (see bellow).
++*/
++
+ /* zlib.h -- interface of the 'zlib' general purpose compression library
+   version 1.1.4, March 11th, 2002
+ 
+@@ -68,11 +85,11 @@ struct internal_state;
+ typedef struct z_stream_s {
+     Bytef    *next_in;  /* next input byte */
+     uInt     avail_in;  /* number of bytes available at next_in */
+-    uLong    total_in;  /* total nb of input bytes read so far */
++    uLongLong total_in;  /* total nb of input bytes read so far */
+ 
+     Bytef    *next_out; /* next output byte should be put there */
+     uInt     avail_out; /* remaining free space at next_out */
+-    uLong    total_out; /* total nb of bytes output so far */
++    uLongLong total_out; /* total nb of bytes output so far */
+ 
+     char     *msg;      /* last error message, NULL if no error */
+     struct internal_state FAR *state; /* not visible by applications */
+@@ -867,6 +884,9 @@ ZEXTERN int ZEXPORT deflateInit2_ OF((z_
+                                       int stream_size));
+ ZEXTERN int ZEXPORT inflateInit2_ OF((z_streamp strm, int  windowBits,
+                                       const char *version, int stream_size));
++ZEXPORT int ZEXPORT inflateSave   OF((z_streamp strm, char **resultp));
++ZEXPORT int ZEXPORT inflateRestore OF((z_streamp strm, char *buf));
++
+ #define deflateInit(strm, level) \
+         deflateInit_((strm), (level),       ZLIB_VERSION, sizeof(z_stream))
+ #define inflateInit(strm) \

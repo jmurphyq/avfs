@@ -1,6 +1,6 @@
 EXTRA_DIST = make_info
 
-AM_CFLAGS = -I$(top_srcdir)/include @ZLIB_INCLUDE@ -I$(top_srcdir)/bzlib @CFLAGS@ @CPPFLAGS@ -DBZ_NO_STDIO
+AM_CFLAGS = -I$(top_srcdir)/include @ZLIB_INCLUDE@ @BZLIB_INCLUDE@ @CFLAGS@ @CPPFLAGS@ -DBZ_NO_STDIO
 
 noinst_LTLIBRARIES = libavfscore.la
 libavfscore_la_LDFLAGS = -module

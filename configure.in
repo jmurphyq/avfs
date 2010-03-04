@@ -130,6 +130,22 @@ fi
 AC_SUBST(LIBZ)
 AC_SUBST(ZLIB_INCLUDE)
 
+AC_ARG_WITH(system-bzlib,
+            AC_HELP_STRING([--with-system-bzlib],[Use system bzlib instead of builtin]),
+            [if test "$withval" = yes; then use_system_bzlib=yes; else use_system_bzlib=no; fi],
+            [use_system_bzlib=no])
+AM_CONDITIONAL(USE_SYSTEM_BZLIB,[test x$use_system_bzlib = xyes])
+if test x$use_system_bzlib = xyes; then
+    AC_DEFINE(USE_SYSTEM_BZLIB, 1, [Define if you want to use system bzlib library])
+    LIBBZ2=-lbz2
+    BZLIB_INCLUDE=
+else
+    LIBBZ2=../bzlib/libbz.la
+    BZLIB_INCLUDE='-I$(top_srcdir)/bzlib'
+fi
+AC_SUBST(LIBBZ2)
+AC_SUBST(BZLIB_INCLUDE)
+
 dnl Checks for programs.
 cflags="$CFLAGS"
 AC_PROG_CC
@@ -557,6 +573,11 @@ if test "x$use_system_zlib" = "xyes"; then
   echo "  Use system zlib                           : yes (recommended: no, slower access)"
 else
   echo "  Use system zlib                           : no  (recommended: no)"
+fi
+if test "x$use_system_bzlib" = "xyes"; then
+  echo "  Use system bzlib                          : yes (recommended: no, slower access)"
+else
+  echo "  Use system bzlib                          : no  (recommended: no)"
 fi
 echo ""
 echo "  Installation prefix                       : $prefix"

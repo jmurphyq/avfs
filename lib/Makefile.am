@@ -15,11 +15,11 @@ noinst_LTLIBRARIES = libavfs_static.la
 ##     Possible solution: Also build a static library which doesn't get installed
 
 libavfs_la_LDFLAGS = @VERSIONSCRIPT_OPTS@ -version-info 0:1:0
-libavfs_la_LIBADD = ../src/libavfscore.la ../modules/libmodules.la @LIBZ@ ../bzlib/libbz.la @LIBDAV@
+libavfs_la_LIBADD = ../src/libavfscore.la ../modules/libmodules.la @LIBZ@ @LIBBZ2@ @LIBDAV@
 libavfs_la_SOURCES = 
 
 libavfs_static_la_LDFLAGS = -static
-libavfs_static_la_LIBADD = ../src/libavfscore.la ../modules/libmodules.la  @LIBZ@ ../bzlib/libbz.la @LIBDAV@
+libavfs_static_la_LIBADD = ../src/libavfscore.la ../modules/libmodules.la  @LIBZ@ @LIBBZ2@ @LIBDAV@
 libavfs_static_la_SOURCES = 
 
 EXTRA_DIST = libavfs.map

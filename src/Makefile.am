@@ -1,6 +1,6 @@
 EXTRA_DIST = make_info
 
-AM_CFLAGS = -I$(top_srcdir)/include @ZLIB_INCLUDE@ @CFLAGS@ @CPPFLAGS@
+AM_CFLAGS = -I$(top_srcdir)/include @ZLIB_INCLUDE@ -I$(top_srcdir)/bzlib @CFLAGS@ @CPPFLAGS@ -DBZ_NO_STDIO
 
 noinst_LTLIBRARIES = libavfscore.la
 libavfscore_la_LDFLAGS = -module
@@ -34,7 +34,8 @@ libavfscore_la_SOURCES = utils.c      \
 	passwords.c  \
 	zread.c      \
 	exit.c       \
-	realfile.c
+	realfile.c   \
+	bzread.c
 
 noinst_HEADERS = \
 	archint.h \

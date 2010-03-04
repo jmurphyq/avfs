@@ -1,3 +1,20 @@
+2010-03-04  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* patch/avfs-bzlib-1.0.5-changes.diff, patch/avfs-zlib-1.1.4-changes.diff:
+	added zlib and bzlib patch for reference
+
+	* bzlib/blocksort.c, bzlib/bzlib.c, bzlib/bzlib.h, bzlib/bzlib_private.h, bzlib/compress.c, bzlib/crctable.c, bzlib/decompress.c, bzlib/huffman.c, bzlib/randtable.c:
+	updated bzlib to 1.0.5
+
+	* bzlib/Makefile.am, configure.in, lib/Makefile.am, src/Makefile.am:
+	updated bz2 support to be able to use system library
+
+	* bzlib/Makefile.am, src/Makefile.am:
+	moved bzread.c into src directory just like zread.c
+
+	* src/Makefile.am, src/zread.c, zlib/Makefile.am, lib/Makefile.am, configure.in:
+	added configure option to use system zlib
+
 2010-02-12  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix a couple of compiler warnings

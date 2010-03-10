@@ -27,6 +27,10 @@ modules = \
 	extfs.c      \
 	dav.c
 
+if USE_LZMA
+modules += uxz.c
+endif
+
 libmodules_la_SOURCES = \
 	dav_ls.c \
 	$(modules)
@@ -54,6 +58,10 @@ modules = \
 	uzip.c       \
 	floppy.c     \
 	extfs.c
+
+if USE_LZMA
+modules += uxz.c
+endif
 
 libmodules_la_SOURCES = \
 	$(modules)

@@ -37,6 +37,10 @@ libavfscore_la_SOURCES = utils.c      \
 	realfile.c   \
 	bzread.c
 
+if USE_LZMA
+libavfscore_la_SOURCES += xzread.c
+endif
+
 noinst_HEADERS = \
 	archint.h \
 	filtprog.h \

@@ -35,3 +35,7 @@ noinst_HEADERS = archive.h \
 	zfile.h \
 	avfs.h \
 	virtual.h
+
+if USE_LZMA
+noinst_HEADERS += xzfile.h
+endif

@@ -474,6 +474,33 @@ if test $fuse_build = yes; then
   fi
 fi
 
+
+dnl ================================================================
+dnl == check for liblzma                                          ==
+dnl ================================================================
+
+have_liblzma=no
+use_liblzma=no
+AC_ARG_WITH(xz,AC_HELP_STRING([--with-xz],[use xz (default is YES)]),
+            ac_cv_use_xz=$withval, ac_cv_use_xz=yes)
+if test "$ac_cv_use_xz" = "yes"; then
+    PKG_CHECK_EXISTS([liblzma],[
+                     PKG_CHECK_MODULES([LIBLZMA],[liblzma],
+                                       [have_liblzma=yes])
+                     ])
+
+    dnl AC_MSG_CHECKING(for liblzma)
+    if test "$have_liblzma" = "yes"; then
+        AC_DEFINE(HAVE_LIBLZMA, 1, [Define to 1 if your system has liblzma installed])
+        CXXFLAGS="$CXXFLAGS $LIBLZMA_CFLAGS"
+        LIBS="$LIBS $LIBLZMA_LIBS"
+        use_liblzma=yes
+    fi
+    dnl AC_MSG_RESULT($have_liblzma)
+fi
+
+
+AM_CONDITIONAL(USE_LZMA, test x$use_lzma = xyes)
 AM_CONDITIONAL(INSTALL_FUSE, test x$install_fuse = xyes)
 AM_CONDITIONAL(INSTALL_AVFSCODA_PROFILE, test x$install_profilescripts = xyes)
 AM_CONDITIONAL(INSTALL_AVFSCODA, test x$install_avfscoda = xyes)
@@ -578,6 +605,11 @@ if test "x$use_system_bzlib" = "xyes"; then
   echo "  Use system bzlib                          : yes (recommended: no, slower access)"
 else
   echo "  Use system bzlib                          : no  (recommended: no)"
+fi
+if test "x$use_liblzma" = "xyes"; then
+  echo "  Use liblzma                               : yes (recommended: yes)"
+else
+  echo "  Use liblzma                               : no  (recommended: yes)"
 fi
 echo ""
 echo "  Installation prefix                       : $prefix"

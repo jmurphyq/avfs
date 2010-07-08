@@ -501,7 +501,7 @@ if test "$ac_cv_use_xz" = "yes"; then
 fi
 
 
-AM_CONDITIONAL(USE_LZMA, test x$use_lzma = xyes)
+AM_CONDITIONAL(USE_LIBLZMA, test x$use_liblzma = xyes)
 AM_CONDITIONAL(INSTALL_FUSE, test x$install_fuse = xyes)
 AM_CONDITIONAL(INSTALL_AVFSCODA_PROFILE, test x$install_profilescripts = xyes)
 AM_CONDITIONAL(INSTALL_AVFSCODA, test x$install_avfscoda = xyes)

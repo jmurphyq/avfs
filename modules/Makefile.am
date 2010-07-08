@@ -27,7 +27,7 @@ modules = \
 	extfs.c      \
 	dav.c
 
-if USE_LZMA
+if USE_LIBLZMA
 modules += uxz.c
 endif
 
@@ -59,7 +59,7 @@ modules = \
 	floppy.c     \
 	extfs.c
 
-if USE_LZMA
+if USE_LIBLZMA
 modules += uxz.c
 endif
 

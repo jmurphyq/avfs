@@ -5,6 +5,7 @@ AC_PREREQ([2.50])
 AM_INIT_AUTOMAKE(avfs, 0.9.8)
 AC_CONFIG_HEADER(include/config.h:config.h.in)
 AC_PREFIX_DEFAULT(/usr)
+AC_CONFIG_MACRO_DIR([macros])
 
 dnl Check if on the same host if reconfiguring
 

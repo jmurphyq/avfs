@@ -585,6 +585,8 @@ extfs/ulha
 extfs/urar
 extfs/uzip
 extfs/uzoo
+
+include/version.h
 ], [chmod +x scripts/avfs-config])
 
 echo ""

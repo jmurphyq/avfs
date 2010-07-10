@@ -25,6 +25,7 @@ modules = \
 	uzip.c       \
 	floppy.c     \
 	extfs.c      \
+	uxze.c       \
 	dav.c
 
 if USE_LIBLZMA
@@ -57,7 +58,8 @@ modules = \
 	urar.c       \
 	uzip.c       \
 	floppy.c     \
-	extfs.c
+	extfs.c      \
+	uxze.c
 
 if USE_LIBLZMA
 modules += uxz.c

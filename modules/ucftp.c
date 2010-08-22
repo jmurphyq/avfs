@@ -1142,6 +1142,12 @@ static int ucftp_read_list(struct ucftpfs *fs, struct filebuf *fb, struct ucftpe
                     ucftp_add_subentry(ent, subent, entp);
                     entp = &subent->next;
 
+                    /* re-use some old values */
+                    if(subent->node != NULL) {
+                        stbuf.dev = subent->node->st.dev;
+                        stbuf.ino = subent->node->st.ino;
+                    }
+
                     subent->node->st = stbuf;
                     if(subent->node->linkname != NULL) {
                         av_free(subent->node->linkname);

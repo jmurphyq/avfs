@@ -971,8 +971,10 @@ static int ftp_password_set(struct entry *ent, const char *param,
     av_free(fts->password);
     fts->password = av_strdup(val);
     len = strlen(fts->password);
-    if(fts->password[len - 1] == '\n')
-        fts->password[len - 1] = '\0';
+    if(len > 0) {
+        if(fts->password[len - 1] == '\n')
+            fts->password[len - 1] = '\0';
+    }
     AV_UNLOCK(ftp_lock);
 
     return 0;

@@ -1630,6 +1630,20 @@ static int ucftp_open(ventry *ve, int flags, avmode_t mode, void **resp)
         }
     }
 
+    if(AV_ISDIR(ent->node->st.mode)) {
+        if(!ucftp_is_valid_node(ent->node)) {
+            //get dir list from ftp
+            
+            struct ucftpconn *conn;
+            
+            conn = ucftp_find_conn_ventry(ve);
+            res = ucftp_list(fs, conn, ent);
+            if(res < 0) {
+                //TODO do something? aborting?
+            }
+        }
+    }
+
     if((flags & AVO_ACCMODE) == AVO_NOPERM) {
         file = ucftp_new_file(ent, flags);
     } else {

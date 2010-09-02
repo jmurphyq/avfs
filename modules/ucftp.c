@@ -46,6 +46,7 @@ struct ucftpconn {
     struct ucftpconn *next;
     int binary;
     char *cwd;
+    short ft_cancel_ok;
 
     struct ucftpentry *root;
 };
@@ -60,6 +61,7 @@ struct ucftpfile {
     avoff_t numbytes;
     struct ucftpconn *conn;
     int writing;
+    short eof;
 };
 
 /* a generic information node */
@@ -985,6 +987,7 @@ static struct ucftpconn *ucftp_lookup_conn(struct ucftpfs *fs, const char *host,
     conn->next = NULL;
     conn->binary = -1;
     conn->cwd = av_strdup("");
+    conn->ft_cancel_ok = 1;
     
     conn->root = ucftp_new_entry("/");
     ucftp_make_node(fs, conn->root, 0755 | AV_IFDIR);
@@ -1025,20 +1028,49 @@ static int ucftp_get_conn(struct ucftpfs *fs, const char *userhost,
 
 static void ucftp_free_file(struct ucftpfile *f)
 {
+#if 0
     if(f->conn != NULL) {
         ucftp_close_conn(f->conn);
         ucftp_release_conn(f->conn);
     }
+#endif
     av_unref_obj(f->sockfb);
     
     if(f->sock >= 0)
         close(f->sock);
+
+    /* if control connection is busy try to wait for reply, often
+       closing the data socket will bring the control connection back
+       to life */
+    if ( f->conn != NULL ) {
+        if ( f->conn->busy ) {
+            if ( f->conn->ft_cancel_ok ) {
+                int res = ucftp_wait_reply_code(f->conn);
+
+                if(res >= 0 && res / 100 != 2)
+                    res = -EIO;
+                
+                if(res < 0) {
+                    av_log( AVLOG_WARNING, "UCFTP: canceling file transfer and reuse connection failed\n" );
+
+                    f->conn->ft_cancel_ok = 0;
+                    ucftp_close_conn(f->conn);
+                }
+                
+                ucftp_release_conn(f->conn);
+            } else {
+                ucftp_close_conn(f->conn);
+                ucftp_release_conn(f->conn);
+            }
+        }
+    }
     
     f->sock = -1;
     f->sockfb = NULL;
     f->numbytes = 0;
     f->conn = NULL;
     f->writing = 0;
+    f->eof = 0;
     
     av_unref_obj(f->ent);
     f->ent = NULL;
@@ -1056,6 +1088,7 @@ static struct ucftpfile *ucftp_new_file(struct ucftpentry *ent, int flags)
     f->conn = NULL;
     f->flags = flags;
     f->writing = 0;
+    f->eof = 0;
 
     av_ref_obj(ent);
     f->ent = ent;
@@ -1070,6 +1103,7 @@ static int ucftp_init_file(struct ucftpfile *lf, int sock)
     lf->numbytes = 0;
     lf->conn = NULL;
     lf->writing = 0;
+    lf->eof = 0;
 
     lf->sockfb = av_filebuf_new(lf->sock, 0);
 
@@ -1787,6 +1821,10 @@ static avssize_t ucftp_read(vfile *vf, char *buf, avsize_t nbyte)
     if(AV_ISDIR(uf->ent->node->st.mode))
         return -EISDIR;
     
+    if(uf->eof) {
+        return 0;
+    }
+    
     if(!uf->sockfb) {
         if(!AV_ISREG(uf->ent->node->st.mode))
             return -EINVAL;
@@ -1796,10 +1834,7 @@ static avssize_t ucftp_read(vfile *vf, char *buf, avsize_t nbyte)
             return -EIO;
     }
 
-    if(vf->ptr >= uf->ent->node->st.size)
-	return 0;
-    
-    nact = AV_MIN(nbyte, (avsize_t) (uf->ent->node->st.size - vf->ptr));
+    nact = nbyte;
     
     for(;;) {
         nbytes = av_filebuf_read(uf->sockfb, buf, nact);
@@ -1813,7 +1848,9 @@ static avssize_t ucftp_read(vfile *vf, char *buf, avsize_t nbyte)
                 uf->sockfb = NULL;
                 close(uf->sock);
                 uf->sock = -1;
-            
+                
+                uf->eof = 1;
+ 
                 res = ucftp_wait_reply_code(uf->conn);
                 if(res >= 0 && res / 100 != 2)
                     res = -EIO;

@@ -2119,6 +2119,22 @@ static int ucftp_mkdir(ventry *ve, avmode_t mode)
 }
 
 /***************************************
+ * seeking
+ ***************************************/
+
+static avoff_t ucftp_lseek(vfile *vf, avoff_t offset, int whence)
+{
+    return -ENOSYS;
+    /* TODO implement some kind of seeking?
+     * Since seeking is not supported by FTP and no data is cached
+     * seeking would be terrible expensive.
+     * on the other hand, forward seeking could be implemented
+     * by repeatedly call read, seek to the end as well. Seek to
+     * the start could be implemented by closing and re-open
+     */
+}
+
+/***************************************
  * ucftp_ctl code
  ***************************************/
 
@@ -2303,6 +2319,8 @@ int av_init_module_ucftp(struct vmodule *module)
     avfs->mkdir     = ucftp_mkdir;
     avfs->unlink    = ucftp_unlink;
     avfs->rmdir     = ucftp_rmdir;
+
+    avfs->lseek     = ucftp_lseek;
     
     //    avfs->rename    = vol_rename;
     //    avfs->setattr   = vol_setattr;

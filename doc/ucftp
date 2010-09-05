@@ -39,6 +39,8 @@ There are some limitation of this module too:
 1.Seeking in files is currently not supported, just plain reading (or writing)
   from the beginning to the end.
   This can be a problem for applications relying on seek support.
+  Also, without seeking many other modules might not work. You won't be able
+  to look inside archives, for example.
 
 Bugs and Problems
 -----------------

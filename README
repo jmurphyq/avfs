@@ -143,7 +143,7 @@ done with the file by using the second method.
 
 There are handlers which do not have a "base" file. The following
 handlers are like this: floppy, ftp, rsh, ssh, http, dav, avfsstat,
-volatile, rpms.
+volatile, rpms, ucftp.
 
 Examples
 
@@ -185,6 +185,8 @@ The following "handlers" are available now:
   #uar               un-ar                  builtin
   #ubz2              bunzip2                builtin
   #ubzip2            bunzip2                uses bzip2
+  #ucftp             ftp                    builtin (write support, no file cache)
+  #ucftp_ctl         control ftp sessions   
   #ugz               gunzip                 builtin (1)
   #ugzip             gunzip                 uses gzip
   #urar              unrar                  builtin list + uses rar to extract

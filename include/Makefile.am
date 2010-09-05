@@ -31,11 +31,12 @@ noinst_HEADERS = archive.h \
 	state.h \
 	tmpfile.h \
 	ugid.h \
-	version.h \
 	zfile.h \
 	avfs.h \
 	virtual.h
 
-if USE_LZMA
+if USE_LIBLZMA
 noinst_HEADERS += xzfile.h
 endif
+
+BUILT_SOURCES = version.h

@@ -549,9 +549,12 @@ static void insert_tarentry(struct archive *arch, struct tar_entinfo *tinf,
     if(ent == NULL)
         return;
 
-    if(av_arch_isroot(arch, ent))
-        av_log(AVLOG_WARNING, "TAR: Empty filename");
-    else
+    if(av_arch_isroot(arch, ent)) {
+        /* that is not so unusual, archives created with
+           "tar -cf test.tar ." have a ./ entry so
+           the warning is disabled */
+        /* av_log(AVLOG_WARNING, "TAR: Empty filename");*/
+    } else
         fill_tarentry(arch, ent, tinf, tarstat);
 
     av_unref_obj(ent);

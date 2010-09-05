@@ -1,3 +1,52 @@
+2010-08-30  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* ftp: fixed crash when password file is empty
+
+2010-08-22  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* utar: disabled warning about empty file names, it happens for
+	archives create with . as base directory
+
+2010-07-10  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* simplified modules/Makefile.am for dav conditional
+
+2010-07-10  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* added xz filter module uxze
+
+2010-07-09  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* changed AV_VER to be replaced with NUMVERSION from configure
+	script
+
+2010-07-09  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* added some m4 macros in configure.in to handle version number
+
+2010-07-08  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* fixed wrong conditional for liblzma
+	* fixed compilation of xzread
+
+2010-07-08  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* set m4 macros directory in configure.in
+
+2010-07-07  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* added pkg.m4 from pkg-config to macros
+	* added macros directory makefile.am
+	* also build bzip2 package when creating a distribution
+
+2010-03-10  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* added support for liblzma (xz files)
+
+2010-03-04  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* forgotten to remove old bzread.c version and add new one
+
 2010-03-04  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* patch/avfs-bzlib-1.0.5-changes.diff, patch/avfs-zlib-1.1.4-changes.diff:

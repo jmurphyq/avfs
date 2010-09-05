@@ -1,10 +1,21 @@
 dnl Process this file with autoconf to produce a configure script.
 
-AC_INIT(include/avfs.h)
+define(AVFS_MAJOR,[0])
+define(AVFS_MINOR,[9])
+define(AVFS_PATCH,[9])
+define(AVFS_COMMENT,[pre1])
+
+define(AVFS_VERSION,AVFS_MAJOR[.]AVFS_MINOR[.]AVFS_PATCH[]AVFS_COMMENT)
+define(AVFS_NUMVERSION,m4_eval(AVFS_MAJOR*100+AVFS_MINOR*10+AVFS_PATCH))
+
 AC_PREREQ([2.50])
-AM_INIT_AUTOMAKE(avfs, 0.9.8)
+AC_INIT([avfs], AVFS_VERSION)
+AC_CONFIG_SRCDIR([include/avfs.h])
+AM_INIT_AUTOMAKE
+
 AC_CONFIG_HEADER(include/config.h:config.h.in)
 AC_PREFIX_DEFAULT(/usr)
+AC_CONFIG_MACRO_DIR([macros])
 
 dnl Check if on the same host if reconfiguring
 
@@ -22,8 +33,11 @@ if test "$validstring" = invalid; then
   AC_MSG_ERROR([type 'make realclean' before running configure])
 fi
 
-VERSION=0.9.8
+VERSION=AVFS_VERSION
 AC_SUBST(VERSION)
+
+NUMVERSION=AVFS_NUMVERSION
+AC_SUBST(NUMVERSION)
 
 os=`uname -s`
 kernver=`uname -r | sed -n 's/\([[0-9]]\+\)\.\([[0-9]]\+\)\..*/\1\2/p'`
@@ -500,7 +514,7 @@ if test "$ac_cv_use_xz" = "yes"; then
 fi
 
 
-AM_CONDITIONAL(USE_LZMA, test x$use_lzma = xyes)
+AM_CONDITIONAL(USE_LIBLZMA, test x$use_liblzma = xyes)
 AM_CONDITIONAL(INSTALL_FUSE, test x$install_fuse = xyes)
 AM_CONDITIONAL(INSTALL_AVFSCODA_PROFILE, test x$install_profilescripts = xyes)
 AM_CONDITIONAL(INSTALL_AVFSCODA, test x$install_avfscoda = xyes)
@@ -571,6 +585,8 @@ extfs/ulha
 extfs/urar
 extfs/uzip
 extfs/uzoo
+
+include/version.h
 ], [chmod +x scripts/avfs-config])
 
 echo ""

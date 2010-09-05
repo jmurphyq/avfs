@@ -37,7 +37,6 @@ static AV_LOCK_DECL(xzread_lock);
 struct xzcache {
     int id;
     avoff_t size;
-    unsigned int numindex;
 };
 
 struct xzfile {
@@ -67,8 +66,6 @@ static avoff_t xz_total_out(lzma_stream *s)
 
 static void xz_delete_stream(lzma_stream *s)
 {
-    int res;
-
     if(s != NULL) {
         lzma_end(s);
         
@@ -149,7 +146,7 @@ static int xzfile_fill_inbuf(struct xzfile *fil)
     if(res < 0)
         return res;
     
-    fil->s->next_in = fil->inbuf;
+    fil->s->next_in = (uint8_t*)fil->inbuf;
     fil->s->avail_in = res;
 
     return 0;
@@ -197,7 +194,7 @@ static int xzfile_read(struct xzfile *fil, struct xzcache *zc, char *buf,
 {
     int res;
 
-    fil->s->next_out = buf;
+    fil->s->next_out = (uint8_t*)buf;
     fil->s->avail_out = nbyte;
     while(fil->s->avail_out != 0 && !fil->iseof) {
         res = xzfile_decompress(fil, zc);
@@ -212,7 +209,7 @@ static int xzfile_skip_to(struct xzfile *fil, struct xzcache *zc,
                           avoff_t offset)
 {
     int res;
-    char outbuf[OUTBUFSIZE];
+    uint8_t outbuf[OUTBUFSIZE];
     
     while(!fil->iseof) {
         avoff_t curroff = xz_total_out(fil->s);
@@ -343,7 +340,6 @@ struct xzfile *av_xzfile_new(vfile *vf)
 
 static void xzcache_destroy(struct xzcache *zc)
 {
-    av_free(zc->indexes);
 }
 
 struct xzcache *av_xzcache_new()
@@ -351,8 +347,6 @@ struct xzcache *av_xzcache_new()
     struct xzcache *zc;
 
     AV_NEW_OBJ(zc, xzcache_destroy);
-    zc->numindex = 0;
-    zc->indexes = NULL;
     zc->size = -1;
 
     AV_LOCK(xzread_lock);

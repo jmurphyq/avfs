@@ -1,5 +1,13 @@
-Changes from 0.9.8 to 0.9.9 (2009-05-xx)
+Changes from 0.9.8 to 0.9.9 (2010-09-xx)
    - fixed race condition in avfsd 
+   - system zlib and bzlib may be used instead of shipped versions.
+     Access is slower for some operations (e.g. seeking)
+   - updated bzlib to 1.0.5
+   - support for liblzma has been added so xz and lzma files
+     can be accessed. There is also a module named uxze which
+     uses the external command xz so even without liblzma
+     such archives can be accessed.
+   - fixed crash in ftp module when password file is empty
 
 Changes from 0.9.7 to 0.9.8 (2007-05-31)
    - utar supports long names in POSIX ustar archives

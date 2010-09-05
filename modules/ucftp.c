@@ -1047,7 +1047,9 @@ static void ucftp_free_file(struct ucftpfile *f)
             if ( f->conn->ft_cancel_ok ) {
                 int res = ucftp_wait_reply_code(f->conn);
 
-                if(res >= 0 && res / 100 != 2)
+                if(res >= 0 && res / 10 == 45 ) {
+                    /* code 45x is acceptable here, server reported abort */
+                } else if(res >= 0 && res / 100 != 2)
                     res = -EIO;
                 
                 if(res < 0) {
@@ -1326,6 +1328,19 @@ static int ucftp_readdir(vfile *vf, struct avdirent *buf)
     if(!AV_ISDIR(parent->st.mode))
         return -ENOTDIR;
     
+    if(!ucftp_is_valid_node(parent)) {
+        //get dir list from ftp
+        
+        struct ucftpconn *conn;
+        int res;
+        
+        conn = ucftp_find_conn(ucftp_vfile_fs(vf), parentfile->ent);
+        res = ucftp_list(ucftp_vfile_fs(vf), conn, parentfile->ent);
+        if(res < 0) {
+            //TODO do something? aborting?
+        }
+    }
+
     nod = ucftp_nth_entry(vf->ptr, parent, &name);
     if(nod == NULL)
         return 0;
@@ -1661,20 +1676,6 @@ static int ucftp_open(ventry *ve, int flags, avmode_t mode, void **resp)
             new_node = 1;
         } else {
             return -ENOENT;
-        }
-    }
-
-    if(AV_ISDIR(ent->node->st.mode)) {
-        if(!ucftp_is_valid_node(ent->node)) {
-            //get dir list from ftp
-            
-            struct ucftpconn *conn;
-            
-            conn = ucftp_find_conn_ventry(ve);
-            res = ucftp_list(fs, conn, ent);
-            if(res < 0) {
-                //TODO do something? aborting?
-            }
         }
     }
 

@@ -1026,9 +1026,11 @@ static int ucftp_get_conn(struct ucftpfs *fs, const char *userhost,
  * ucftpfile constructor and destructor
  ***************************************/
 
+#define TRY_REUSE_CONN_AFTER_CLOSE
+
 static void ucftp_free_file(struct ucftpfile *f)
 {
-#if 0
+#ifndef TRY_REUSE_CONN_AFTER_CLOSE
     if(f->conn != NULL) {
         ucftp_close_conn(f->conn);
         ucftp_release_conn(f->conn);
@@ -1039,6 +1041,7 @@ static void ucftp_free_file(struct ucftpfile *f)
     if(f->sock >= 0)
         close(f->sock);
 
+#ifdef TRY_REUSE_CONN_AFTER_CLOSE
     /* if control connection is busy try to wait for reply, often
        closing the data socket will bring the control connection back
        to life */
@@ -1047,8 +1050,8 @@ static void ucftp_free_file(struct ucftpfile *f)
             if ( f->conn->ft_cancel_ok ) {
                 int res = ucftp_wait_reply_code(f->conn);
 
-                if(res >= 0 && res / 10 == 45 ) {
-                    /* code 45x is acceptable here, server reported abort */
+                if(res >= 0 && ( res / 10 == 45 || res == 426 ) ) {
+                    /* code 45x and 426 is acceptable here, server reported abort */
                 } else if(res >= 0 && res / 100 != 2)
                     res = -EIO;
                 
@@ -1066,6 +1069,7 @@ static void ucftp_free_file(struct ucftpfile *f)
             }
         }
     }
+#endif
     
     f->sock = -1;
     f->sockfb = NULL;
@@ -1722,6 +1726,10 @@ static int ucftp_close(vfile *vf)
         res = ucftp_wait_reply_code(f->conn);
         if(res >= 0 && res / 100 != 2)
             res = -EIO;
+
+        if ( res >= 0 ) {
+            ucftp_release_conn(f->conn);
+        }
     }
 
     av_unref_obj(f);
@@ -1837,6 +1845,11 @@ static avssize_t ucftp_read(vfile *vf, char *buf, avsize_t nbyte)
 
     nact = nbyte;
     
+    if ( uf->numbytes != vf->ptr ) {
+        av_log(AVLOG_ERROR, "UCFTP: wrong file position\n");
+        return -EIO;
+    }
+
     for(;;) {
         nbytes = av_filebuf_read(uf->sockfb, buf, nact);
         if(nbytes != 0) {

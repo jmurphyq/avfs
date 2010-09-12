@@ -33,7 +33,7 @@ Forms of AVFS
 AVFS can now be installed in four different ways. These are:
 
  - Fuse
- 	With fuse support, systems with 2.6 kernels can now use avfs.
+ 	With fuse support, systems with 2.6 kernels are able to use avfs.
 	The requirements are 
 	1) fuse support be compiled into the kernel or fuse modules 
 	   loaded.
@@ -53,14 +53,15 @@ AVFS can now be installed in four different ways. These are:
         higher, so systems using GLIBC are not supported.
 
  - Library
-        This method should work on any system but the support is only
-        available for programs compiled to use this library.
+        AVFS can be used as a shared library for programs written to
+        utilize AVFS. This is a pure userspace library so it should
+        work on any POSIX system.
 
 Using AVFS is very similar in all cases. Differences will be indicated.
 
 The installation method is different. For installation instructions
-see the files 'INSTALL.preload', 'INSTALL.avfscoda' and 'INSTALL.library'
-respectively.
+see the files 'INSTALL.fuse', 'INSTALL.avfscoda', 'INSTALL.preload',
+and 'INSTALL.library' respectively all located in the doc/ directory.
 
 Using AVFS
 ----------
@@ -189,6 +190,8 @@ The following "handlers" are available now:
   #ugzip             gunzip                 uses gzip
   #urar              unrar                  builtin list + uses rar to extract
   #utar              untar                  builtin
+  #uxz               unxz/unlzma            builtin
+  #uxze              unxz/unlzma            uses xz
   #uz                uncompress             uses gzip
   #uzip              unzip                  builtin
   #volatile          'memory fs'            mainly for testing

@@ -23,6 +23,7 @@ modules = \
 	uzip.c       \
 	floppy.c     \
 	extfs.c      \
+	ucftp.c      \
 	uxze.c
 
 if USE_LIBLZMA

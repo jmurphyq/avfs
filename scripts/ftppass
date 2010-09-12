@@ -37,4 +37,6 @@ echo
 
 echo $passwd | cp /dev/stdin $basedir/#ftp_ctl:$userhost/password
 
-
+if [ -e "$basedir/#ucftp_ctl" ]; then
+    echo $passwd | cp /dev/stdin $basedir/#ucftp_ctl:$userhost/password
+fi

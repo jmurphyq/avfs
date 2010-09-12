@@ -1,7 +1,7 @@
 /*
     FUSE: Filesystem in Userspace
     Copyright (C) 2001  Miklos Szeredi <miklos@szeredi.hu>
-    Copyright (C) 2009  Ralf Hoffmann (ralf@boomerangsworld.de)
+    Copyright (C) 2009-2010  Ralf Hoffmann (ralf@boomerangsworld.de)
 
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
@@ -273,6 +273,19 @@ static int avfsd_access(const char *path, int mask)
     return 0;
 }
 
+static int avfsd_create(const char *path, mode_t mode, struct fuse_file_info *fi)
+{
+    int res;
+
+    /* open will handle the O_CREAT flag */
+    res = virt_open(path, fi->flags | O_CREAT | O_TRUNC, mode);
+    if (res == -1)
+        return -errno;
+
+    fi->fh = res;
+    return 0;
+}
+
 static struct fuse_operations avfsd_oper = {
     getattr:	avfsd_getattr,
     readlink:	avfsd_readlink,
@@ -293,6 +306,7 @@ static struct fuse_operations avfsd_oper = {
     write:	avfsd_write,
     release:	avfsd_release,
     access:	avfsd_access,
+    create:	avfsd_create,
 };
 
 int main(int argc, char *argv[])

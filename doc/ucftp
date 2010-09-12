@@ -1,0 +1,52 @@
+UnCached FTP module
+===================
+
+Motivation
+----------
+
+FTP support is available for a long time in AVFS using the ftp module. FTP
+servers can be accessed by entering /#ftp:some_server/directory/file and so on.
+There are, however, some limitations. This module only supports read-only
+access. All downloaded files are cached in the local file system which makes
+additional accesses to the same file fast and also allows seeking in these
+files. The downside is that even very large files will be cached which is
+perhaps not always wanted (imagine downloading an iso image of a linux
+distribution).
+
+Introduction
+------------
+
+The ucftp module adds write support and additionally downloaded files are not
+cached. It can be used just as the original module, whenever you did go to
+/#ftp:some_server/directory/file you would now go to
+/#ucftp:some_server/directory/file.
+
+If you don't use anonymous access, you need to write the password to
+/#ucftp_ctl:user@host.domain.org/password just like ftp_ctl for the original
+module.
+
+The features of this module are:
+1.Write support
+  Create files/directories
+  Delete files
+2.No file cache
+  It can be a pro or con depending on your usage. Accessing the same file
+  several times issues re-download every time so for a slow connection this
+  could be problem. On the other hand, you perhaps don't want to cache
+  very large files but just cp'ing them to the final location.
+
+There are some limitation of this module too:
+1.Seeking in files is currently not supported, just plain reading (or writing)
+  from the beginning to the end.
+  This can be a problem for applications relying on seek support.
+  Also, without seeking many other modules might not work. You won't be able
+  to look inside archives, for example.
+
+Bugs and Problems
+-----------------
+The module is basically based on the existing ftp module so it should share
+known and unknown problems. It's a new module and it's not much tested so
+please report problems to the AVFS mailing list.
+
+No guarantees are made for a secure implementation but if you use ftp instead
+of sftp you should know about the security implications anyway.

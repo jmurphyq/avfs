@@ -43,11 +43,16 @@ extfs/mailfs
 extfs/patchfs
 extfs/rpms
 extfs/u7z
+extfs/uace
 extfs/uar
 extfs/uarj
+extfs/uc1541
 extfs/uha
 extfs/ulha
+extfs/upp
 extfs/urar
+extfs/uxdms
+extfs/uxpk
 extfs/uzip
 extfs/uzoo
 fuse/Makefile

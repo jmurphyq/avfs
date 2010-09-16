@@ -3,7 +3,12 @@ EXTFS_CONST =		\
         ftplist		\
         rpm		\
         trpm		\
-        ucpio
+	uadf		\
+	uarc		\
+	ucab		\
+        ucpio		\
+	udar		\
+	uimg
 
 EXTFS_IN =	\
 	a		\
@@ -20,17 +25,22 @@ EXTFS_IN =	\
 	patchfs		\
 	rpms		\
 	u7z		\
+	uace		\
 	uar		\
 	uarj		\
+	uc1541		\
 	uha		\
 	ulha		\
+	upp		\
 	urar		\
+	uxmds		\
+	uxpk		\
 	uzip		\
 	uzoo
 
 extfsscriptsdir = @moduledir@/extfs
 extfsscripts_SCRIPTS = $(EXTFS_IN) $(EXTFS_CONST)
-	
+
 extfsdatadir = @moduledir@/extfs
 extfsdata_DATA = extfs.ini README
 

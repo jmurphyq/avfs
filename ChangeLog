@@ -1,3 +1,28 @@
+2010-09-23  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* bumped library revision to 2
+
+2010-09-21  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* updated internal bzlib to 1.0.6 to fix security bug
+
+2010-09-16  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* extfs: updated existing and added some new extfs handler
+	* fixed typo in extfs.ini
+	* fixed typo in modules/Makefile.am
+	* fixed typo in extfs/Makefile.am
+	* updated gitignore file
+
+2010-09-12  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* ucftp: added ucftp module for uncached ftp support with read and
+	write
+	* avfsd: added avfsd_create function for fuse
+	* mountavfs: changed mountavfs to also check AVFSBASE env var and
+	to create the base directory $HOME/.avfs
+
+
 2010-08-30  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* ftp: fixed crash when password file is empty

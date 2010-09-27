@@ -1,3 +1,7 @@
+2010-09-27  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* udar: handled h and r entries as regular files
+
 2010-09-23  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* bumped library revision to 2

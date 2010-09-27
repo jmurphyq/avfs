@@ -14,6 +14,11 @@
 # - Block and character special files are not handled
 # - Files not stored in (differential) backups are not handled
 
+# Changes
+# 2010-09-27  Ralf Hoffmann <ralf@boomerangsworld.de>
+#  - hard links (h) and special dar file type (e) are handled
+#    as regular files
+
 DAR=dar_static
 
 # dar expects the basename (without number and extension)
@@ -58,6 +63,11 @@ BEGIN { flag=0 }
   if (match(substr(perm, 1, 1), "[bc]") != 0)
   {
     next
+  }
+  # change h and e types into regulat types
+  if (match(substr(perm, 1, 1), "[he]") != 0)
+  {
+    perm = "-" substr( perm, 2 );
   }
   uid=record[2]
   if (match(uid, "^[0-9]*$") != 0)

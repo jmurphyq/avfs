@@ -1,3 +1,7 @@
+2010-09-28  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* registered .lzma for uxze module
+
 2010-09-27  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* udar: handled h and r entries as regular files

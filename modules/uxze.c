@@ -18,6 +18,7 @@ int av_init_module_uxze(struct vmodule *module)
     struct avfs *avfs;
     const char *uxze_args[3];
     const char *xze_args[2];
+    struct ext_info uxze_exts[2];
 
     uxze_args[0] = "xz";
     uxze_args[1] = "-d";
@@ -26,6 +27,9 @@ int av_init_module_uxze(struct vmodule *module)
     xze_args[0] = "xz";
     xze_args[1] = NULL;
 
+    uxze_exts[0].from = ".lzma",   uxze_exts[0].to = NULL;
+    uxze_exts[1].from = NULL;
+
     return av_init_filt(module, AV_VER, "uxze", uxze_args, xze_args,
-                        NULL, &avfs);
+                        uxze_exts, &avfs);
 }

@@ -1,4 +1,4 @@
-Changes from 0.9.8 to 0.9.9 (2010-09-xx)
+Changes from 0.9.8 to 0.9.9 (2010-10-06)
    - fixed race condition in avfsd 
    - system zlib and bzlib may be used instead of shipped versions.
      Access is slower for some operations (e.g. seeking)

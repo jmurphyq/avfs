@@ -71,6 +71,7 @@ static void filebuf_fill_poll(struct filebuf *fbs[], struct pollfd *pf,
 
     for(i = 0; i < numfbs; i++) {
         pf[i].fd = -1;
+        pf[i].events = 0;
         if(fbs[i] != NULL && !fbs[i]->eof) {
             pf[i].fd = fbs[i]->fd;
             if((fbs[i]->flags & FILEBUF_WRITE) != 0)

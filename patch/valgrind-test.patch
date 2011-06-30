@@ -1,0 +1,20 @@
+diff --git a/zlib/inflate.c b/zlib/inflate.c
+index 6d59698..ce4a5f5 100644
+--- a/zlib/inflate.c
++++ b/zlib/inflate.c
+@@ -7,6 +7,7 @@
+ #include "infblock.h"
+ 
+ #include <assert.h>
++#include <valgrind/memcheck.h>
+ 
+ struct inflate_blocks_state {int dummy;}; /* for buggy compilers */
+ 
+@@ -407,6 +408,7 @@ int inflateSave(z_streamp z, char **resultp)
+   buf[at++] = 'S';
+   buf[at++] = 'Z';
+ 
++  VALGRIND_MAKE_MEM_DEFINED(buf,at);
+   *resultp = buf;  
+   return at;
+ }

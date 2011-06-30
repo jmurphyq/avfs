@@ -22,6 +22,7 @@ static struct namespace *avfsstat_ns;
 struct av_obj {
     int refctr;
     void (*destr)(void *);
+    avmutex *ref_lock;
 };
 
 static AV_LOCK_DECL(objlock);
@@ -238,8 +239,18 @@ void *av_new_obj(avsize_t nbyte, void (*destr)(void *))
     ao = (struct av_obj *) av_calloc(sizeof(*ao) + nbyte);
     ao->refctr = 1;
     ao->destr = destr;
+    ao->ref_lock = NULL;
     
     return (void *) (ao + 1);
+}
+
+void av_obj_set_ref_lock(void *obj, avmutex *lock)
+{
+    if(obj != NULL) {
+        struct av_obj *ao = ((struct av_obj *) obj) - 1;
+
+        ao->ref_lock = lock;
+    }
 }
 
 void av_ref_obj(void *obj)
@@ -248,11 +259,21 @@ void av_ref_obj(void *obj)
         struct av_obj *ao = ((struct av_obj *) obj) - 1;
         int refctr;
         
-        AV_LOCK(objlock);
+        if(ao->ref_lock != NULL) {
+            AV_LOCK(*ao->ref_lock);
+        } else {
+            AV_LOCK(objlock);
+        }
+
         if(ao->refctr > 0)
             ao->refctr ++;
         refctr = ao->refctr;
-        AV_UNLOCK(objlock);
+
+        if(ao->ref_lock != NULL) {
+            AV_UNLOCK(*ao->ref_lock);
+        } else {
+            AV_UNLOCK(objlock);
+        }
 
         if(refctr <= 0)
             av_log(AVLOG_ERROR, "Referencing deleted object (%p)", obj);
@@ -265,20 +286,37 @@ void av_unref_obj(void *obj)
         struct av_obj *ao = ((struct av_obj *) obj) - 1;
         int refctr;
 
-        AV_LOCK(objlock);
+        if(ao->ref_lock != NULL) {
+            AV_LOCK(*ao->ref_lock);
+        } else {
+            AV_LOCK(objlock);
+        }
+
         if(ao->refctr >= 0)
             ao->refctr --;
         refctr = ao->refctr;
-        AV_UNLOCK(objlock);
         
         if(refctr == 0) {
             if(ao->destr != NULL)
                 ao->destr(obj);
 
+            if(ao->ref_lock != NULL) {
+                AV_UNLOCK(*ao->ref_lock);
+            } else {
+                AV_UNLOCK(objlock);
+            }
+
             av_free(ao);
+            return;
         }
         else if(refctr < 0)
             av_log(AVLOG_ERROR, "Unreferencing deleted object (%p)", obj);
+
+        if(ao->ref_lock != NULL) {
+            AV_UNLOCK(*ao->ref_lock);
+        } else {
+            AV_UNLOCK(objlock);
+        }
     }
 }
 

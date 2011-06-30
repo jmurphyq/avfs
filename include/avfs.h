@@ -169,8 +169,12 @@ typedef struct {
 #define AV_NEW_OBJ(ptr, destr) \
    ptr = av_new_obj(sizeof(*(ptr)), (void (*)(void *)) destr)
 
-#define AV_LOCK_DECL(mutex) avmutex mutex
-#define AV_INITLOCK(mutex) pthread_mutex_init(&(mutex), NULL)
+#define AV_LOCK_DECL(mutex) avmutex mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+#define AV_INITLOCK(mutex) { pthread_mutexattr_t attr; \
+        pthread_mutexattr_init(&attr); \
+        pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE); \
+        pthread_mutex_init(&(mutex), &attr); \
+        pthread_mutexattr_destroy(&attr);}
 #define AV_FREELOCK(mutex) pthread_mutex_destroy(&(mutex));
 #define AV_LOCK(mutex)     pthread_mutex_lock(&(mutex))
 #define AV_UNLOCK(mutex)   pthread_mutex_unlock(&(mutex))
@@ -303,6 +307,7 @@ void       av_free(void *ptr);
 void      *av_new_obj(avsize_t nbyte, void (*destr)(void *));
 void       av_ref_obj(void *obj);
 void       av_unref_obj(void *obj);
+void       av_obj_set_ref_lock(void *obj, avmutex *lock);
           
 char      *av_strdup(const char *s);
 char      *av_strndup(const char *s, avsize_t len);

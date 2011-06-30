@@ -213,6 +213,12 @@ static struct entry *lookup_name(struct namespace *ns, struct entry *parent,
         
     ent->name = av_strndup(name, namelen);
     ent->flags = 0;
+
+    /* set namespace lock since the entry will be in the hash without
+       a reference. This prevents deleting the object in one thread
+       while finding the pointer in another thread. */
+    av_obj_set_ref_lock(ent, &namespace_lock);
+
     init_list_head(&ent->subdir);
     list_add(&ent->child, subdir_head(ns, parent));
     list_add(&ent->hash, hashlist);

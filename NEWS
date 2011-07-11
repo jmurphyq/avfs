@@ -1,3 +1,6 @@
+Changes from 0.9.9 to 1.0.0 (2011-07-11)
+   - fixed possible crash due to race condition in namespace module
+
 Changes from 0.9.8 to 0.9.9 (2010-10-06)
    - fixed race condition in avfsd 
    - system zlib and bzlib may be used instead of shipped versions.

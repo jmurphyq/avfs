@@ -170,15 +170,19 @@ struct namespace *av_namespace_new()
     return ns;
 }
 
-static void free_entry(struct entry *ent)
+/* remove the entry from internal list while holding the locked
+ * so it cannot be looked up by a different thread */
+static void free_entry_locked(struct entry *ent)
 {
-    AV_LOCK(namespace_lock);
     list_del(&ent->child);
     list_del(&ent->hash);
     ent->ns->numentries --;
     resize_hashtable(ent->ns);
-    AV_UNLOCK(namespace_lock);
+}
 
+/* this is the regular destructor called outside the lock */
+static void free_entry(struct entry *ent)
+{
     av_free(ent->name);
     av_unref_obj(ent->parent);
     av_unref_obj(ent->ns);
@@ -218,6 +222,9 @@ static struct entry *lookup_name(struct namespace *ns, struct entry *parent,
        a reference. This prevents deleting the object in one thread
        while finding the pointer in another thread. */
     av_obj_set_ref_lock(ent, &namespace_lock);
+
+    /* activate destructor called while holding the lock */
+    av_obj_set_destr_locked(ent, free_entry_locked);
 
     init_list_head(&ent->subdir);
     list_add(&ent->child, subdir_head(ns, parent));

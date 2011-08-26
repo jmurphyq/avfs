@@ -23,6 +23,7 @@ struct av_obj {
     int refctr;
     void (*destr)(void *);
     avmutex *ref_lock;
+    void (*destr_locked)(void *);
 };
 
 static AV_LOCK_DECL(objlock);
@@ -240,6 +241,7 @@ void *av_new_obj(avsize_t nbyte, void (*destr)(void *))
     ao->refctr = 1;
     ao->destr = destr;
     ao->ref_lock = NULL;
+    ao->destr_locked = NULL;
     
     return (void *) (ao + 1);
 }
@@ -250,6 +252,15 @@ void av_obj_set_ref_lock(void *obj, avmutex *lock)
         struct av_obj *ao = ((struct av_obj *) obj) - 1;
 
         ao->ref_lock = lock;
+    }
+}
+
+void av_obj_set_destr_locked(void *obj, void (*destr_locked)(void *))
+{
+    if(obj != NULL) {
+        struct av_obj *ao = ((struct av_obj *) obj) - 1;
+
+        ao->destr_locked = destr_locked;
     }
 }
 
@@ -297,26 +308,25 @@ void av_unref_obj(void *obj)
         refctr = ao->refctr;
         
         if(refctr == 0) {
-            if(ao->destr != NULL)
-                ao->destr(obj);
-
-            if(ao->ref_lock != NULL) {
-                AV_UNLOCK(*ao->ref_lock);
-            } else {
-                AV_UNLOCK(objlock);
-            }
-
-            av_free(ao);
-            return;
+            if(ao->destr_locked != NULL)
+                ao->destr_locked(obj);
         }
-        else if(refctr < 0)
-            av_log(AVLOG_ERROR, "Unreferencing deleted object (%p)", obj);
 
         if(ao->ref_lock != NULL) {
             AV_UNLOCK(*ao->ref_lock);
         } else {
             AV_UNLOCK(objlock);
         }
+
+        if(refctr == 0) {
+            if(ao->destr != NULL)
+                ao->destr(obj);
+
+            av_free(ao);
+            return;
+        }
+        else if(refctr < 0)
+            av_log(AVLOG_ERROR, "Unreferencing deleted object (%p)", obj);
     }
 }
 

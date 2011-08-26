@@ -169,11 +169,18 @@ typedef struct {
 #define AV_NEW_OBJ(ptr, destr) \
    ptr = av_new_obj(sizeof(*(ptr)), (void (*)(void *)) destr)
 
-#define AV_LOCK_DECL(mutex) avmutex mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
-#define AV_INITLOCK(mutex) { pthread_mutexattr_t attr; \
-        pthread_mutexattr_init(&attr); \
-        pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE); \
-        pthread_mutex_init(&(mutex), &attr); \
+#define AV_LOCK_DECL(mutex) avmutex mutex
+#define AV_INITLOCK(mutex) pthread_mutex_init(&(mutex), NULL)
+#define AV_INIT_RECURSIVELOCK(mutex) { pthread_mutexattr_t attr;   \
+        pthread_mutexattr_init(&attr);                                  \
+        if (pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE) != 0) { \
+            av_log(AVLOG_ERROR, "Couldn't init recursive mutex");       \
+            exit(1);                                                    \
+        }                                                               \
+        if (pthread_mutex_init(&(mutex), &attr) != 0) {                 \
+            av_log(AVLOG_ERROR, "Couldn't init recursive mutex");       \
+            exit(1);                                                    \
+        }                                                               \
         pthread_mutexattr_destroy(&attr);}
 #define AV_FREELOCK(mutex) pthread_mutex_destroy(&(mutex));
 #define AV_LOCK(mutex)     pthread_mutex_lock(&(mutex))
@@ -308,6 +315,7 @@ void      *av_new_obj(avsize_t nbyte, void (*destr)(void *));
 void       av_ref_obj(void *obj);
 void       av_unref_obj(void *obj);
 void       av_obj_set_ref_lock(void *obj, avmutex *lock);
+void       av_obj_set_destr_locked(void *obj, void (*destr)(void *));
           
 char      *av_strdup(const char *s);
 char      *av_strndup(const char *s, avsize_t len);

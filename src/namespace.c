@@ -15,11 +15,18 @@
 
 #include "namespace.h"
 #include "avfs.h"
+#include <stdlib.h>
 
 #define HASH_TABLE_MIN_SIZE 11
 #define HASH_TABLE_MAX_SIZE 13845163
 
 static AV_LOCK_DECL(namespace_lock);
+static pthread_once_t namespace_lock_initialized = PTHREAD_ONCE_INIT;
+
+static void namespace_init_lock()
+{
+    AV_INIT_RECURSIVELOCK(namespace_lock);
+}
 
 #define list_entry(ptr, type, member) \
 	((type *)((char *)(ptr)-(unsigned long)(&((type *)0)->member)))
@@ -161,6 +168,8 @@ struct namespace *av_namespace_new()
 {
     struct namespace *ns;
 
+    pthread_once(&namespace_lock_initialized, namespace_init_lock);
+
     AV_NEW_OBJ(ns, namespace_delete);
     init_list_head(&ns->root);
     ns->numentries = 0;
@@ -224,7 +233,7 @@ static struct entry *lookup_name(struct namespace *ns, struct entry *parent,
     av_obj_set_ref_lock(ent, &namespace_lock);
 
     /* activate destructor called while holding the lock */
-    av_obj_set_destr_locked(ent, free_entry_locked);
+    av_obj_set_destr_locked(ent,(void (*)(void *))  free_entry_locked);
 
     init_list_head(&ent->subdir);
     list_add(&ent->child, subdir_head(ns, parent));

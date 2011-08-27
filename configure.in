@@ -477,15 +477,32 @@ if test $fuse_build = yes; then
 fi
 
 if test $fuse_build = yes; then
-  AC_CHECK_LIB(fuse, fuse_main,[fuse_found=yes],[fuse_found=false])
-  if test x$fuse_found == xyes; then
-    FUSELIBS="-lfuse"
-    AC_SUBST(FUSELIBS)
-    install_fuse=yes
-    install_scriptcomps="$install_scriptcomps mountavfs umountavfs"
-  else
-    fuse_build=no
-  fi
+    fuse_pkg_found=no
+    PKG_CHECK_EXISTS([fuse],[
+                     PKG_CHECK_MODULES([LIBFUSE],[fuse],
+                                       [fuse_pkg_found=yes])
+                     ])
+
+    if test "$fuse_pkg_found" = "yes"; then
+        AC_DEFINE(HAVE_LIBFUSE, 1, [Define to 1 if your system has libfuse installed])
+        CPPFLAGS="$CPPFLAGS $LIBFUSE_CFLAGS"
+        FUSELIBS="$LIBFUSE_LIBS"
+        AC_SUBST(FUSELIBS)
+        install_fuse=yes
+        install_scriptcomps="$install_scriptcomps mountavfs umountavfs"
+    else
+        fuse_build=no
+    fi
+
+dnl  AC_CHECK_LIB(fuse, fuse_main,[fuse_found=yes],[fuse_found=false])
+dnl  if test x$fuse_found == xyes; then
+dnl    FUSELIBS="-lfuse"
+dnl    AC_SUBST(FUSELIBS)
+dnl    install_fuse=yes
+dnl    install_scriptcomps="$install_scriptcomps mountavfs umountavfs"
+dnl  else
+dnl    fuse_build=no
+dnl  fi
 fi
 
 
@@ -506,7 +523,7 @@ if test "$ac_cv_use_xz" = "yes"; then
     dnl AC_MSG_CHECKING(for liblzma)
     if test "$have_liblzma" = "yes"; then
         AC_DEFINE(HAVE_LIBLZMA, 1, [Define to 1 if your system has liblzma installed])
-        CXXFLAGS="$CXXFLAGS $LIBLZMA_CFLAGS"
+        CPPFLAGS="$CPPFLAGS $LIBLZMA_CFLAGS"
         LIBS="$LIBS $LIBLZMA_LIBS"
         use_liblzma=yes
     fi

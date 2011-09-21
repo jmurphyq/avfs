@@ -91,6 +91,7 @@ static void fill_extfs_node(struct archive *arch, struct entry *ent,
         
     stbuf->dev = nod->st.dev;
     stbuf->ino = nod->st.ino;
+    stbuf->nlink = nod->st.nlink;
 
     nod->st = *stbuf;
     nod->offset = 0;

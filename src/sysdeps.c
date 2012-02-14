@@ -209,7 +209,7 @@ void av_log(int type, const char *format, ...)
     va_end(ap);
 
     if(logfile == NULL)
-        syslog(LOG_INFO, buf);
+        syslog(LOG_INFO, "%s", buf);
     else
         filelog(buf);
     AV_UNLOCK(loglock);

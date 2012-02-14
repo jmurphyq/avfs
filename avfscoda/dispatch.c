@@ -147,7 +147,7 @@ static void logerr(const char *fmt, ...)
     va_end(ap);
 
     buf[LOGMSG_SIZE] = '\0';
-    syslog(LOG_INFO, buf);
+    syslog(LOG_INFO, "%s", buf);
     log(buf);
 }
 

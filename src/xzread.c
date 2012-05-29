@@ -20,7 +20,7 @@
 
 #define INBUFSIZE 16384
 #define OUTBUFSIZE 32768
-#define INITIAL_MEMLIMIT ( 25 * 1024 * 1024 )
+#define INITIAL_MEMLIMIT (100<<20)
 
 struct xzstreamcache {
     int id;

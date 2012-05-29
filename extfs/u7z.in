@@ -1,4 +1,4 @@
-#! /bin/sh
+#!/bin/bash
 #
 # u7z - 7zip file archive Virtual File System for Midnight Commander ( ftp://ftp.ibiblio.org/pub/Linux/utils/file/managers/mc/ )
 # 
@@ -76,7 +76,7 @@ mc7zfs_copyin ()
     pwd=`pwd`
 # Create a directory and copy in it the tmp file with the random name
     dir="$3".dir
-    mkdir "$dir"
+    mkdir "$dir" || exit 1
     cd "$dir"
     mv "$1" .
     arname=`basename "$1"`
@@ -84,7 +84,7 @@ mc7zfs_copyin ()
 # if file is to be written upper in the archive tree, make fake dir
     if test "$di" != "${2##*/}" ; then
 #	echo asdsad 1>&2
-        mkdir -p "$di" 
+        mkdir -p "$di" || exit 1
     fi
 #    pwd > /tmp/cdir
 #    echo "$arname $2" > /tmp/ters
@@ -121,11 +121,11 @@ mc7zfs_mkdir ()
     pwd=`pwd`
 # Create a directory and create in it a tmp directory with the good name     
     dir=tmpdir.${RANDOM}
-    mkdir $dir
+    mkdir $dir || exit 1
     cd $dir
     mv "$1" .
     arname=`basename "$1"`
-    mkdir -p "$2"
+    mkdir -p "$2" || exit 1
 # 7z cannot create an empty directory    
 #    touch "$2"/.emptydir
     $SEVENZ a -r "$arname" "$2" >/dev/null 2>/dev/null

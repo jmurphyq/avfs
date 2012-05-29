@@ -231,13 +231,14 @@ int av_init_module_ubz2(struct vmodule *module)
 {
     int res;
     struct avfs *avfs;
-    struct ext_info ubz_exts[5];
+    struct ext_info ubz_exts[6];
 
-    ubz_exts[0].from = ".bz2",  ubz_exts[0].to = NULL;
-    ubz_exts[1].from = ".bz",   ubz_exts[1].to = NULL;
-    ubz_exts[2].from = ".tbz2", ubz_exts[2].to = ".tar";
-    ubz_exts[3].from = ".tbz",  ubz_exts[3].to = ".tar";
-    ubz_exts[4].from = NULL;
+    ubz_exts[0].from = ".tar.bz2",  ubz_exts[0].to = ".tar";
+    ubz_exts[1].from = ".bz2",  ubz_exts[1].to = NULL;
+    ubz_exts[2].from = ".bz",   ubz_exts[2].to = NULL;
+    ubz_exts[3].from = ".tbz2", ubz_exts[3].to = ".tar";
+    ubz_exts[4].from = ".tbz",  ubz_exts[4].to = ".tar";
+    ubz_exts[5].from = NULL;
 
     res = av_new_avfs("ubz2", ubz_exts, AV_VER, AVF_NOLOCK, module, &avfs);
     if(res < 0)

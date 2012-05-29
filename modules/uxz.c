@@ -231,11 +231,13 @@ int av_init_module_uxz(struct vmodule *module)
 {
     int res;
     struct avfs *avfs;
-    struct ext_info uxz_exts[3];
+    struct ext_info uxz_exts[5];
 
-    uxz_exts[0].from = ".xz",  uxz_exts[0].to = NULL;
+    uxz_exts[0].from = ".tar.xz",  uxz_exts[0].to = ".tar";
     uxz_exts[1].from = ".txz",  uxz_exts[1].to = ".tar";
-    uxz_exts[2].from = NULL;
+    uxz_exts[2].from = ".xz",  uxz_exts[2].to = NULL;
+    uxz_exts[3].from = ".lzma",  uxz_exts[3].to = NULL;
+    uxz_exts[4].from = NULL;
 
     res = av_new_avfs("uxz", uxz_exts, AV_VER, AVF_NOLOCK, module, &avfs);
     if(res < 0)

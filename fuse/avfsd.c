@@ -314,5 +314,3 @@ int main(int argc, char *argv[])
     fuse_main(argc, argv, &avfsd_oper, NULL);
     return 0;
 }
-
-

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Written by Stas Maximov 1998 SVR4 (UnixWare)
 # stmax@u213.srcc.msu.su 
@@ -22,7 +22,7 @@ uni_cat ()
 mccpiofs_list ()
 # $1 is the archive name
 {
-    uni_cat "$1" | cpio -itv | /bin/awk '
+    uni_cat "$1" | cpio -itv | /usr/bin/awk '
 	{
 	    if (substr($9,length($9),1) == ",")
 	    {

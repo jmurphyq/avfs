@@ -47,7 +47,7 @@ typedef XML_Char hip_xml_char;
 # ifdef HAVE_LIBXML
 
 /******** libxml **********/
-#  include <parser.h>
+#  include <libxml/parser.h>
 typedef xmlChar hip_xml_char;
 
 # else /* not HAVE_LIBXML */

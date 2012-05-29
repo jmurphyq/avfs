@@ -1,4 +1,4 @@
-#! /bin/sh
+#!/bin/bash
 # umountavfs -- program to unmount avfs file system
 # and unload avfsd daemon.
 # companion program to mountavfs
@@ -14,8 +14,11 @@ else
     MntDir="${HOME}/.avfs"
 fi
 
-grep -q "avfsd ${MntDir}" /proc/mounts && {
+grep -qE "${MntDir}.*avfsd" /proc/mounts && {
    echo unMounting AVFS on $MntDir...
-   fusermount -u "$MntDir"
+   if type -p fusermount > /dev/null 2>&1 ; then
+      fusermount -u -z "$MntDir"
+   else
+      umount -l "$MntDir"
+   fi
 }
-

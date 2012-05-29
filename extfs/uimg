@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # This is a parser for DOS/Atari disk images in Midnight Commander. You 
 # need the GPL mtools program (version >= 3.9.9) written by Emmet P. Gray, 

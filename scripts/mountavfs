@@ -1,4 +1,4 @@
-#! /bin/sh
+#!/bin/bash
 # mountavfs -- program to mount avfs file system
 # and load avfsd daemon.
 # companion program to umountavfs
@@ -14,7 +14,7 @@ else
     MntDir=${HOME}/.avfs
 fi
 
-grep -q "avfsd ${MntDir}" /proc/mounts || {
+grep -qE "avfsd ${MntDir}" /proc/mounts || {
    if [ ! -e "$MntDir" ]; then
       mkdir -p "$MntDir"
    fi
@@ -24,6 +24,7 @@ grep -q "avfsd ${MntDir}" /proc/mounts || {
    fi
    echo Mounting AVFS on $MntDir...
    avfsd "$MntDir"
-   echo "1" >"$MntDir/#avfsstat/symlink_rewrite"
+   while test ! -e "$MntDir/#avfsstat/symlink_rewrite"
+   do sleep 0.5 ; done
+   echo "1" >| "$MntDir/#avfsstat/symlink_rewrite"
 }
-

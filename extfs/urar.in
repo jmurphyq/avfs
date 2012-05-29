@@ -1,4 +1,4 @@
-#! /bin/sh
+#!/bin/bash
 #
 # Written by andrey joukov
 # (C) 1996 2:5020/337.13@fidonet.org
@@ -54,12 +54,12 @@ mcrarfs_copyin ()
 # preserve pwd. It is clean, but is it necessary?
     pwd=`pwd`
 # Create a directory and copy in it the tmp file with the good name     
-    mkdir "$3.dir"
+    mkdir "$3.dir" || exit 1
     cd "$3.dir"
     di="${2%/*}"
 # if file is to be written upper in the archive tree, make fake dir
     if test x"$di" != x"${2##*/}" ; then
-        mkdir -p "$di"
+        mkdir -p "$di" || exit 1
     fi
     cp -fp "$3" "$3.dir/$2" 
     $RAR a "$1" "$2" >/dev/null
@@ -79,7 +79,7 @@ mcrarfs_mkdir ()
 # Create a directory and create in it a tmp directory with the good name     
     dir=`mktemp -d "${MC_TMPDIR:-/tmp}/mctmpdir-urar.XXXXXX"` || exit 1
     cd "$dir"
-    mkdir -p "$2"  
+    mkdir -p "$2"  || exit 1
 # rar cannot create an empty directory    
     touch "$2"/.rarfs
     $RAR a -r "$1" "$2" >/dev/null

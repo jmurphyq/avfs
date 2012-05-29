@@ -1,4 +1,4 @@
-#! /bin/sh
+#!/bin/bash
 # This fs implements a simple database of your favourite ftp servers.
 # The `archive' is a text file containing a list of ftp URL's one per line
 # like this (followed optionaly by name under which the link will be

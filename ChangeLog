@@ -1,3 +1,10 @@
+2012-06-11  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* removed recursive locks and made other changes so it compiles on Mac OS
+	* fixed number of hard links counter for extfs directories (find
+	would skip some subdirectories)
+	* bumped version to 1.0.1
+
 2011-07-01  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* fixed race condition in namespace module.

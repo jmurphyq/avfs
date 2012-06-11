@@ -1,3 +1,9 @@
+Changes from 1.0.0 to 1.0.1 (2011-06-xx)
+   - compile fixes for macos
+   - fixed hard link count for extfs directories
+   - extfs updates to use bash as executing shell
+   - xz handler support quite some more file endings
+
 Changes from 0.9.9 to 1.0.0 (2011-07-11)
    - fixed possible crash due to race condition in namespace module
 

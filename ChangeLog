@@ -1,3 +1,8 @@
+2013-05-09  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* fixed some 32bit overflows for archive, utar, and state
+	module. It prevented accessing large files.
+
 2012-06-11  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* removed recursive locks and made other changes so it compiles on Mac OS

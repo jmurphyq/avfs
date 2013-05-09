@@ -1156,7 +1156,8 @@ static avssize_t read_sparse(vfile *vf, char *buf, avsize_t nbyte)
     sparses = tn->sparsearray;
     offset = fil->nod->offset;
 
-    nact = AV_MIN(nbyte, (avsize_t) (size - vf->ptr));
+    // since nbyte is avsize_t, the min will not be larger than that datatype
+    nact = (avsize_t)AV_MIN((avoff_t)nbyte, (avoff_t) (size - vf->ptr));
     start = vf->ptr;
     end = start + nact;
 

@@ -342,6 +342,11 @@ static void decode_header (union block *header, struct avstat *stat_info,
         stat_info->size = 
             from_oct (1 + 12, header->oldgnu_header.realsize);
     else stat_info->size = from_oct (1 + 12, header->header.size);
+
+    // from_oct failed, so set size to 0
+    if ( stat_info->size == -1 ) {
+        stat_info->size = 0;
+    }
   
     switch(header->header.typeflag) {
     case GNUTYPE_SPARSE:

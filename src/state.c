@@ -191,7 +191,8 @@ static avssize_t state_read(vfile *vf, char *buf, avsize_t nbyte)
     if(vf->ptr >= size)
 	return 0;
     
-    nact = AV_MIN(nbyte, (avsize_t) (size - vf->ptr));
+    // since nbyte is avsize_t, the min will not be larger than that datatype
+    nact = AV_MIN((avoff_t)nbyte, (avoff_t) (size - vf->ptr));
     
     memcpy(buf, sf->contents + vf->ptr, nact);
     

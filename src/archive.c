@@ -426,7 +426,7 @@ avssize_t av_arch_read(vfile *vf, char *buf, avsize_t nbyte)
     avoff_t realoff;
     struct archfile *fil = arch_vfile_file(vf);
     struct archnode *nod = fil->nod;
-    avsize_t nact;
+    avoff_t nact;
 
     if(AV_ISDIR(nod->st.mode))
         return -EISDIR;
@@ -435,9 +435,10 @@ avssize_t av_arch_read(vfile *vf, char *buf, avsize_t nbyte)
         return 0;
 
     realoff = vf->ptr + nod->offset;
-    nact = AV_MIN(nbyte, (avsize_t) (nod->realsize - vf->ptr));
+    nact = AV_MIN((avoff_t)nbyte, (avoff_t) (nod->realsize - vf->ptr));
 
-    res = av_pread(fil->basefile, buf, nact, realoff);
+    // due to the MIN, nact is not larger than the range of avsize_t
+    res = av_pread(fil->basefile, buf, (avsize_t)nact, realoff);
     if(res > 0)
         vf->ptr += res;
 

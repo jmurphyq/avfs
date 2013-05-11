@@ -1,3 +1,7 @@
+2013-05-11  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* utar: added support for files larger than 8GB in archives.
+
 2013-05-09  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* fixed some 32bit overflows for archive, utar, and state

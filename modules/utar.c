@@ -1,7 +1,7 @@
 /*  
     AVFS: A Virtual File System Library
     Copyright (C) 1998  Miklos Szeredi <miklos@szeredi.hu>
-    Copyright (C) 2007  Ralf Hoffmann (ralf@boomerangsworld.de)
+    Copyright (C) 2007,2013  Ralf Hoffmann (ralf@boomerangsworld.de)
 
     Based on the GNU tar sources (C) Free Software Foundation
     
@@ -16,6 +16,7 @@
 #include "oper.h"
 #include "ugid.h"
 #include "version.h"
+#include <limits.h>
 
 #define COPYBUFSIZE 16384
 #define BIGBLOCKSIZE (20 * BLOCKSIZE)
@@ -88,6 +89,123 @@ static long long from_oct(int digs, char *where)
     return value;
 }
 
+/* this function is from gtar 1.26:list.c */
+
+const int LG_8 = 3;
+const int LG_256 = 8;
+
+/* Convert buffer at WHERE0 of size DIGS from external format to
+   uintmax_t.  DIGS must be positive.  If TYPE is nonnull, the data
+   are of type TYPE.  The buffer must represent a value in the range
+   -MINUS_MINVAL through MAXVAL.  If OCTAL_ONLY, allow only octal
+   numbers instead of the other GNU extensions.  Return -1 on error,
+   diagnosing the error if TYPE is nonnull and if !SILENT.  */
+static avoff_t
+val_from_header (char const *where0, size_t digs, char const *type,
+                 avoff_t minus_minval, avoff_t maxval,
+                 char octal_only)
+{
+    avoff_t value;
+    char const *where = where0;
+    char const *lim = where + digs;
+    int negative = 0;
+
+    /* Accommodate buggy tar of unknown vintage, which outputs leading
+       NUL if the previous field overflows.  */
+    where += !*where;
+
+    /* Accommodate older tars, which output leading spaces.  */
+    for (;;) {
+        if (where == lim) {
+            return -1;
+        }
+        if (!ISSPACE ((unsigned char) *where))
+            break;
+        where++;
+    }
+
+    value = 0;
+    if (ISODIGIT (*where)) {
+        char const *where1 = where;
+        avoff_t overflow = 0;
+
+        for (;;) {
+            value += *where++ - '0';
+            if (where == lim || ! ISODIGIT (*where))
+                break;
+            overflow |= value ^ (value << LG_8 >> LG_8);
+            value <<= LG_8;
+        }
+
+        /* Parse the output of older, unportable tars, which generate
+           negative values in two's complement octal.  If the leading
+           nonzero digit is 1, we can't recover the original value
+           reliably; so do this only if the digit is 2 or more.  This
+           catches the common case of 32-bit negative time stamps.  */
+        if ((overflow || maxval < value) && '2' <= *where1 && type) {
+            /* Compute the negative of the input value, assuming two's
+               complement.  */
+            int digit = (*where1 - '0') | 4;
+            overflow = 0;
+            value = 0;
+            where = where1;
+            for (;;) {
+                value += 7 - digit;
+                where++;
+                if (where == lim || ! ISODIGIT (*where))
+                    break;
+                digit = *where - '0';
+                overflow |= value ^ (value << LG_8 >> LG_8);
+                value <<= LG_8;
+            }
+            value++;
+            overflow |= !value;
+
+            if (!overflow && value <= minus_minval) {
+                negative = 1;
+            }
+        }
+
+        if (overflow) {
+            return -1;
+        }
+    } else if (octal_only) {
+        /* Suppress the following extensions.  */
+    } else if (*where == '\200' /* positive base-256 */
+               || *where == '\377' /* negative base-256 */) {
+        /* Parse base-256 output.  A nonnegative number N is
+           represented as (256**DIGS)/2 + N; a negative number -N is
+           represented as (256**DIGS) - N, i.e. as two's complement.
+           The representation guarantees that the leading bit is
+           always on, so that we don't confuse this format with the
+           others (assuming ASCII bytes of 8 bits or more).  */
+        int signbit = *where & (1 << (LG_256 - 2));
+        avoff_t topbits = (((avoff_t) - signbit)
+                           << (CHAR_BIT * sizeof (avoff_t)
+                               - LG_256 - (LG_256 - 2)));
+        value = (*where++ & ((1 << (LG_256 - 2)) - 1)) - signbit;
+        for (;;) {
+            value = (value << LG_256) + (unsigned char) *where++;
+            if (where == lim)
+                break;
+            if (((value << LG_256 >> LG_256) | topbits) != value) {
+                return -1;
+            }
+        }
+        negative = signbit;
+        if (negative)
+            value = -value;
+    }
+
+    if (where != lim && *where && !ISSPACE ((unsigned char) *where)) {
+        return -1;
+    }
+
+    if (value <= (negative ? minus_minval : maxval))
+        return negative ? -value : value;
+
+    return -1;
+}
 /*------------------------------------------------------------------------.
 | Converts long VALUE into a DIGS-digit field at WHERE, including a       |
 | trailing space and room for a NUL.  For example, 3 for DIGS 3 means one |
@@ -226,7 +344,9 @@ static int read_entry(vfile *vf, struct tar_entinfo *tinf)
         if (header->header.typeflag == LNKTYPE)
             tinf->size  = 0;	/* links 0 size on tape */
         else
-            tinf->size = from_oct (1 + 12, header->header.size);
+            tinf->size = val_from_header(header->header.size,
+                                         sizeof(header->header.size),
+                                         "avoff_t", 0, AV_MAXOFF, 0);
 
         if (header->header.typeflag == GNUTYPE_LONGNAME
             || header->header.typeflag == GNUTYPE_LONGLINK)
@@ -338,10 +458,15 @@ static void decode_header (union block *header, struct avstat *stat_info,
     stat_info->mtime.sec = from_oct (1 + 12, header->header.mtime);
     stat_info->mtime.nsec = 0;
 
-    if(header->header.typeflag == GNUTYPE_SPARSE) 
-        stat_info->size = 
-            from_oct (1 + 12, header->oldgnu_header.realsize);
-    else stat_info->size = from_oct (1 + 12, header->header.size);
+    if(header->header.typeflag == GNUTYPE_SPARSE) {
+        stat_info->size = val_from_header(header->oldgnu_header.realsize,
+                                          sizeof(header->oldgnu_header.realsize),
+                                          "avoff_t", 0, AV_MAXOFF, 0);
+    } else {
+        stat_info->size = val_from_header(header->header.size,
+                                          sizeof(header->header.size),
+                                          "avoff_t", 0, AV_MAXOFF, 0);
+    }
 
     // from_oct failed, so set size to 0
     if ( stat_info->size == -1 ) {

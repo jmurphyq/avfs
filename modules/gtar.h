@@ -71,6 +71,10 @@ struct posix_header
 #define FIFOTYPE '6'		/* FIFO special */
 #define CONTTYPE '7'		/* reserved */
 
+#define XHDTYPE  'x'            /* Extended header referring to the
+                                   next file in the archive */
+#define XGLTYPE  'g'            /* Global extended header */
+
 /* Bits used in the mode field, values in octal.  */
 #define TSUID    04000		/* set UID on execution */
 #define TSGID    02000		/* set GID on execution */

@@ -349,27 +349,37 @@ static int read_entry(vfile *vf, struct tar_entinfo *tinf)
                                          "avoff_t", 0, AV_MAXOFF, 0);
 
         if (header->header.typeflag == GNUTYPE_LONGNAME
-            || header->header.typeflag == GNUTYPE_LONGLINK)
+            || header->header.typeflag == GNUTYPE_LONGLINK
+            || header->header.typeflag == XHDTYPE
+            || header->header.typeflag == XGLTYPE)
 	{
-            longp = ((header->header.typeflag == GNUTYPE_LONGNAME)
-                     ? &next_long_name
-                     : &next_long_link);
+            if (header->header.typeflag == GNUTYPE_LONGNAME
+                || header->header.typeflag == GNUTYPE_LONGLINK) {
+                longp = ((header->header.typeflag == GNUTYPE_LONGNAME)
+                         ? &next_long_name
+                         : &next_long_link);
 
-            if (*longp) av_free (*longp);
-            bp = *longp = (char *) av_malloc ((avsize_t) tinf->size);
+                if (*longp) av_free (*longp);
+                bp = *longp = (char *) av_malloc ((avsize_t) tinf->size);
 
-            for (size = tinf->size; size > 0; size -= written)
-	    {
-                res = get_next_block (vf, &data_block);
-                if (res < 0) break;
-                written = BLOCKSIZE;
-                if (written > size)
-                    written = size;
+                for (size = tinf->size; size > 0; size -= written)
+                    {
+                        res = get_next_block (vf, &data_block);
+                        if (res < 0) break;
+                        written = BLOCKSIZE;
+                        if (written > size)
+                            written = size;
 
-                memcpy (bp, data_block.buffer, (avsize_t) written);
-                bp += written;
-	    }
-            if(res < 0) break;
+                        memcpy (bp, data_block.buffer, (avsize_t) written);
+                        bp += written;
+                    }
+                if(res < 0) break;
+            } else if (header->header.typeflag == XHDTYPE) {
+                /* just ignore/skip for the moment
+                 * look for details in GNU tar/list.c/read_header */
+            } else if (header->header.typeflag == XGLTYPE) {
+                /* just ignore/skip for the moment */
+            }
 
             /* Loop!  */
 

@@ -65,10 +65,16 @@ lib/Makefile
 lib/Makefile.in
 libneon/Makefile
 libneon/Makefile.in
+libneon/hip_xml.loT
 libtool
 ltmain.sh
 macros/Makefile
 macros/Makefile.in
+macros/libtool.m4
+macros/ltoptions.m4
+macros/ltsugar.m4
+macros/ltversion.m4
+macros/lt~obsolete.m4
 missing
 modules/Makefile
 modules/Makefile.in
@@ -92,3 +98,5 @@ test/Makefile.in
 test/runtest
 zlib/Makefile
 zlib/Makefile.in
+fuse/avfsd
+include/version.h

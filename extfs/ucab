@@ -22,7 +22,7 @@ UNCAB="cabextract"
 
 mccabfs_list ()
 {
-    $UNCAB -l "$1" | gawk -v uid=${UID-0} '
+    $UNCAB -l "$1" | gawk -v uid=$(id -ru) '
     BEGIN { hyphens=0; date="JanFebMarAprMayJunJulAugSepOctNovDec" }
     /^----/ { hyphens++; next }
     /^$/ { next }

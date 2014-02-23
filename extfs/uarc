@@ -13,7 +13,7 @@ UNARC="nomarch"
 
 mcarcfs_list ()
 {
-    $UNARC -lv "$1" | gawk -v uid=${UID-0} '
+    $UNARC -lv "$1" | gawk -v uid=$(id -ru) '
     BEGIN { date="JanFebMarAprMayJunJulAugSepOctNovDec" }
     {
         split(substr($0, 14), t)

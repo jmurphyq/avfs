@@ -1,4 +1,4 @@
-#!/bin/bash
+#! /bin/sh
 #                                                                     
 # Written by Viatcheslav Odintsov (2:5020/181)
 # (C) 2002 ARJ Software Russia.
@@ -16,7 +16,7 @@ ARJ="arj -+ -ja1"
 
 mcarjfs_list ()
 {
- $ARJ v "$1" | @AWK@ -v uuid=${UID-0} '
+ $ARJ v "$1" | @AWK@ -v uuid=$(id -ru) '
   { 
    if (($0 ~ /^[0-9]+\) .*/)||($0 ~ /^------------ ---------- ---------- -----/)){
     if (filestr ~ /^[0-9]+\) .*/) {

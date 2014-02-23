@@ -1,4 +1,4 @@
-#!/bin/bash
+#! /bin/sh
 #
 # It is the uhafs Valery Kornienkov vlk@st.simbirsk.su 2:5051/30@fidonet
 # ver 0.1 Thu Apr  6 12:05:08 2000
@@ -10,7 +10,7 @@ HA=ha
 
 mchafs_list ()
 {
-    $HA lf "$1" 2>/dev/null | @AWK@ -v uid=${UID-0} '
+    $HA lf "$1" 2>/dev/null | @AWK@ -v uid=$(id -ru) '
 /^===========/ {next}
 {
  if ($5="%" && $8~/DIR|ASC|HSC|CPY/) {

@@ -20,7 +20,7 @@ C1541="c1541"
 # There are no time stamps in the disk image, so a bogus timestamp is displayed
 mc_c1541_fs_list()
 {
-    $C1541 "$1" -list | gawk -v uid=${UID-0} '
+    $C1541 "$1" -list | gawk -v uid=$(id -ru) '
 BEGIN { FS = "\"" }
 /No LINES!/ { next }
 /BLOCKS FREE/ { next }

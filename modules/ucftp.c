@@ -2320,7 +2320,7 @@ int av_init_module_ucftp(struct vmodule *module)
     avfs->unlink    = ucftp_unlink;
     avfs->rmdir     = ucftp_rmdir;
 
-    avfs->lseek     = ucftp_lseek;
+    //avfs->lseek     = ucftp_lseek;
     
     //    avfs->rename    = vol_rename;
     //    avfs->setattr   = vol_setattr;

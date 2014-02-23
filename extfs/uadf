@@ -1,4 +1,4 @@
-#!/bin/sh
+#! /bin/sh
 
 # Description:
 # This is a parser for Amiga ADF disk images in Midnight Commander. You 
@@ -18,11 +18,10 @@
 
 # Settings:
 UNADF="unadf"
-TEMPDIR=/tmp/mctmpdir-mcadf.$USER.${RANDOM}
 
 mcadffs_list ()
 {
-    $UNADF -lr "$1" 2>/dev/null | gawk -v uid=${UID-0} '
+    $UNADF -lr "$1" 2>/dev/null | gawk -v uid=$(id -ru) '
     BEGIN { date="JanFebMarAprMayJunJulAugSepOctNovDec" }
     /^$/ { next }
     /^unADF/ { next }
@@ -63,26 +62,6 @@ mcadffs_test ()
     else
         echo "UNKNOWN"
     fi
-}
-
-# This can usually only be performed as root (Linux only).
-mcadffs_copyin ()
-{
-    mkdir $3.mnt
-    mount -n -w "$1" $3.mnt -t affs -o loop
-    cp -a -f $3 "$3.mnt/$2"
-    umount -n $3.mnt
-    rmdir $3.mnt
-}
-
-# This can usually only be performed as root (Linux only).
-mcadffs_rm ()
-{
-    mkdir $TEMPDIR
-    mount -n -w "$1" $TEMPDIR -t affs -o loop
-    rm -f "$TEMPDIR/$2"
-    umount -n $TEMPDIR
-    rmdir $TEMPDIR
 }
 
 umask 077

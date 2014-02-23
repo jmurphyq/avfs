@@ -3,6 +3,9 @@
 	* extfs: updated some scripts to not require bash (patch from
 	Michael Meskes)
 
+	* ucftp: unregistered lseek to avoid some problems (like cat not
+	working)
+
 2014-02-05  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* utar: handle extended header so there will be no PaxHeaders files

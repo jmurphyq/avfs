@@ -1,4 +1,4 @@
-#!/bin/bash
+#! /bin/sh
 # This fs implements a simple database of your favourite ftp servers.
 # The `archive' is a text file containing a list of ftp URL's one per line
 # like this (followed optionaly by name under which the link will be
@@ -20,7 +20,7 @@
 
 mcftplistfs_list ()
 {
-    { ls -l $1; cat $1; } | gawk -v uid=${UID-0} '
+    { ls -l $1; cat $1; } | gawk -v uid=$(id -ru) '
 /^[\ \	]*(#.*)?$/ { next }
 {
 if (NF > 8) {

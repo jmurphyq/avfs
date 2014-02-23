@@ -22,7 +22,7 @@ ACE_GET="unace x"
 # ls:
 mc_ace_fs_list()
 {
-    $ACE_LIST "$1" | gawk -v uid=${UID-0} '
+    $ACE_LIST "$1" | gawk -v uid=$(id -ru) '
 BEGIN { Month="JanFebMarAprMayJunJulAugSepOctNovDec" }
 /%/ { 
   split($1,date,".")

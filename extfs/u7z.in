@@ -1,4 +1,4 @@
-#!/bin/bash
+#! /bin/sh
 #
 # u7z - 7zip file archive Virtual File System for Midnight Commander ( ftp://ftp.ibiblio.org/pub/Linux/utils/file/managers/mc/ )
 # 
@@ -36,7 +36,7 @@ SEVENZ=`which 7za`
 
 mc7zfs_list ()
 {
-    $SEVENZ l "$1" 2> /dev/null | @AWK@ -v uid=${UID-0} '
+    $SEVENZ l "$1" 2> /dev/null | @AWK@ -v uid=$(id -ru) '
 BEGIN { flag=0; arr_of_month="JanFebMarAprMayJunJulAugSepOctNovDec" }
  /^-------/ { flag++; if (flag > 1) exit 0; next }
 {
@@ -106,40 +106,12 @@ mc7zfs_copyout ()
 #	p7zip 0.91 don't understand filename in subdir without "./"
 #	but in top dir it understand only without "./"
     FLIST=`$SEVENZ l "$1" 2> /dev/null`
-    echo "$FLIST" | grep -q "[.][/]" &> /dev/null && EXFNAME=*./"$2" || EXFNAME="$2"
+    echo "$FLIST" | grep -q "[.][/]" > /dev/null 2>&1 && EXFNAME=*./"$2" || EXFNAME="$2"
     EXFN=`basename "$2"`
     $SEVENZ e -r- "$1" "$EXFNAME" -o"$TMPDIR" > /dev/null 2> /dev/null
 
     cat "$TMPDIR"/"$EXFN" > "$3"
     rm -rf "$TMPDIR"
-}
-
-mc7zfs_mkdir ()
-{
-# Function not fully implemented, because 7z cannot keep empty directories
-# preserve pwd.
-    pwd=`pwd`
-# Create a directory and create in it a tmp directory with the good name     
-    dir=tmpdir.${RANDOM}
-    mkdir $dir || exit 1
-    cd $dir
-    mv "$1" .
-    arname=`basename "$1"`
-    mkdir -p "$2" || exit 1
-# 7z cannot create an empty directory    
-#    touch "$2"/.emptydir
-    $SEVENZ a -r "$arname" "$2" >/dev/null 2>/dev/null
-#    echo "$1" "$2" >error34
-#    $SEVENZ d ../"$1" "$2/.7zfs" >/dev/null
-    mv "$arname" "$1"
-    cd $pwd
-    rm -rf $dir
-}
-
-mc7zfs_rm ()
-{
-    $SEVENZ l "$1" 2> /dev/null | grep -q "[.][/]" &> /dev/null && EXFNAME=*./"$2" || EXFNAME="$2"
-    $SEVENZ d "$1" "$EXFNAME" 2>&1 | grep -q E_NOTIMPL &> /dev/null && { echo -e "Function not implemented...\n7z cannot delete files from solid archive." >&2 ; exit 1 ; }
 }
 
 umask 077
@@ -149,9 +121,6 @@ shift
 
 case "$cmd" in
   list)    mc7zfs_list    "$@" ;;
-  rm)      mc7zfs_rm      "$@" ;;
-  rmdir)   mc7zfs_rm      "$@" ;;
-  mkdir)   mc7zfs_mkdir   "$@" ;;
   copyin)  mc7zfs_copyin  "$@" ;;
   copyout) mc7zfs_copyout "$@" ;;
   *) exit 1 ;;

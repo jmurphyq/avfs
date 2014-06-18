@@ -25,6 +25,7 @@ struct ecrec {
     avushort comment_len;
 
     avoff_t file_size;
+    short is_zip64;
 };
 
 #define ECREC_THIS_DISK     4
@@ -232,6 +233,7 @@ static avoff_t find_ecrec(vfile *vf, long searchlen, struct ecrec *ecrec)
     ecrec->comment_len =   DBYTE(buf+ECREC_COMMENT_LEN);
 
     ecrec->file_size = sres;
+    ecrec->is_zip64 = 0;
 
     return bufstart;
 }
@@ -459,10 +461,32 @@ static avoff_t find_z64_ecdl(vfile *vf, struct ecrec *ecd, struct z64_end_of_cen
     return pos;
 }
 
-static int read_zip64file(vfile *vf, struct archive *arch, struct ecrec *ecrec, avoff_t pos)
+static int find_and_validate_z64_ecdl(vfile *vf, struct archive *arch, struct ecrec *ecrec, avoff_t pos,
+                                      struct z64_end_of_central_dir_loc *ecdl)
 {
-    avoff_t ecrec_pos;
-    struct z64_end_of_central_dir_loc ecdl;
+    avoff_t ecdl_pos;
+
+    ecdl_pos = find_z64_ecdl(vf, ecrec, ecdl, pos);
+    if(ecdl_pos < 0) {
+        return ecdl_pos;
+    }
+
+    if(ecdl->ecdir_disk != ecdl->ecd->this_disk) {
+        return -EIO;
+    }
+
+    if (ecdl->ecdir_off > ecdl->ecd->file_size) {
+        return -EIO;
+    }
+
+    ecrec->is_zip64 = 1;
+
+    return 0;
+}
+
+static int read_zip64file(vfile *vf, struct archive *arch, struct ecrec *ecrec,
+                          struct z64_end_of_central_dir_loc *ecdl, avoff_t pos)
+{
     struct z64_end_of_central_dir z64_ecd;
     avoff_t extra_bytes;
     avoff_t cdir_end;
@@ -470,24 +494,13 @@ static int read_zip64file(vfile *vf, struct archive *arch, struct ecrec *ecrec, 
     avoff_t cdir_pos;
     int nument;
 
-    avoff_t ecdl_pos;
+    ecdir_pos = ecdl->ecdir_off;
 
-    ecdl_pos = find_z64_ecdl(vf, ecrec, &ecdl, pos);
-    if(ecdl_pos < 0) {
-        return ecdl_pos;
-    }
-
-    if(ecdl.ecdir_disk != ecdl.ecd->this_disk) {
+    if (ecdir_pos > ecdl->ecd->file_size) {
         return -EIO;
     }
 
-    ecdir_pos = ecdl.ecdir_off;
-
-    if (ecdir_pos > ecdl.ecd->file_size) {
-        return -EIO;
-    }
-
-    pos = find_z64_ecd(vf, &ecdl, &z64_ecd, ecdir_pos);
+    pos = find_z64_ecd(vf, ecdl, &z64_ecd, ecdir_pos);
     if(pos < 0) {
         return -EIO;
     }
@@ -529,6 +542,7 @@ static int read_zipfile(vfile *vf, struct archive *arch)
 {
     avoff_t ecrec_pos;
     struct ecrec ecrec;
+    struct z64_end_of_central_dir_loc ecdl;
     avoff_t extra_bytes;
     avoff_t cdir_end;
     avoff_t cdir_pos;
@@ -538,9 +552,9 @@ static int read_zipfile(vfile *vf, struct archive *arch)
     if(ecrec_pos < 0)
         return ecrec_pos;
 
-    if(ecrec.total_entries == 0xffff) {
+    if(find_and_validate_z64_ecdl(vf, arch, &ecrec, ecrec_pos, &ecdl) == 0) {
         /* zip64 format */
-        return read_zip64file(vf, arch, &ecrec, ecrec_pos);
+        return read_zip64file(vf, arch, &ecrec, &ecdl, ecrec_pos);
     }
 
     cdir_end = ecrec.cdir_size+ecrec.cdir_off;
@@ -568,6 +582,7 @@ static int read_zipfile(vfile *vf, struct archive *arch)
             av_log(AVLOG_ERROR, "UZIP: Broken archive");
             return -EIO;
 	}
+
 	cdir_pos = read_entry(vf, arch, cdir_pos, &ecrec);
 	if(cdir_pos < 0) 
             return cdir_pos;

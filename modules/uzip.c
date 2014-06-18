@@ -23,6 +23,8 @@ struct ecrec {
     avuint cdir_size;
     avuint cdir_off;
     avushort comment_len;
+
+    avoff_t file_size;
 };
 
 #define ECREC_THIS_DISK     4
@@ -34,6 +36,46 @@ struct ecrec {
 #define ECREC_COMMENT_LEN   20
 
 #define ECREC_SIZE          22
+
+/* Z64_ECDL reads ZIP64_End_of_Central_Director_Locator */
+
+struct z64_end_of_central_dir_loc {
+    avuint ecdir_disk;
+    avuquad ecdir_off;
+    avuint total_disks;
+
+    struct ecrec *ecd;
+};
+
+#define Z64_ECDL_ECDIR_DISK   4
+#define Z64_ECDL_ECDIR_OFF    8
+#define Z64_ECDL_TOTAL_DISKS 16
+
+#define Z64_ECDL_SIZE        20
+
+#define Z64_ECD_VERSION       12
+#define Z64_ECD_NEED_VERSION  14
+#define Z64_ECD_THIS_DISK     16
+#define Z64_ECD_CDIR_DISK     20
+#define Z64_ECD_THIS_ENTRIES  24
+#define Z64_ECD_TOTAL_ENTRIES 32
+#define Z64_ECD_CDIR_SIZE     40
+#define Z64_ECD_CDIR_OFF      48
+#define Z64_ECD_SIZE          56
+
+/* Z64_ECD end of central directory record */
+
+struct z64_end_of_central_dir {
+    avushort version;
+    avushort need_version;
+    avuint   this_disk;
+    avuint   cdir_disk;
+    avuquad  this_entries;
+    avuquad  total_entries;
+    avuquad  cdir_size;
+    avuquad  cdir_off;
+};
+
 
 struct cdirentry {
     avushort version;
@@ -107,9 +149,14 @@ struct ldirentry {
 #define SEARCHLEN 66000
 
 #define BI(ptr, i)  ((avbyte) (ptr)[i])
+#define BI_Q(ptr, i)  ((avuquad)((avbyte) (ptr)[i]))
 #define DBYTE(ptr) (BI(ptr,0) | (BI(ptr,1)<<8))
 #define QBYTE(ptr) (BI(ptr,0) | (BI(ptr,1)<<8) | \
                    (BI(ptr,2)<<16) | (BI(ptr,3)<<24))
+#define QQBYTE(ptr) (BI_Q(ptr,0)      | (BI_Q(ptr,1)<<8) | \
+                    (BI_Q(ptr,2)<<16) | (BI_Q(ptr,3)<<24) | \
+                    (BI_Q(ptr,4)<<32) | (BI_Q(ptr,5)<<40) | \
+                    (BI_Q(ptr,6)<<48) | (BI_Q(ptr,7)<<56))
 
 struct zipnode {
     avuint crc;
@@ -183,6 +230,8 @@ static avoff_t find_ecrec(vfile *vf, long searchlen, struct ecrec *ecrec)
     ecrec->cdir_size =     QBYTE(buf+ECREC_CDIR_SIZE);
     ecrec->cdir_off =      QBYTE(buf+ECREC_CDIR_OFF);
     ecrec->comment_len =   DBYTE(buf+ECREC_COMMENT_LEN);
+
+    ecrec->file_size = sres;
 
     return bufstart;
 }
@@ -349,6 +398,132 @@ static avoff_t read_entry(vfile *vf, struct archive *arch, avoff_t pos,
         ent.comment_len;
 }
 
+static avoff_t find_z64_ecd(vfile *vf, struct z64_end_of_central_dir_loc *ecdl, struct z64_end_of_central_dir *z64_ecd, avoff_t pos)
+{
+    char buf[Z64_ECD_SIZE];
+    int res;
+
+    if(pos + Z64_ECD_SIZE > ecdl->ecd->file_size) {
+        return -EIO;
+    }
+
+    res = av_pread_all(vf, buf, Z64_ECD_SIZE, pos);
+    if(res < 0) {
+        return res;
+    }
+
+	if(!(buf[0] == 'P' && buf[1] == 'K' && 
+         buf[2] == 6 && buf[3] == 6)) {
+        return -EIO;
+	}
+
+    z64_ecd->version       =  DBYTE(buf+Z64_ECD_VERSION);
+    z64_ecd->need_version  =  DBYTE(buf+Z64_ECD_NEED_VERSION);
+    z64_ecd->this_disk     =  QBYTE(buf+Z64_ECD_THIS_DISK);
+    z64_ecd->cdir_disk     =  QBYTE(buf+Z64_ECD_CDIR_DISK);
+    z64_ecd->this_entries  = QQBYTE(buf+Z64_ECD_THIS_ENTRIES);
+    z64_ecd->total_entries = QQBYTE(buf+Z64_ECD_TOTAL_ENTRIES);
+    z64_ecd->cdir_size     = QQBYTE(buf+Z64_ECD_CDIR_SIZE);
+    z64_ecd->cdir_off      = QQBYTE(buf+Z64_ECD_CDIR_OFF);
+
+    return pos;
+}
+
+static avoff_t find_z64_ecdl(vfile *vf, struct ecrec *ecd, struct z64_end_of_central_dir_loc *ecdl, avoff_t pos)
+{
+    char buf[Z64_ECDL_SIZE];
+    int res;
+
+    if (pos < Z64_ECDL_SIZE) {
+        return -EIO;
+    }
+
+    pos -= Z64_ECDL_SIZE;
+
+    res = av_pread_all(vf, buf, Z64_ECDL_SIZE, pos);
+    if(res < 0) {
+        return res;
+    }
+
+	if(!(buf[0] == 'P' && buf[1] == 'K' && 
+         buf[2] == 6 && buf[3] == 7)) {
+        return -EIO;
+	}
+
+    ecdl->ecdir_disk  =    QBYTE(buf+Z64_ECDL_ECDIR_DISK);
+    ecdl->ecdir_off   =   QQBYTE(buf+Z64_ECDL_ECDIR_OFF);
+    ecdl->total_disks =    QBYTE(buf+Z64_ECDL_TOTAL_DISKS);
+
+    ecdl->ecd = ecd;
+
+    return pos;
+}
+
+static int read_zip64file(vfile *vf, struct archive *arch, struct ecrec *ecrec, avoff_t pos)
+{
+    avoff_t ecrec_pos;
+    struct z64_end_of_central_dir_loc ecdl;
+    struct z64_end_of_central_dir z64_ecd;
+    avoff_t extra_bytes;
+    avoff_t cdir_end;
+    avoff_t ecdir_pos;
+    avoff_t cdir_pos;
+    int nument;
+
+    avoff_t ecdl_pos;
+
+    ecdl_pos = find_z64_ecdl(vf, ecrec, &ecdl, pos);
+    if(ecdl_pos < 0) {
+        return ecdl_pos;
+    }
+
+    if(ecdl.ecdir_disk != ecdl.ecd->this_disk) {
+        return -EIO;
+    }
+
+    ecdir_pos = ecdl.ecdir_off;
+
+    if (ecdir_pos > ecdl.ecd->file_size) {
+        return -EIO;
+    }
+
+    pos = find_z64_ecd(vf, &ecdl, &z64_ecd, ecdir_pos);
+    if(pos < 0) {
+        return -EIO;
+    }
+
+    if(z64_ecd.cdir_disk != z64_ecd.this_disk) {
+        av_log(AVLOG_ERROR, "UZIP: Cannot handle multivolume archives");
+        return -EIO;
+    }
+
+    cdir_end = z64_ecd.cdir_size + z64_ecd.cdir_off;
+
+    extra_bytes = pos - cdir_end;
+    if(extra_bytes < 0) {
+        av_log(AVLOG_ERROR, "UZIP: Broken archive");
+        return -EIO;
+    }
+  
+    if(z64_ecd.cdir_off == 0 && z64_ecd.cdir_size == 0) {
+        /* Empty zipfile */
+        return 0;
+    }
+  
+    cdir_pos = z64_ecd.cdir_off + extra_bytes;
+
+    for(nument = 0; nument < z64_ecd.total_entries; nument++) {
+        if(cdir_pos >= pos) {
+            av_log(AVLOG_ERROR, "UZIP: Broken archive");
+            return -EIO;
+        }
+        cdir_pos = read_entry(vf, arch, cdir_pos, ecrec);
+        if(cdir_pos < 0) 
+            return cdir_pos;
+    }
+  
+    return 0;
+}
 
 static int read_zipfile(vfile *vf, struct archive *arch)
 {
@@ -362,6 +537,11 @@ static int read_zipfile(vfile *vf, struct archive *arch)
     ecrec_pos = find_ecrec(vf, SEARCHLEN, &ecrec);
     if(ecrec_pos < 0)
         return ecrec_pos;
+
+    if(ecrec.total_entries == 0xffff) {
+        /* zip64 format */
+        return read_zip64file(vf, arch, &ecrec, ecrec_pos);
+    }
 
     cdir_end = ecrec.cdir_size+ecrec.cdir_off;
 

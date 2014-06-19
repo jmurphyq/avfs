@@ -1,3 +1,8 @@
+2014-06-19  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* uzip: added support for zip64 format. Allows more than 64k files
+	per archive and files larger than 4 GiB.
+
 2014-02-23  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* extfs: updated some scripts to not require bash (patch from

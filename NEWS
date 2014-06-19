@@ -1,6 +1,8 @@
-Changes from 1.0.1 to 1.0.2 (2014-02-xx)
+Changes from 1.0.1 to 1.0.2 (2014-06-xx)
    - in some modules, fixed access to files which are larger than 4GB
    - added support in utar modules for files larger than 8GB
+   - added zip64 support in uzip module to support more than 64k files
+     and files larger then 4 GiB
    - improved utar module to skip sime extended headers (so there
      will no longer be pseudo PaxHeaders files)
    - changed some extfs scripts to no longer require bash

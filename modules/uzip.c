@@ -93,7 +93,7 @@ struct cdirentry {
     avushort start_disk;
     avushort int_attr;
     avuint attr;
-    avuquad file_off;         
+    avuquad file_off;
 };
 
 #define CDIRENT_VERSION       4
@@ -154,7 +154,7 @@ struct ldirentry {
 #define DBYTE(ptr) (BI(ptr,0) | (BI(ptr,1)<<8))
 #define QBYTE(ptr) (BI(ptr,0) | (BI(ptr,1)<<8) | \
                    (BI(ptr,2)<<16) | (BI(ptr,3)<<24))
-#define QQBYTE(ptr) (BI_Q(ptr,0)      | (BI_Q(ptr,1)<<8) | \
+#define DQBYTE(ptr) (BI_Q(ptr,0)      | (BI_Q(ptr,1)<<8) | \
                     (BI_Q(ptr,2)<<16) | (BI_Q(ptr,3)<<24) | \
                     (BI_Q(ptr,4)<<32) | (BI_Q(ptr,5)<<40) | \
                     (BI_Q(ptr,6)<<48) | (BI_Q(ptr,7)<<56))
@@ -386,9 +386,9 @@ static int parse_extra_header(vfile *vf, avoff_t pos,
                     }
 
                     if (cent) {
-                        cent->file_size = QQBYTE(buf8);
+                        cent->file_size = DQBYTE(buf8);
                     } else {
-                        lent->file_size = QQBYTE(buf8);
+                        lent->file_size = DQBYTE(buf8);
                     }
 
                     size -= 8;
@@ -414,9 +414,9 @@ static int parse_extra_header(vfile *vf, avoff_t pos,
                     }
 
                     if (cent) {
-                        cent->comp_size = QQBYTE(buf8);
+                        cent->comp_size = DQBYTE(buf8);
                     } else{
-                        lent->comp_size = QQBYTE(buf8);
+                        lent->comp_size = DQBYTE(buf8);
                     }
 
                     size -= 8;
@@ -440,7 +440,7 @@ static int parse_extra_header(vfile *vf, avoff_t pos,
                         return res;
                     }
 
-                    cent->file_off = QQBYTE(buf8);
+                    cent->file_off = DQBYTE(buf8);
 
                     size -= 8;
                     pos += 8;
@@ -538,10 +538,10 @@ static avoff_t find_z64_ecd(vfile *vf, struct z64_end_of_central_dir_loc *ecdl, 
     z64_ecd->need_version  =  DBYTE(buf+Z64_ECD_NEED_VERSION);
     z64_ecd->this_disk     =  QBYTE(buf+Z64_ECD_THIS_DISK);
     z64_ecd->cdir_disk     =  QBYTE(buf+Z64_ECD_CDIR_DISK);
-    z64_ecd->this_entries  = QQBYTE(buf+Z64_ECD_THIS_ENTRIES);
-    z64_ecd->total_entries = QQBYTE(buf+Z64_ECD_TOTAL_ENTRIES);
-    z64_ecd->cdir_size     = QQBYTE(buf+Z64_ECD_CDIR_SIZE);
-    z64_ecd->cdir_off      = QQBYTE(buf+Z64_ECD_CDIR_OFF);
+    z64_ecd->this_entries  = DQBYTE(buf+Z64_ECD_THIS_ENTRIES);
+    z64_ecd->total_entries = DQBYTE(buf+Z64_ECD_TOTAL_ENTRIES);
+    z64_ecd->cdir_size     = DQBYTE(buf+Z64_ECD_CDIR_SIZE);
+    z64_ecd->cdir_off      = DQBYTE(buf+Z64_ECD_CDIR_OFF);
 
     return pos;
 }
@@ -568,7 +568,7 @@ static avoff_t find_z64_ecdl(vfile *vf, struct ecrec *ecd, struct z64_end_of_cen
 	}
 
     ecdl->ecdir_disk  =    QBYTE(buf+Z64_ECDL_ECDIR_DISK);
-    ecdl->ecdir_off   =   QQBYTE(buf+Z64_ECDL_ECDIR_OFF);
+    ecdl->ecdir_off   =   DQBYTE(buf+Z64_ECDL_ECDIR_OFF);
     ecdl->total_disks =    QBYTE(buf+Z64_ECDL_TOTAL_DISKS);
 
     ecdl->ecd = ecd;

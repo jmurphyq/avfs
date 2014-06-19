@@ -85,15 +85,15 @@ struct cdirentry {
     avushort method;
     avuint mod_time;
     avuint crc;
-    avuint comp_size;
-    avuint file_size;
+    avuquad comp_size;
+    avuquad file_size;
     avushort fname_len;
     avushort extra_len;
     avushort comment_len;
     avushort start_disk;
     avushort int_attr;
     avuint attr;
-    avuint file_off;         
+    avuquad file_off;         
 };
 
 #define CDIRENT_VERSION       4
@@ -120,8 +120,8 @@ struct ldirentry {
     avushort method;
     avuint mod_time;
     avuint crc;
-    avuint comp_size;
-    avuint file_size;
+    avuquad comp_size;
+    avuquad file_size;
     avushort fname_len;
     avushort extra_len;
 };
@@ -352,6 +352,110 @@ static void insert_zipentry(struct archive *arch, char *path,
     av_unref_obj(ent);
 }
 
+static int parse_extra_header(vfile *vf, avoff_t pos,
+                              struct cdirentry *cent,
+                              struct ldirentry *lent)
+{
+    char buf[4];
+    avoff_t end = pos + (cent ? cent->extra_len : lent->extra_len);
+
+    while (pos + 4 <= end) {
+        /* read header ID and size */
+        int res = av_pread_all(vf, buf, 4, pos);
+        avushort id;
+        int size;
+
+        if(res < 0) {
+            return res;
+        }
+
+        id = DBYTE(buf);
+        size = DBYTE(buf+2);
+
+        pos += 4;
+
+        if (id == 1 && pos + size <= end) {
+            if((cent && (avuint)(cent->file_size) == 0xffffffff) ||
+               (lent && (avuint)(lent->file_size) == 0xffffffff)) {
+                if(size >= 8) {
+                    char buf8[8];
+                    int res = av_pread_all(vf, buf8, 8, pos);
+
+                    if(res < 0) {
+                        return res;
+                    }
+
+                    if (cent) {
+                        cent->file_size = QQBYTE(buf8);
+                    } else {
+                        lent->file_size = QQBYTE(buf8);
+                    }
+
+                    size -= 8;
+                    pos += 8;
+                } else {
+                    if (cent) {
+                        cent->file_size = 0;
+                    } else {
+                        lent->file_size = 0;
+                    }
+                    pos += size;
+                }
+            }
+
+            if((cent && (avuint)(cent->comp_size) == 0xffffffff) ||
+               (lent && (avuint)(lent->comp_size) == 0xffffffff)) {
+                if(size >= 8) {
+                    char buf8[8];
+                    int res = av_pread_all(vf, buf8, 8, pos);
+
+                    if(res < 0) {
+                        return res;
+                    }
+
+                    if (cent) {
+                        cent->comp_size = QQBYTE(buf8);
+                    } else{
+                        lent->comp_size = QQBYTE(buf8);
+                    }
+
+                    size -= 8;
+                    pos += 8;
+                } else {
+                    if (cent) {
+                        cent->comp_size = 0;
+                    } else{
+                        lent->comp_size = 0;
+                    }
+                    pos += size;
+                }
+            }
+
+            if(cent && (avuint)(cent->file_off) == 0xffffffff) {
+                if(size >= 8) {
+                    char buf8[8];
+                    int res = av_pread_all(vf, buf8, 8, pos);
+
+                    if(res < 0) {
+                        return res;
+                    }
+
+                    cent->file_off = QQBYTE(buf8);
+
+                    size -= 8;
+                    pos += 8;
+                } else {
+                    pos += size;
+                }
+            }
+        } else {
+            pos += size;
+        }
+    }
+
+    return 0;
+}
+
 static avoff_t read_entry(vfile *vf, struct archive *arch, avoff_t pos,
                           struct ecrec *ecrec)
 {
@@ -392,6 +496,17 @@ static avoff_t read_entry(vfile *vf, struct archive *arch, avoff_t pos,
         return res;
     }
     filename[ent.fname_len] = '\0';
+
+    if(pos + CDIRENT_SIZE + ent.fname_len + ent.extra_len +
+       ent.comment_len > ecrec->file_size) {
+        av_free(filename);
+        return -EIO;
+    }
+
+    if(parse_extra_header(vf, pos + CDIRENT_SIZE + ent.fname_len, &ent, NULL) < 0 ) {
+        av_free(filename);
+        return -EIO;
+    }
 
     insert_zipentry(arch, filename, &ent, ecrec);
     av_free(filename);
@@ -670,6 +785,10 @@ static int zip_open(ventry *ve, struct archfile *fil)
     info->method = ent.method;
     headersize = LDIRENT_SIZE + ent.fname_len + ent.extra_len;
     fil->nod->offset = offset + headersize;
+
+    if(parse_extra_header(fil->basefile, offset + LDIRENT_SIZE + ent.fname_len, NULL, &ent) < 0 ) {
+        return -EIO;
+    }
 
     if(ent.method == METHOD_DEFLATE) {
         struct zfile *zfil;

@@ -1,5 +1,6 @@
-Changes from 1.0.1 to 1.0.2 (2014-06-xx)
-   - in some modules, fixed access to files which are larger than 4GB
+Changes from 1.0.1 to 1.0.2 (2014-06-29)
+   - fixed access to files which are larger than 4GB in modules based on
+     archive, state, and utar
    - added support in utar modules for files larger than 8GB
    - added zip64 support in uzip module to support more than 64k files
      and files larger then 4 GiB
@@ -7,7 +8,7 @@ Changes from 1.0.1 to 1.0.2 (2014-06-xx)
      will no longer be pseudo PaxHeaders files)
    - changed some extfs scripts to no longer require bash
 
-Changes from 1.0.0 to 1.0.1 (2011-06-12)
+Changes from 1.0.0 to 1.0.1 (2012-06-12)
    - compile fixes for macos
    - fixed hard link count for extfs directories
    - extfs updates to use bash as executing shell

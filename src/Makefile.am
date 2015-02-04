@@ -48,7 +48,8 @@ noinst_HEADERS = \
 	local.h \
 	mod_static.h
 
-$(srcdir)/utils.c: info.h
+nodist_libavfscore_la_SOURCES = info.h
+BUILT_SOURCES = info.h
 
 info.h:
 	rm -f info.h

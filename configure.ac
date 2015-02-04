@@ -483,7 +483,7 @@ if test $fuse_build = yes; then
                                        [fuse_pkg_found=yes])
                      ])
 
-    if test "$fuse_pkg_found" = "yes"; then
+    if test "$fuse_pkg_found" = "yes" -o "$run_fuse_test" = "no"; then
         AC_DEFINE(HAVE_LIBFUSE, 1, [Define to 1 if your system has libfuse installed])
         CPPFLAGS="$CPPFLAGS $LIBFUSE_CFLAGS"
         FUSELIBS="$LIBFUSE_LIBS"
@@ -512,16 +512,16 @@ dnl ================================================================
 
 have_liblzma=no
 use_liblzma=no
-AC_ARG_WITH(xz,AC_HELP_STRING([--with-xz],[use xz (default is YES)]),
+AC_ARG_WITH(xz,AC_HELP_STRING([--with-xz],[use xz (default is YES, force to always enable)]),
             ac_cv_use_xz=$withval, ac_cv_use_xz=yes)
-if test "$ac_cv_use_xz" = "yes"; then
+if test "$ac_cv_use_xz" = "yes" -o "$ac_cv_use_xz" = "force"; then
     PKG_CHECK_EXISTS([liblzma],[
                      PKG_CHECK_MODULES([LIBLZMA],[liblzma],
                                        [have_liblzma=yes])
                      ])
 
     dnl AC_MSG_CHECKING(for liblzma)
-    if test "$have_liblzma" = "yes"; then
+    if test "$have_liblzma" = "yes" -o "$ac_cv_use_xz" = "force"; then
         AC_DEFINE(HAVE_LIBLZMA, 1, [Define to 1 if your system has liblzma installed])
         CPPFLAGS="$CPPFLAGS $LIBLZMA_CFLAGS"
         LIBS="$LIBS $LIBLZMA_LIBS"

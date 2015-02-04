@@ -1,3 +1,9 @@
+2015-02-04  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* changed info.h dependency for out-of-src builds
+	* changed configure to allow forcing to build with fuse and/or
+	liblzma support
+
 2014-06-19  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* uzip: added support for zip64 format. Allows more than 64k files

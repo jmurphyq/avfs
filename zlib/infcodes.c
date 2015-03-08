@@ -261,11 +261,20 @@ z_streamp z;
   char *buf = *bufp;
   inflate_codes_statef *c = s->sub.decode.codes;
   struct inflate_codes_state ccpy = *c;
-  char fixed_tree = 0;
+  char fixed_tree = 0;  /* this is a flag for the restore code to
+                           indicate that a tree pointer points to a
+                           fixed table instead of dynamic one.  Bit 0
+                           is for the c->ltree/dtree, bit 1 for
+                           c->sub.code.tree
+                        */
 
   if(c->mode == LEN || c->mode == DIST) {
-    assert(c->sub.code.tree >= s->hufts && c->sub.code.tree < s->hufts + MANY);
-    ccpy.sub.code.tree = (inflate_huft *) ((long) c->sub.code.tree - (long) s->hufts);
+      if(c->sub.code.tree >= s->hufts && c->sub.code.tree < s->hufts + MANY) {
+          ccpy.sub.code.tree = (inflate_huft *) ((long) c->sub.code.tree - (long) s->hufts);
+      } else {
+          /* this is an assumption, it will be checked in restore */
+          fixed_tree |= 2;
+      }
   }
 
   if(c->ltree >= s->hufts && c->ltree < s->hufts + MANY) {
@@ -275,7 +284,7 @@ z_streamp z;
     ccpy.dtree = (inflate_huft *) ((long) c->dtree - (long) s->hufts);
   } else {
     /* this is an assumption, it will be checked in restore */
-    fixed_tree = 1;
+    fixed_tree |= 1;
   }
   
   *bufp = buf = realloc(buf, at + sizeof(struct inflate_codes_state) + 1);
@@ -307,10 +316,10 @@ inflate_codes_statef *inflate_codes_restore(bufp, s, z)
 
   fixed_tree = buf[sizeof(struct inflate_codes_state)];
 
-  if(fixed_tree == 0) {
+  if( (fixed_tree & 1) == 0) {
     c->ltree = (inflate_huft *) ((long) s->hufts + (long) c->ltree);
     c->dtree = (inflate_huft *) ((long) s->hufts + (long) c->dtree);
-  } else if(fixed_tree == 1) {
+  } else if( (fixed_tree & 1) == 1) {
     Byte old_lbits = c->lbits;
     Byte old_dbits = c->dbits;
     inflate_huft *old_ltree = c->ltree;
@@ -340,8 +349,32 @@ inflate_codes_statef *inflate_codes_restore(bufp, s, z)
   
   *bufp = buf;
 
-  if(c->mode == LEN || c->mode == DIST)
-    c->sub.code.tree = (inflate_huft *) ((long) s->hufts + (long) c->sub.code.tree);
+  if(c->mode == LEN || c->mode == DIST) {
+      if (fixed_tree & 2) {
+          /* c->sub.code.tree is probably also a fixed tree */
+          Byte old_lbits = c->lbits;
+          inflate_huft *old_ltree = c->ltree;
+          inflate_huft *temp_dtree;
+          uInt bl, bd;
+
+          if(inflate_trees_fixed(&bl, &bd, &c->sub.code.tree, &temp_dtree, z) != Z_OK) {
+              ZFREE(z, c);
+              return Z_NULL;
+          }
+
+          c->sub.code.need = (Byte)bl;
+
+          /* it was an assumption that fixed trees are used
+             if one of the following conditions is false we were wrong */
+          if (c->sub.code.tree != old_ltree ||
+              c->sub.code.need != old_lbits) {
+              ZFREE(z, c);
+              return Z_NULL;
+          }
+      } else {
+          c->sub.code.tree = (inflate_huft *) ((long) s->hufts + (long) c->sub.code.tree);
+      }
+  }
 
   return c;
 }

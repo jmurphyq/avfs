@@ -1,3 +1,10 @@
+2015-03-08  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* fixed zlib state saving/restoring when a Huffman tree is not a
+	dynamic one. This fixes an assertion triggered by some rare cases
+	when accessing zip'ed content. Triggering the assertion did also
+	depend on the block size when reading content.
+
 2015-02-04  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* changed info.h dependency for out-of-src builds

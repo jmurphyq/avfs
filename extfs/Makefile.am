@@ -32,7 +32,7 @@ EXTFS_IN =	\
 	uha		\
 	ulha		\
 	upp		\
-	urar		\
+	uextrar		\
 	uxdms		\
 	uxpk		\
 	uzip		\

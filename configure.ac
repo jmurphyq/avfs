@@ -602,7 +602,7 @@ extfs/uc1541
 extfs/uha
 extfs/ulha
 extfs/upp
-extfs/urar
+extfs/uextrar
 extfs/uxdms
 extfs/uxpk
 extfs/uzip

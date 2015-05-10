@@ -1,3 +1,9 @@
+2015-05-10  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* added rar v5 support in extfs urar module.
+	* renamed extfs urar module to uextrar so internal urar and
+	external module can be used simultaneously.
+
 2015-03-08  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* fixed zlib state saving/restoring when a Huffman tree is not a

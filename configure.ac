@@ -167,6 +167,8 @@ AC_PROG_CPP
 AC_PROG_INSTALL
 AC_PROG_LIBTOOL
 
+PKG_PROG_PKG_CONFIG
+
 if test ! "$preload_build" = "yes"; then
   AC_SYS_LARGEFILE
 fi

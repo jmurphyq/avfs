@@ -1,3 +1,7 @@
+2015-06-13  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* bumped version to 1.0.3
+
 2015-05-10  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* added rar v5 support in extfs urar module.

@@ -1,3 +1,10 @@
+Changes from 1.0.2 to 1.0.3 (2015-06-13)
+   - fixed zlib assert triggered for some Huffman encodings
+   - added rar v5 in extfs urar (which is also renamed to uextrar to avoid
+     collision with internal rar module)
+   - some configure script improvements have been done for fuse and liblzma
+     dependencies
+
 Changes from 1.0.1 to 1.0.2 (2014-06-29)
    - fixed access to files which are larger than 4GB in modules based on
      archive, state, and utar

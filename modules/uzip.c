@@ -151,9 +151,9 @@ struct ldirentry {
 
 #define BI(ptr, i)  ((avbyte) (ptr)[i])
 #define BI_Q(ptr, i)  ((avuquad)((avbyte) (ptr)[i]))
-#define DBYTE(ptr) (BI(ptr,0) | (BI(ptr,1)<<8))
-#define QBYTE(ptr) (BI(ptr,0) | (BI(ptr,1)<<8) | \
-                   (BI(ptr,2)<<16) | (BI(ptr,3)<<24))
+#define DBYTE(ptr) ((avushort)(BI(ptr,0) | (BI(ptr,1)<<8)))
+#define QBYTE(ptr) ((avuint)(BI(ptr,0) | (BI(ptr,1)<<8) |           \
+                             (BI(ptr,2)<<16) | (BI(ptr,3)<<24)))
 #define DQBYTE(ptr) (BI_Q(ptr,0)      | (BI_Q(ptr,1)<<8) | \
                     (BI_Q(ptr,2)<<16) | (BI_Q(ptr,3)<<24) | \
                     (BI_Q(ptr,4)<<32) | (BI_Q(ptr,5)<<40) | \

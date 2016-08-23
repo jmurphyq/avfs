@@ -1,3 +1,8 @@
+2016-08-23  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* use correct unsigned read for zip header values, fixing handling
+	large zip files.
+
 2015-06-13  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* bumped version to 1.0.3

@@ -1,3 +1,7 @@
+Changes from 1.0.3 to 1.0.4 (2016-09-14)
+   - fixed zip module to correctly read archives with a lot of files or
+     very large files
+
 Changes from 1.0.2 to 1.0.3 (2015-06-13)
    - fixed zlib assert triggered for some Huffman encodings
    - added rar v5 in extfs urar (which is also renamed to uextrar to avoid

@@ -10,15 +10,24 @@
 #include "internal.h"
 #include "exit.h"
 
+// keep this many elements in the case
+#define FILECACHE_MAX_SIZE 50
+
+// and remove any additional elements if they are older than this number of seconds
+#define FILECACHE_MAX_AGE ( 10 * 60 )
+
 struct filecache {
     struct filecache *next;
     struct filecache *prev;
     
     char *key;
     void *obj;
+
+    time_t last_access;
 };
 
 static struct filecache fclist;
+static int fclist_len;
 static AV_LOCK_DECL(fclock);
 
 static void filecache_remove(struct filecache *fc)
@@ -28,6 +37,8 @@ static void filecache_remove(struct filecache *fc)
 
     prev->next = next;
     next->prev = prev;
+
+    fclist_len--;
 }
 
 static void filecache_insert(struct filecache *fc)
@@ -39,6 +50,15 @@ static void filecache_insert(struct filecache *fc)
     next->prev = fc;
     fc->prev = prev;
     fc->next = next;
+
+    fclist_len++;
+
+    struct timespec tv;
+    if ( clock_gettime( CLOCK_MONOTONIC, &tv ) == 0 ) {
+        fc->last_access = tv.tv_sec;
+    } else {
+        fc->last_access = 0;
+    }
 }
 
 static void filecache_delete(struct filecache *fc)
@@ -51,10 +71,31 @@ static void filecache_delete(struct filecache *fc)
     av_free(fc);
 }
 
+static void filecache_check_limits(void)
+{
+    struct timespec now;
+    if ( clock_gettime( CLOCK_MONOTONIC, &now ) != 0 ) {
+        now.tv_sec = 0;
+    }
+
+    while (fclist_len > FILECACHE_MAX_SIZE &&
+           fclist.prev != &fclist) {
+
+        if (now.tv_sec == 0 ||
+            (now.tv_sec != 0 && (int)(now.tv_sec - fclist.prev->last_access) > FILECACHE_MAX_AGE)) {
+            filecache_delete(fclist.prev);
+        } else {
+            break;
+        }
+    }
+}
+
 static struct filecache *filecache_find(const char *key)
 {
     struct filecache *fc;
-    
+
+    filecache_check_limits();
+
     for(fc = fclist.next; fc != &fclist; fc = fc->next) {
         if(strcmp(fc->key, key) == 0)
             break;
@@ -123,6 +164,8 @@ void av_init_filecache()
     fclist.prev = &fclist;
     fclist.obj = NULL;
     fclist.key = NULL;
+
+    fclist_len = 0;
     
     av_add_exithandler(destroy_filecache);
 }

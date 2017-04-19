@@ -419,7 +419,7 @@ static avtime_t parse_filedate(struct columns *col, struct avtm *currtim)
             }
 
             /* This is a special case for ctime() or Mon DD YYYY hh:mm */
-            if(is_num (col)) {
+            if(is_num (col) && !is_last_col(col)) {
                 if(got_year) {
                     if(is_time(CURR_COL(col), &tim))
                         col->idx++; /* year & time */

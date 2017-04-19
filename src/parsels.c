@@ -76,11 +76,31 @@ static void split_text(char *p, struct columns *col)
     col->num = numcols;
 }
 
+static int is_valid_col (struct columns *col)
+{
+    if (col->idx < col->num) {
+        return 1;
+    }
+
+    return 0;
+}
 static int is_num (struct columns *col)
 {
+    if (!is_valid_col(col)) {
+        return 0;
+    }
     if (!CURR_COL(col) || CURR_COL(col)[0] < '0' || CURR_COL(col)[0] > '9')
         return 0;
     return 1;
+}
+
+static int is_last_col (struct columns *col)
+{
+    if (col->idx + 1 >= col->num) {
+        return 1;
+    }
+
+    return 0;
 }
 
 static int is_dos_date(const char *str)
@@ -292,14 +312,26 @@ static avtime_t parse_filedate(struct columns *col, struct avtm *currtim)
     tim.min  = 0;
     tim.sec  = 0;
     
+    if (!is_valid_col(col)) {
+        return -1;
+    }
+
     p = INC_COL(col);
     
+    if (!is_valid_col(col)) {
+        return -1;
+    }
+
     /* We eat weekday name in case of extfs */
     if(is_week(p)) p = INC_COL(col);
   
     /* Month name */
     if(is_month(p, &tim)){
         /* And we expect, it followed by day number */
+        if (!is_valid_col(col)) {
+            return -1;
+        }
+
         if (is_num (col))
             tim.day = (int) atol (INC_COL(col));
         else
@@ -373,10 +405,18 @@ static avtime_t parse_filedate(struct columns *col, struct avtm *currtim)
   
     /* Here we expect to find time and/or year */
   
+    if (!is_valid_col(col)) {
+        return -1;
+    }
+
     if (is_num (col)) {
         if(is_time(CURR_COL(col), &tim) || 
            (got_year = is_year(CURR_COL(col), &tim))) {
             col->idx++;
+
+            if (!is_valid_col(col)) {
+                return -1;
+            }
 
             /* This is a special case for ctime() or Mon DD YYYY hh:mm */
             if(is_num (col)) {
@@ -454,15 +494,26 @@ int av_parse_ls(struct lscache *cache, const char *line,
 
     split_text (p_copy, col);
 
+    if (!is_valid_col(col)) {
+        goto error;
+    }
   
     stbuf->nlink = atol (INC_COL(col));
     if (stbuf->nlink <= 0)
         goto error;
   
+    if (!is_valid_col(col)) {
+        goto error;
+    }
+  
     if (!is_num (col))
         stbuf->uid = av_finduid (cache->ugid, CURR_COL(col), -1);
     else
         stbuf->uid = (uid_t) atol (CURR_COL(col));
+
+    if (col->num < 6) {
+        goto error;
+    }
   
     /* Mhm, the ls -lg did not produce a group field */
     for (col->idx = 3; col->idx <= 5; col->idx++) 
@@ -518,11 +569,19 @@ int av_parse_ls(struct lscache *cache, const char *line,
   
     col->idx = saveidx;
   
+    if (!is_valid_col(col)) {
+        goto error;
+    }
+  
     stbuf->mtime.nsec = 0;
     stbuf->mtime.sec = parse_filedate(col, &cache->currtim);
     if (stbuf->mtime.sec == -1)
         goto error;
 
+    if (!is_valid_col(col)) {
+        goto error;
+    }
+  
     /* Use resulting time value */
     stbuf->atime = stbuf->ctime = stbuf->mtime;
     stbuf->dev = 0;

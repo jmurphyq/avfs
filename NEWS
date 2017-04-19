@@ -2,6 +2,8 @@ Changes from 1.0.4 to 1.0.5 (2017-04-17)
    - limit the file cache to 50 elements and age of 10 minutes to avoid
      endless grow of internal cache
    - allow reproducable builds
+   - fixed crash in parsing ls output for modules which need to handle
+     ls-like output
 
 Changes from 1.0.3 to 1.0.4 (2016-09-14)
    - fixed zip module to correctly read archives with a lot of files or

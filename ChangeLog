@@ -1,3 +1,7 @@
+2017-05-03  Ralf Hoffmann <ralf@boomerangsworld.de>
+	* urar.c: fix possible crash of external rar/unrar tool because of
+	readonly filehandle
+
 2017-04-19  Ralf Hoffmann <ralf@boomerangsworld.de>
 	* parsels.c: fix potential out-of-bound read access when parsing ls output
         * parsels.c: only parse year when it is not the last column

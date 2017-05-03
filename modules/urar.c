@@ -533,7 +533,7 @@ static int get_rar_file(ventry *ve, struct archfile *fil, int fd)
     if(rar_available) {
         av_init_proginfo(&pri);
         pri.prog = prog;
-        pri.ifd = open("/dev/null", O_RDONLY);
+        pri.ifd = open("/dev/null", O_RDWR);
         pri.ofd = fd;
         pri.efd = pri.ifd;
         
@@ -555,7 +555,7 @@ static int get_rar_file(ventry *ve, struct archfile *fil, int fd)
         prog[0] = "unrar";
         av_init_proginfo(&pri);
         pri.prog = prog;
-        pri.ifd = open("/dev/null", O_RDONLY);
+        pri.ifd = open("/dev/null", O_RDWR);
         pri.ofd = fd;
         pri.efd = pri.ifd;
         

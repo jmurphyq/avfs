@@ -24,7 +24,8 @@ modules = \
 	floppy.c     \
 	extfs.c      \
 	ucftp.c      \
-	uxze.c
+	uxze.c 	     \
+	uzstde.c
 
 if USE_LIBLZMA
     modules += uxz.c

@@ -532,8 +532,33 @@ if test "$ac_cv_use_xz" = "yes" -o "$ac_cv_use_xz" = "force"; then
     dnl AC_MSG_RESULT($have_liblzma)
 fi
 
+dnl ================================================================
+dnl == check for libzstd                                          ==
+dnl ================================================================
+
+have_libzstd=no
+use_libzstd=no
+AC_ARG_WITH(zstd,AC_HELP_STRING([--with-zstd],[use zstd (default is YES)]),
+            ac_cv_use_zstd=$withval, ac_cv_use_zstd=yes)
+if test "$ac_cv_use_zstd" = "yes"; then
+    PKG_CHECK_EXISTS([libzstd],[
+                     PKG_CHECK_MODULES([LIBZSTD],[libzstd],
+                                       [have_libzstd=yes])
+                     ])
+
+    dnl AC_MSG_CHECKING(for libzstd)
+    if test "$have_libzstd" = "yes"; then
+        AC_DEFINE(HAVE_LIBZSTD, 1, [Define to 1 if your system has libzstd installed])
+        CPPFLAGS="$CPPFLAGS $LIBZSTD_CFLAGS"
+        LIBS="$LIBS $LIBZSTD_LIBS"
+        use_libzstd=yes
+    fi
+    dnl AC_MSG_RESULT($have_libzstd)
+fi
+
 
 AM_CONDITIONAL(USE_LIBLZMA, test x$use_liblzma = xyes)
+AM_CONDITIONAL(USE_LIBZSTD, test x$use_libzstd = xyes)
 AM_CONDITIONAL(INSTALL_FUSE, test x$install_fuse = xyes)
 AM_CONDITIONAL(INSTALL_AVFSCODA_PROFILE, test x$install_profilescripts = xyes)
 AM_CONDITIONAL(INSTALL_AVFSCODA, test x$install_avfscoda = xyes)
@@ -650,6 +675,11 @@ if test "x$use_liblzma" = "xyes"; then
   echo "  Use liblzma                               : yes (recommended: yes)"
 else
   echo "  Use liblzma                               : no  (recommended: yes)"
+fi
+if test "x$use_libzstd" = "xyes"; then
+  echo "  Use libzstd                               : yes (recommended: yes)"
+else
+  echo "  Use libzstd                               : no  (recommended: yes)"
 fi
 echo ""
 echo "  Installation prefix                       : $prefix"

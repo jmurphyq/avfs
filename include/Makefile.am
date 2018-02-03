@@ -39,4 +39,8 @@ if USE_LIBLZMA
 noinst_HEADERS += xzfile.h
 endif
 
+if USE_LIBZSTD
+noinst_HEADERS += zstdfile.h
+endif
+
 BUILT_SOURCES = version.h

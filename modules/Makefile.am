@@ -30,6 +30,10 @@ if USE_LIBLZMA
     modules += uxz.c
 endif
 
+if USE_LIBZSTD
+    modules += uzstd.c
+endif
+
 libmodules_la_SOURCES = \
 	$(modules)
 

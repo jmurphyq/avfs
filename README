@@ -196,6 +196,8 @@ The following "handlers" are available now:
   #uxze              unxz/unlzma            uses xz
   #uz                uncompress             uses gzip
   #uzip              unzip                  builtin
+  #uzstd             uzstd                  builtin
+  #uzstde            uzstd                  uses zstd
   #volatile          'memory fs'            mainly for testing
   
 

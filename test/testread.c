@@ -19,6 +19,14 @@ int main( int argc, char **argv )
     if ( argc < 2 ) {
         return 0;
     }
+
+    struct stat stat_buf;
+
+    if ( virt_stat( argv[1], &stat_buf ) != 0 ) {
+        printf( "Could not stat %s\n", argv[1] );
+    } else {
+        printf( "Size: %lu\n", stat_buf.st_size );
+    }
   
     fd = virt_open( argv[1], O_RDONLY, 0 );
     if ( fd >= 0 ) {
@@ -32,6 +40,8 @@ int main( int argc, char **argv )
 
             if ( len == 0 ) break;
         }
+
+        printf( "Total len:%lu\n", total_len );
 
         if ( total_len >= sizeof( buf ) ) {
             for (;;) {

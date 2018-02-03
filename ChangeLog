@@ -1,3 +1,7 @@
+2018-02-03  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* added support for libzstd (zst files)
+
 2017-05-03  Ralf Hoffmann <ralf@boomerangsworld.de>
 	* urar.c: fix possible crash of external rar/unrar tool because of
 	readonly filehandle

@@ -1,6 +1,6 @@
 /*  
     AVFS: A Virtual File System Library
-    Copyright (C) 2010 Ralf Hoffmann <ralf@boomerangsworld.de>
+    Copyright (C) 2010-2018 Ralf Hoffmann <ralf@boomerangsworld.de>
 
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
@@ -10,6 +10,7 @@
 
 #include "filter.h"
 #include "version.h"
+#include "config.h"
 
 extern int av_init_module_uxze(struct vmodule *module);
 
@@ -27,11 +28,16 @@ int av_init_module_uxze(struct vmodule *module)
     xze_args[0] = "xz";
     xze_args[1] = NULL;
 
+#if HAVE_LIBLZMA
+    // no default ending conversion if we have internal zstd support
+    uxze_exts[0].from = NULL;
+#else
     uxze_exts[0].from = ".tar.xz",   uxze_exts[0].to = ".tar";
     uxze_exts[1].from = ".txz",  uxze_exts[1].to = ".tar";
     uxze_exts[2].from = ".xz",   uxze_exts[2].to = NULL;
     uxze_exts[3].from = ".lzma",   uxze_exts[3].to = NULL;
     uxze_exts[4].from = NULL;
+#endif
 
     return av_init_filt(module, AV_VER, "uxze", uxze_args, xze_args,
                         uxze_exts, &avfs);

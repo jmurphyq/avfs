@@ -106,6 +106,51 @@ static char *rsh_split_hostpart(const char *hostpart, const char **hostp)
     return NULL;
 }
 
+static int rsh_is_valid_username(const char *username)
+{
+    const char *ch;
+
+    if (!username) return 0;
+
+    if (strlen(username) > 32) {
+        // arbitrary chosen
+        return 0;
+    }
+
+    for (ch = username; *ch != '\0'; ch++) {
+        if (*ch >= 'A' && *ch <= 'Z') continue;
+        if (*ch >= 'a' && *ch <= 'z') continue;
+        if (*ch >= '0' && *ch <= '9') continue;
+
+        return 0;
+    }
+
+    return 1;
+}
+
+static int rsh_is_valid_hostname(const char *host)
+{
+    const char *ch;
+
+    if (!host) return 0;
+
+    if (strlen(host) > 255) {
+        return 0;
+    }
+
+    for (ch = host; *ch != '\0'; ch++) {
+        if (*ch >= 'A' && *ch <= 'Z') continue;
+        if (*ch >= 'a' && *ch <= 'z') continue;
+        if (*ch >= '0' && *ch <= '9') continue;
+        if (*ch == '-') continue;
+        if (*ch == '.') continue;
+
+        return 0;
+    }
+
+    return 1;
+}
+
 static int rsh_list(struct remote *rem, struct remdirlist *dl)
 {
     int res;
@@ -119,6 +164,13 @@ static int rsh_list(struct remote *rem, struct remdirlist *dl)
     escaped_path = rsh_code_name(dl->hostpath.path);
     username = rsh_split_hostpart(dl->hostpath.host, &host);
 
+    if (!rsh_is_valid_username(username) ||
+        !rsh_is_valid_hostname(host)) {
+        av_free(escaped_path);
+        av_free(username);
+        return -EINVAL;
+    }
+    
     arg = 0;
     prog[arg++] = rem->name;
     if(username != NULL) {

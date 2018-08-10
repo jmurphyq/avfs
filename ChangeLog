@@ -1,3 +1,10 @@
+2018-08-010  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* security fix for possible command execution in rsh/ssh
+	module. User or host name could contain special characters to
+	force rsh or ssh to execute commands within the name on the local
+	or remote machine. Thanks to Jann Horn for pointing that out.
+
 2018-02-03  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* added support for libzstd (zst files)

@@ -142,8 +142,10 @@ static int rsh_is_valid_hostname(const char *host)
         if (*ch >= 'A' && *ch <= 'Z') continue;
         if (*ch >= 'a' && *ch <= 'z') continue;
         if (*ch >= '0' && *ch <= '9') continue;
-        if (*ch == '-') continue;
-        if (*ch == '.') continue;
+
+        // accept only for any other than the first char
+        if (ch != host && *ch == '-') continue;
+        if (ch != host && *ch == '.') continue;
 
         return 0;
     }

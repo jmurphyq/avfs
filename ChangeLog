@@ -1,4 +1,9 @@
-2018-08-010  Ralf Hoffmann <ralf@boomerangsworld.de>
+2018-08-18  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* uzip.c: set regular file mode if unix attributes are actually
+	zero.
+
+2018-08-10  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* security fix for possible command execution in rsh/ssh
 	module. User or host name could contain special characters to

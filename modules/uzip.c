@@ -268,10 +268,15 @@ static avmode_t zip_get_mode(struct cdirentry *cent, const char *path,
     avmode_t mode;
 
     /* FIXME: Handle other architectures */
-    if((cent->version & 0xFF00) >> 8 == OS_UNIX) 
-	mode = (cent->attr >> 16) & 0xFFFF;
-    else
-	mode = dos2unix_attr(cent->attr & 0xFF, origmode);
+    if((cent->version & 0xFF00) >> 8 == OS_UNIX) {
+        mode = (cent->attr >> 16) & 0xFFFF;
+        /* workaround for unset type */
+        if ((mode & AV_IFMT) == 0) {
+            mode |= AV_IFREG;
+        }
+    } else {
+        mode = dos2unix_attr(cent->attr & 0xFF, origmode);
+    }
 
     if(path[0] && path[strlen(path)-1] == '/')
         mode = (mode & 07777) | AV_IFDIR;

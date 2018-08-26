@@ -1,3 +1,9 @@
+Changes from 1.0.5 to 1.0.6 (2018-08-26)
+   - added support for libzstd (zst files)
+   - fixed arbitrary command execution in rsh/ssh module
+   - zip workaround for zip archives with unix attributes but regular
+     files are not marked correctly
+
 Changes from 1.0.4 to 1.0.5 (2017-05-03)
    - limit the file cache to 50 elements and age of 10 minutes to avoid
      endless grow of internal cache

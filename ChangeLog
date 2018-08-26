@@ -1,3 +1,7 @@
+2018-08-26  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* bump version to 1.0.6
+
 2018-08-18  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* uzip.c: set regular file mode if unix attributes are actually

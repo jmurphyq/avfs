@@ -1,3 +1,8 @@
+2019-05-24  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* parse.c: improve lookup of autofs via # to stop at first
+	dir-like avfs.
+
 2018-09-09  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* uzip.c: add .apk extension.

@@ -155,7 +155,7 @@ static int xzfile_fill_inbuf(struct xzfile *fil)
 static int xzfile_decompress(struct xzfile *fil, struct xzcache *zc)
 {
     int res;
-    unsigned char *start;
+    //unsigned char *start;
 
     if(fil->s->avail_in == 0) {
         res = xzfile_fill_inbuf(fil);
@@ -168,7 +168,7 @@ static int xzfile_decompress(struct xzfile *fil, struct xzcache *zc)
 	}
     }
     
-    start = (unsigned char*)( fil->s->next_out );
+    //start = (unsigned char*)( fil->s->next_out );
 
     res = lzma_code(fil->s, LZMA_RUN);
     if(res == LZMA_STREAM_END) {

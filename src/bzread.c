@@ -264,7 +264,7 @@ static void bz_block_end(void *data, bz_stream *s, unsigned int bitsrem,
 static int bzfile_decompress(struct bzfile *fil, struct bzcache *zc)
 {
     int res;
-    unsigned char *start;
+    //unsigned char *start;
 
     if(fil->s->avail_in == 0) {
         res = bzfile_fill_inbuf(fil);
@@ -277,7 +277,7 @@ static int bzfile_decompress(struct bzfile *fil, struct bzcache *zc)
 	}
     }
     
-    start = (unsigned char*)( fil->s->next_out );
+    //start = (unsigned char*)( fil->s->next_out );
 #ifndef USE_SYSTEM_BZLIB
     BZ2_bzSetBlockEndHandler(fil->s, bz_block_end, zc);
 #endif

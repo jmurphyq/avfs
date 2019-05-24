@@ -196,14 +196,14 @@ static avssize_t sfile_read(struct sfile *fil, char *buf, avssize_t nbyte)
 static int sfile_dummy_read(struct sfile *fil, avoff_t offset)
 {
     avssize_t res;
-    avsize_t nact;
+    //avsize_t nact;
     const int tmpbufsize = 8192;
     char tmpbuf[tmpbufsize];
 
-    if((fil->flags & SFILE_NOCACHE) != 0)
-        nact = AV_MIN(tmpbufsize, offset - fil->numbytes);
-    else
-        nact = tmpbufsize;
+    //if((fil->flags & SFILE_NOCACHE) != 0)
+    //    nact = AV_MIN(tmpbufsize, offset - fil->numbytes);
+    //else
+    //    nact = tmpbufsize;
 
     res = sfile_read(fil, tmpbuf, tmpbufsize);
     

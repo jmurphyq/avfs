@@ -596,7 +596,7 @@ static int lookup_segment(struct parse_state *ps, int noavfs)
 static int segment_islocal(struct parse_state *ps, unsigned int seglen )
 {
     int islocal = 0;
-    char c;
+    //char c;
     struct parse_state tempps;
     int f;
 
@@ -606,7 +606,7 @@ static int segment_islocal(struct parse_state *ps, unsigned int seglen )
     av_copy_parsestate( ps, &tempps );
     
     tempps.nextseg = seglen;
-    c = tempps.path[seglen];
+    //c = tempps.path[seglen];
     tempps.path[seglen] = '\0';
     
     /* we force lookup_segment() to not enter any avfs hierarchie */

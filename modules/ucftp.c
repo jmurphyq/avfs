@@ -1164,7 +1164,6 @@ static int ucftp_read_list(struct ucftpfs *fs, struct filebuf *fb, struct ucftpe
             av_free(line);
             if(res == 1) {
                 struct ucftpentry *subent = NULL;
-                int res2;
 
                 if(strcmp(filename, "..") != 0 &&
                    strcmp(filename, ".") != 0 ) {
@@ -1176,7 +1175,7 @@ static int ucftp_read_list(struct ucftpfs *fs, struct filebuf *fb, struct ucftpe
                         subent = ucftp_new_entry(filename);
                     }
                     if(subent->node == NULL) {
-                        res2 = ucftp_make_node(fs, subent, stbuf.mode);
+                        ucftp_make_node(fs, subent, stbuf.mode);
                         av_unref_obj(subent);
                     }
                     ucftp_add_subentry(ent, subent, entp);
@@ -2122,6 +2121,7 @@ static int ucftp_mkdir(ventry *ve, avmode_t mode)
  * seeking
  ***************************************/
 
+#if 0
 static avoff_t ucftp_lseek(vfile *vf, avoff_t offset, int whence)
 {
     return -ENOSYS;
@@ -2133,6 +2133,7 @@ static avoff_t ucftp_lseek(vfile *vf, avoff_t offset, int whence)
      * the start could be implemented by closing and re-open
      */
 }
+#endif
 
 /***************************************
  * ucftp_ctl code

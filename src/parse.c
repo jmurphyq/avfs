@@ -21,6 +21,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <stdbool.h>
 
 static AV_LOCK_DECL(initlock);
 static int inited;
@@ -429,6 +430,18 @@ static void get_new_name(struct parse_state *ps, struct ext_info *ext)
         ps->prevseg = av_stradd(ps->prevseg, ext->to, NULL);
 }
 
+static bool avfs_is_filter_like( struct avfs *avfs )
+{
+    if (avfs->flags & AVF_ONLYROOT) {
+        return false;
+    }
+
+    if (av_avfs_implements_readdir(avfs)) {
+        return false;
+    }
+
+    return true;
+}
 
 static int lookup_auto_avfs(struct parse_state *ps, const char *opts,
                             const char *param)
@@ -445,9 +458,14 @@ static int lookup_auto_avfs(struct parse_state *ps, const char *opts,
         av_ref_obj(avfs);
 
         get_new_name(ps, ext);
-        if(find_auto_avfs(ps->prevseg, &ext) == NULL)
+
+        // repeat searching for next avfs if the current avfs is a
+        // filter. Otherwise it does not make sense to use another
+        // avfs. Dir-based vfs need to be entered first.
+
+        if(!avfs_is_filter_like(avfs) || find_auto_avfs(ps->prevseg, &ext) == NULL) { 
             set_prevseg(ps, "");
-        else {
+        } else {
             param = "";
             ps->nextseg = 0;
         }

@@ -223,3 +223,11 @@ void av_default_avfs(struct avfs *avfs)
     avfs->lseek      = default_lseek;
 }
 
+int av_avfs_implements_readdir( const struct avfs *avfs )
+{
+    if (!avfs) return 0;
+
+    if (avfs->readdir != default_readdir) return 1;
+
+    return 0;
+}

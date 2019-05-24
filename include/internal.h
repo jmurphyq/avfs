@@ -31,3 +31,5 @@ void av_do_exit();
 
 void av_avfsstat_register(const char *path, struct statefile *func);
 int av_get_symlink_rewrite();
+
+int av_avfs_implements_readdir( const struct avfs *avfs );

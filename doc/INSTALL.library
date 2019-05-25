@@ -1,7 +1,7 @@
 Introduction
 ------------
 
-In contrast to the avfscoda or preload code using avfs as a library requires
+In contrast to the preload code using avfs as a library requires
 support from the application. The advantage is that the library is much more
 portable and should compile on any system.
 

@@ -11,7 +11,6 @@ SUBDIRS =        \
 	libneon  \
 	lib      \
 	preload  \
-	avfscoda \
 	include  \
 	test     \
 	scripts  \

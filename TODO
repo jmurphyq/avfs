@@ -32,10 +32,6 @@ Redir should support operations:
 
 Redir can't support following symlinks to virtual files. Find better solution
 
-Avfscoda:
-  - Clean soloution to file access permissions
-  - Faster random access to files (at least streaming access)
-
 Preload:
   - remember cwd after exec
   - add missing operations

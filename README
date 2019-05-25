@@ -39,14 +39,6 @@ AVFS can now be installed in four different ways. These are:
 	   loaded.
 	2) the fuse package and library >= 2.4 be installed.
 	
- - Avfscoda 
-        This method in theory works on any Linux system which has the
-        'coda' filesystem compiled in the kernel or as a kernel module.
-
-        In practice it works best with glibc-6.1 or higher, and it has
-        been tested on 2.2.X and 2.4.X kernels. It currently does not
-        work on 2.6.X kernels.
-
  - Preload
         Currently this works on solaris systems. There are problems
         making the preload method work for GLIBC version 6.1 or
@@ -60,7 +52,7 @@ AVFS can now be installed in four different ways. These are:
 Using AVFS is very similar in all cases. Differences will be indicated.
 
 The installation method is different. For installation instructions
-see the files 'INSTALL.fuse', 'INSTALL.avfscoda', 'INSTALL.preload',
+see the files 'INSTALL.fuse', 'INSTALL.preload',
 and 'INSTALL.library' respectively all located in the doc/ directory.
 
 Using AVFS
@@ -114,8 +106,7 @@ NOTES:
 
 1) ('preload' only) Input and output redirection to/from virtual files
    does not work, since, in the 'preload' method, virtual file
-   descriptors cannot be kept open over exec(). This is not a problem
-   with the 'avfscoda' method. 
+   descriptors cannot be kept open over exec().
 
    E.g. you can't do
            patch -p0 < patchfile.gz#

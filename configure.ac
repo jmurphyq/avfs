@@ -45,17 +45,12 @@ if test -z "$kernver"; then
   kernver="0"
 fi
 
-AC_MSG_CHECKING([whether to build preload, avfscoda, shared library and/or fuse daemon])
+AC_MSG_CHECKING([whether to build preload, shared library and/or fuse daemon])
 
 dnl here come the default values
 shared=yes
 if test "$os" = "Linux"; then
-    if test "$kernver" -ge "22" \
-            -a "$kernver" -le "24"; then
-        avfscoda=yes
-    else
-        fuse=yes
-    fi
+    fuse=yes
 elif test "$os" = "SunOS"; then
     preload=yes
 fi
@@ -63,10 +58,6 @@ fi
 AC_ARG_ENABLE([preload],
               AC_HELP_STRING([--enable-preload],[Compile the preloaded library and server]),
               [if test "$enableval" = yes; then preload=yes; else preload=no; fi])
-
-AC_ARG_ENABLE([avfscoda],
-              AC_HELP_STRING([--enable-avfscoda],[Compile avfscoda (which uses the coda interface)]),
-              [if test "$enableval" = yes; then avfscoda=yes; else avfscoda=no; fi])
 
 AC_ARG_ENABLE([library],
               AC_HELP_STRING([--enable-library],[Compile avfs as a shared or static library]),
@@ -77,15 +68,10 @@ AC_ARG_ENABLE([fuse],
               [if test "$enableval" = yes; then fuse=yes; else fuse=no; fi])
 
 shared_build=no
-avfscoda_build=no
 preload_build=no
 fuse_build=no
 build_result=
 
-if test "$avfscoda" = yes; then
-   avfscoda_build=yes
-   build_result=avfscoda
-fi
 if test "$preload" = yes; then
    preload_build=yes
    if test -z "$build_result"; then
@@ -313,144 +299,7 @@ if test $preload_build = yes; then
 fi
 AM_CONDITIONAL(INSTALL_PRELOAD, test x$preload_build = xyes)
 
-dnl ================================================================
-dnl == Now comes the stuff that is only for avfscoda              ==
-dnl ================================================================
-
-install_profilescripts=no
-install_avfscoda=no
-install_initscript=no
-install_scriptlinks=no
-install_codadev=no
 install_fuse=no
-
-if test $avfscoda_build = yes; then
-
-	AC_MSG_CHECKING([kernel source directory])
-	kernelsrc=
-	AC_ARG_WITH(kernel,
-		[  --with-kernel           Specify location of kernel source ],
-		[kernelsrc="$withval"])
-	
-	if test -z "$kernelsrc"; then
-		buildlink=/lib/modules/`uname -r`/build
-		if test -e $buildlink; then
-			kernelsrc=`(cd $buildlink; /bin/pwd)`
-		elif test -e /usr/src/linux; then
-			kernelsrc=/usr/src/linux
-		else
-			AC_MSG_RESULT([Not found])
-			AC_MSG_ERROR([
-*** Please specify the location of the kernel source with
-*** the '--with-kernel=SRCDIR' option])
-		fi
-	fi
-	AC_MSG_RESULT([$kernelsrc])
-	AC_MSG_CHECKING([kernel source version])
-
-	origlibs=$LIBS
-	LIBS=""
-	kernsrcver=`AC_TRY_RUN([
-	#include "$kernelsrc/include/linux/version.h"
-	#include <stdio.h>
-	
-	int main() {
-	printf("%s\n", UTS_RELEASE);
-		return 0;
-	}
-	], , , true)`
-	
-	if test -z "$kernsrcver"; then
-		AC_MSG_RESULT([Not found])
-		AC_MSG_ERROR([
-*** Cannot determine the version of the linux kernel source. Please 
-*** configure the kernel before running this script])
-	fi
-	LIBS=$origlibs
-	AC_MSG_RESULT([$kernsrcver])
-
-	KERNINCLUDE=${kernelsrc}/include
-	AC_SUBST(KERNINCLUDE)
-
-	kmoduledir=/lib/modules/${kernsrcver}/misc
-	AC_SUBST(kmoduledir)
-
-	initstyle=
-	AC_MSG_CHECKING([for init-script style])
-	if test -d /sbin/init.d -a -f /etc/rc.config; then
-		initstyle=suse
-	elif test -f /etc/rc.d/init.d/functions; then
-		initstyle=redhat
-        elif test -d /etc/rc2.d; then
-		initstyle=debian
-	else
-		initstyle=generic
-	fi;
-	AC_MSG_RESULT([$initstyle])
-
-	rcdir=
-	rcscriptdir=
-	start_levels=
-	stop_levels=
-	start_prio=
-	stop_prio=
-
-	install_initscript=yes
-
-	if test "$initstyle" = redhat; then
-		install_scriptlinks=yes
-		rcdir=/etc/rc.d
-		rcscriptdir=init.d
-		start_levels="2 3 4 5"
-		stop_levels="0 1 6"
-		start_prio=85
-		stop_prio=25
-	elif test "$initstyle" = suse; then
-		install_scriptlinks=yes
-		rcdir=/sbin/init.d
-		rcscriptdir=
-		start_levels="2 3"
-		stop_levels="2 3"
-		start_prio=20
-		stop_prio=20
-	elif test "$initstyle" = debian; then
-		install_scriptlinks=yes
-		rcdir=/etc
-		rcscriptdir=init.d
-		start_levels="2 3 4 5"
-		stop_levels="0 1 6"
-		start_prio=85
-		stop_prio=25
-	else
-		rcdir=/etc/rc.d
-		rcscriptdir=
-	fi
-
-	AC_SUBST(initstyle)
-	AC_SUBST(rcdir)
-	AC_SUBST(rcscriptdir)
-	AC_SUBST(start_levels)
-	AC_SUBST(stop_levels)
-	AC_SUBST(start_prio)
-	AC_SUBST(stop_prio)
-
-	profiledir=
-        newredir=no
-	if test "$newredir" = no; then
-		AC_MSG_CHECKING([for profile directory])
-                install_profilescripts=yes
-		if test -d /etc/profile.d; then
-			profiledir=/etc/profile.d
-		else 
-			profiledir=/etc
-		fi
-		AC_MSG_RESULT([$profiledir])
-	fi
-	AC_SUBST(profiledir)
-
-	install_codadev=yes
-	install_avfscoda=yes
-fi
 
 dnl ================================================================
 dnl == Now comes the stuff for fuse                               ==
@@ -560,11 +409,6 @@ fi
 AM_CONDITIONAL(USE_LIBLZMA, test x$use_liblzma = xyes)
 AM_CONDITIONAL(USE_LIBZSTD, test x$use_libzstd = xyes)
 AM_CONDITIONAL(INSTALL_FUSE, test x$install_fuse = xyes)
-AM_CONDITIONAL(INSTALL_AVFSCODA_PROFILE, test x$install_profilescripts = xyes)
-AM_CONDITIONAL(INSTALL_AVFSCODA, test x$install_avfscoda = xyes)
-AM_CONDITIONAL(INSTALL_INITSCRIPT, test x$install_initscript = xyes)
-AM_CONDITIONAL(INSTALL_SCRIPTLINKS, test x$install_scriptlinks = xyes)
-AM_CONDITIONAL(INSTALL_CODADEV, test x$install_codadev = xyes)
 
 dnl ================================================================
 dnl == Now comes the stuff that is only for shared                ==
@@ -580,7 +424,6 @@ dnl Test whether linker supports symbol versioning
 CHECK_LD_VERSIONSCRIPT
 
 AC_SUBST(install_scriptcomps)
-AC_SUBST(avfscoda_build)
 AC_SUBST(preload_build)
 AC_SUBST(shared_build)
 
@@ -592,13 +435,10 @@ zlib/Makefile
 bzlib/Makefile
 lib/Makefile
 include/Makefile
-avfscoda/Makefile
-avfscoda/redir/Makefile
 preload/Makefile
 libneon/Makefile
 extfs/Makefile
 scripts/Makefile
-scripts/init/Makefile
 test/Makefile
 spec/Makefile
 macros/Makefile
@@ -654,11 +494,6 @@ if test "$preload_build" = "yes"; then
   echo "  Building preload library                  : yes (recommended: no)"
 else
   echo "  Building preload library                  : no  (recommended: no)"
-fi
-if test "$avfscoda_build" = "yes"; then
-  echo "  Building avfscoda daemon and kernel module: yes (recommended: no)"
-else
-  echo "  Building avfscoda daemon and kernel module: no  (recommended: no)"
 fi
 echo ""
 if test "x$use_system_zlib" = "xyes"; then

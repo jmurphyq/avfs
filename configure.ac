@@ -261,10 +261,7 @@ AC_SUBST(moduledir)
 
 install_scriptcomps=
 
-AC_CHECK_PROG(EMACS, emacs, yes, no)
 MC_EXTFS_CHECKS
-
-AM_CONDITIONAL(INSTALL_EMACS, test x$EMACS = xyes)
 
 install_fuse=no
 

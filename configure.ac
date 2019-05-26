@@ -45,19 +45,13 @@ if test -z "$kernver"; then
   kernver="0"
 fi
 
-AC_MSG_CHECKING([whether to build preload, shared library and/or fuse daemon])
+AC_MSG_CHECKING([whether to build shared library and/or fuse daemon])
 
 dnl here come the default values
 shared=yes
 if test "$os" = "Linux"; then
     fuse=yes
-elif test "$os" = "SunOS"; then
-    preload=yes
 fi
-
-AC_ARG_ENABLE([preload],
-              AC_HELP_STRING([--enable-preload],[Compile the preloaded library and server]),
-              [if test "$enableval" = yes; then preload=yes; else preload=no; fi])
 
 AC_ARG_ENABLE([library],
               AC_HELP_STRING([--enable-library],[Compile avfs as a shared or static library]),
@@ -68,18 +62,9 @@ AC_ARG_ENABLE([fuse],
               [if test "$enableval" = yes; then fuse=yes; else fuse=no; fi])
 
 shared_build=no
-preload_build=no
 fuse_build=no
 build_result=
 
-if test "$preload" = yes; then
-   preload_build=yes
-   if test -z "$build_result"; then
-      build_result=preload
-   else
-      build_result="$build_result preload"
-   fi
-fi
 if test "$shared" = yes; then
    shared_build=yes
    if test -z "$build_result"; then
@@ -155,9 +140,7 @@ AC_PROG_LIBTOOL
 
 PKG_PROG_PKG_CONFIG
 
-if test ! "$preload_build" = "yes"; then
-  AC_SYS_LARGEFILE
-fi
+AC_SYS_LARGEFILE
 
 
 fob_set=no
@@ -282,22 +265,6 @@ AC_CHECK_PROG(EMACS, emacs, yes, no)
 MC_EXTFS_CHECKS
 
 AM_CONDITIONAL(INSTALL_EMACS, test x$EMACS = xyes)
-
-dnl ================================================================
-dnl == Now comes the stuff that is only for preload               ==
-dnl ================================================================
-
-if test $preload_build = yes; then
-	origlibs=$LIBS
-	LIBS=
-	AC_CHECK_FUNCS(lseek64 getdents64 open64 creat64 stat64 acl)
-	AC_SEARCH_LIBS(socket, socket inet)
-	AC_SEARCH_LIBS(dlsym, dl)
-	PRELOAD_LIBS=$LIBS
-	AC_SUBST(PRELOAD_LIBS)
-	LIBS=$origlibs
-fi
-AM_CONDITIONAL(INSTALL_PRELOAD, test x$preload_build = xyes)
 
 install_fuse=no
 
@@ -424,7 +391,6 @@ dnl Test whether linker supports symbol versioning
 CHECK_LD_VERSIONSCRIPT
 
 AC_SUBST(install_scriptcomps)
-AC_SUBST(preload_build)
 AC_SUBST(shared_build)
 
 AC_OUTPUT([
@@ -435,7 +401,6 @@ zlib/Makefile
 bzlib/Makefile
 lib/Makefile
 include/Makefile
-preload/Makefile
 libneon/Makefile
 extfs/Makefile
 scripts/Makefile
@@ -489,11 +454,6 @@ if test "$fuse_build" = "yes"; then
   echo "  Building avfsd for fuse                   : yes (recommended: yes)"
 else
   echo "  Building avfsd for fuse                   : no  (recommended: yes)"
-fi
-if test "$preload_build" = "yes"; then
-  echo "  Building preload library                  : yes (recommended: no)"
-else
-  echo "  Building preload library                  : no  (recommended: no)"
 fi
 echo ""
 if test "x$use_system_zlib" = "xyes"; then

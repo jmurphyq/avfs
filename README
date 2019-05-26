@@ -11,8 +11,7 @@ few other handlers are implemented with the Midnight Commander's
 external FS.
 
 AVFS is (C) under the GNU GPL (see the file COPYING). The shared
-library supporting AVFS with LD_PRELOAD is (C) under the GNU LGPL (see
-the file COPYING.LIB).
+library is (C) under the GNU LGPL (see the file COPYING.LIB).
 
 AVFS comes with ABSOLUTELY NO WARRANTY, for details see the file COPYING. 
 
@@ -39,11 +38,6 @@ AVFS can now be installed in four different ways. These are:
 	   loaded.
 	2) the fuse package and library >= 2.4 be installed.
 	
- - Preload
-        Currently this works on solaris systems. There are problems
-        making the preload method work for GLIBC version 6.1 or
-        higher, so systems using GLIBC are not supported.
-
  - Library
         AVFS can be used as a shared library for programs written to
         utilize AVFS. This is a pure userspace library so it should
@@ -52,8 +46,8 @@ AVFS can now be installed in four different ways. These are:
 Using AVFS is very similar in all cases. Differences will be indicated.
 
 The installation method is different. For installation instructions
-see the files 'INSTALL.fuse', 'INSTALL.preload',
-and 'INSTALL.library' respectively all located in the doc/ directory.
+see the files 'INSTALL.fuse' and 'INSTALL.library' respectively all
+located in the doc/ directory.
 
 Using AVFS
 ----------
@@ -76,8 +70,6 @@ Obtaining information about avfs itself:
   cat /#avfsstat/version        - prints version information
 
 'cd' into an archive:
-  (For the 'preload' method the shell itself must be started with
-   avfs)
 
   cd avfs-0.9.1.tgz#/
   less avfs-0.9.1/README
@@ -90,9 +82,6 @@ Unpacking an archive:
   cp -a tarfile.tgz#/dir .
   cp -a zipfile.zip#/* .
 
-  (For the 'preload' method, using '*' means that the shell must be
-   started with AVFS)
-
 Creating an archive:
 
   mkdir tarfile.tgz#+  
@@ -101,18 +90,6 @@ Creating an archive:
   Note: The efficiency of this method is not yet the same as the
   'normal' archive creation method, but it should not be more than 2
   times slower.
-
-NOTES:
-
-1) ('preload' only) Input and output redirection to/from virtual files
-   does not work, since, in the 'preload' method, virtual file
-   descriptors cannot be kept open over exec().
-
-   E.g. you can't do
-           patch -p0 < patchfile.gz#
-
-   only
-           cat patchfile.gz# | patch -p0
 
 
 If something doesn't work, then check the section 'Common Problems'.

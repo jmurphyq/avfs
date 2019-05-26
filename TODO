@@ -31,7 +31,3 @@ Redir should support operations:
   - link
 
 Redir can't support following symlinks to virtual files. Find better solution
-
-Preload:
-  - remember cwd after exec
-  - add missing operations

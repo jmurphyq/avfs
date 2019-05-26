@@ -10,7 +10,6 @@ SUBDIRS =        \
 	bzlib    \
 	libneon  \
 	lib      \
-	preload  \
 	include  \
 	test     \
 	scripts  \
@@ -26,6 +25,3 @@ EXTRA_DIST =                 \
 	glassfs/glassfs.c    \
 	glassfs/redir2.c     \
 	glassfs/redir2mount.c
-
-start:
-	( cd scripts && make start )

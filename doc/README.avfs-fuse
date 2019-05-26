@@ -1,12 +1,9 @@
 November 2005
 May 2006 (updated)
 
-This version of AVFS includes support for fuse (Filesystems
-in userspace). The other versions of AVFS, preload, library,
-do NOT have to be installed since they are not supported
-by applications and are unsupported in kernels >2.6.x or 
-glibc > 2.1. Any user wishing to install the library may do so 
-but will have to write his/her own program interface to it.
+This version of AVFS includes support for fuse (Filesystems in
+userspace). AVFS can also be used as a (shared) library for programs
+with dedicated support.
 
 Fuse support consists of a single daemon file and startup 
 script. In order to compile fuse support, the avfs library must 

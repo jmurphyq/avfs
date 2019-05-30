@@ -16,6 +16,6 @@ avssize_t av_zfile_pread(struct zfile *fil, struct zcache *zc, char *buf,
                          avsize_t nbyte, avoff_t offset);
 int av_zfile_size(struct zfile *fil, struct zcache *zc, avoff_t *sizep);
 
-struct zfile *av_zfile_new(vfile *vf, avoff_t dataoff, avuint crc, int calccrc);
+struct zfile *av_zfile_new(vfile *vf, avoff_t dataoff, avuint crc, int calccrc, int use_crc);
 struct zcache *av_zcache_new();
 avoff_t av_zcache_size(struct zcache *zc);

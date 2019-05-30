@@ -25,6 +25,10 @@
 /* It is not worth it to compress the state better */
 #define STATE_COMPRESS_LEVEL 1
 
+#define BI(ptr, i)  ((avbyte) (ptr)[i])
+#define QBYTE(ptr) ((avuint) (BI(ptr,0) | (BI(ptr,1)<<8) | \
+                   (BI(ptr,2)<<16) | (BI(ptr,3)<<24)))
+
 struct streamcache {
     int id;
     z_stream s;
@@ -60,6 +64,7 @@ struct zfile {
     int iserror;
     int id; /* Hack: the id of the last used zcache */
     int calccrc;
+    int use_crc;
     avuint crc;
     
     vfile *infile;
@@ -371,6 +376,21 @@ static int zfile_inflate(struct zfile *fil, struct zcache *zc)
     }
     if(res == Z_STREAM_END) {
         fil->iseof = 1;
+        
+        if (fil->calccrc && !fil->use_crc) {
+            if (fil->s.avail_in < 8) {
+                res = zfile_fill_inbuf(fil);
+                if(res < 0) {
+                    return res;
+                }
+                if(fil->s.avail_in < 8) {
+                    return -EINVAL;
+                }
+            }
+
+            // the last 8 bytes are the CRC and the uncompressed file size
+            fil->crc = QBYTE(fil->s.next_in);
+        }
         if(fil->calccrc && fil->s.adler != fil->crc) {
             av_log(AVLOG_ERROR, "ZFILE: CRC error");
             return -EIO;
@@ -582,7 +602,7 @@ static void zfile_destroy(struct zfile *fil)
     AV_UNLOCK(zread_lock);
 }
 
-struct zfile *av_zfile_new(vfile *vf, avoff_t dataoff, avuint crc, int calccrc)
+struct zfile *av_zfile_new(vfile *vf, avoff_t dataoff, avuint crc, int calccrc, int use_crc)
 {
     int res;
     struct zfile *fil;
@@ -595,6 +615,7 @@ struct zfile *av_zfile_new(vfile *vf, avoff_t dataoff, avuint crc, int calccrc)
     fil->id = 0;
     fil->crc = crc;
     fil->calccrc = calccrc;
+    fil->use_crc = use_crc;
 
     memset(&fil->s, 0, sizeof(z_stream));
     res = inflateInit2(&fil->s, -MAX_WBITS);

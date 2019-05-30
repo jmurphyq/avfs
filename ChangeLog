@@ -1,3 +1,9 @@
+2019-06-02  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* ugz.c, zread.c: fix handling of gzip files with multiple
+	members. It now extract all members after each other just like
+	gzip does.
+
 2019-05-24  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* parse.c: improve lookup of autofs via # to stop at first

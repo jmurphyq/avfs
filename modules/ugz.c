@@ -21,7 +21,6 @@ struct gznode {
     struct avstat sig;
     struct cacheobj *cache;
     avino_t ino;
-    avoff_t dataoff;
     avtime_t mtime;
 };
 
@@ -175,8 +174,6 @@ static int gz_read_header(vfile *vf, struct gznode *nod)
         if(res < 0)
             return res;
     }
-
-    nod->dataoff = gb.total;
 
     nod->ready = 1;
     
@@ -355,7 +352,7 @@ static int gz_open(ventry *ve, int flags, avmode_t mode, void **resp)
 
     AV_NEW(fil);
     if((flags & AVO_ACCMODE) != AVO_NOPERM)
-        fil->zfil = av_zfile_new(base, nod->dataoff, 0, 1, 0);
+        fil->zfil = av_zfile_new(base, 0, 0, AV_ZFILE_DATA_GZIP_ENCAPSULATED);
     else
         fil->zfil = NULL;
 
@@ -427,8 +424,8 @@ static int gz_getsize(vfile *vf, struct avstat *buf)
 
     res = av_zfile_size(fil->zfil, zc, &size);
     if(res == 0 && size == -1) {
-        fil->zfil = av_zfile_new(fil->base, fil->node->dataoff,
-                                 0, 1, 0);
+        fil->zfil = av_zfile_new(fil->base, 0,
+                                 0, AV_ZFILE_DATA_GZIP_ENCAPSULATED);
         res = av_zfile_size(fil->zfil, zc, &size);
     }
     buf->size = size;

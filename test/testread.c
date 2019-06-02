@@ -9,6 +9,8 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <virtual.h>
+#include <errno.h>
+#include <string.h>
 
 int main( int argc, char **argv )
 {
@@ -39,6 +41,10 @@ int main( int argc, char **argv )
             printf( "Bytes read: %lu\n", len );
 
             if ( len == 0 ) break;
+            else if ( len < 0 ) {
+                printf( "Error: %s\n", strerror( errno ) );
+                break;
+            }
         }
 
         printf( "Total len:%lu\n", total_len );

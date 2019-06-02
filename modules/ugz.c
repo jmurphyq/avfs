@@ -21,9 +21,6 @@ struct gznode {
     struct avstat sig;
     struct cacheobj *cache;
     avino_t ino;
-    avoff_t size;
-    avoff_t dataoff;
-    avuint crc;
     avtime_t mtime;
 };
 
@@ -31,7 +28,6 @@ struct gzfile {
     struct zfile *zfil;
     vfile *base;
     struct gznode *node;
-    int validsize;
 };
 
 #define GZBUFSIZE 1024
@@ -113,7 +109,6 @@ static int gzbuf_read(struct gzbuf *gb, char *buf, avsize_t nbyte)
 static int gz_read_header(vfile *vf, struct gznode *nod)
 {
     int res;
-    avoff_t sres;
     struct gzbuf gb;
     unsigned char buf[GZHEADER_SIZE];
     int method, flags;
@@ -179,19 +174,6 @@ static int gz_read_header(vfile *vf, struct gznode *nod)
         if(res < 0)
             return res;
     }
-
-    nod->dataoff = gb.total;
-
-    sres = av_lseek(vf, -8, AVSEEK_END);
-    if(sres < 0)
-        return sres;
-
-    res = av_read_all(vf, (char*)buf, 8);
-    if(res < 0)
-        return res;
-
-    nod->crc = QBYTE(buf);
-    nod->size = QBYTE(buf + 4);
 
     nod->ready = 1;
     
@@ -370,16 +352,12 @@ static int gz_open(ventry *ve, int flags, avmode_t mode, void **resp)
 
     AV_NEW(fil);
     if((flags & AVO_ACCMODE) != AVO_NOPERM)
-        fil->zfil = av_zfile_new(base, nod->dataoff, nod->crc, 1);
+        fil->zfil = av_zfile_new(base, 0, 0, AV_ZFILE_DATA_GZIP_ENCAPSULATED);
     else
         fil->zfil = NULL;
 
     fil->base = base;
     fil->node = nod;
-    if(strcmp(ve->mnt->opts, "-s") == 0)
-        fil->validsize = 1;
-    else
-        fil->validsize = 0;
     
     *resp = fil;
     return 0;
@@ -446,8 +424,8 @@ static int gz_getsize(vfile *vf, struct avstat *buf)
 
     res = av_zfile_size(fil->zfil, zc, &size);
     if(res == 0 && size == -1) {
-        fil->zfil = av_zfile_new(fil->base, fil->node->dataoff,
-                                 fil->node->crc, 0);
+        fil->zfil = av_zfile_new(fil->base, 0,
+                                 0, AV_ZFILE_DATA_GZIP_ENCAPSULATED);
         res = av_zfile_size(fil->zfil, zc, &size);
     }
     buf->size = size;
@@ -470,8 +448,7 @@ static int gz_getattr(vfile *vf, struct avstat *buf, int attrmask)
     if(res < 0)
         return res;
 
-    buf->size = nod->size;
-    if(!fil->validsize && (attrmask & (AVA_SIZE | AVA_BLKCNT)) != 0) {
+    if((attrmask & (AVA_SIZE | AVA_BLKCNT)) != 0) {
         res = gz_getsize(vf, buf);
         if(res < 0)
             return res;

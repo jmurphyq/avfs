@@ -798,7 +798,7 @@ static int zip_open(ventry *ve, struct archfile *fil)
     if(ent.method == METHOD_DEFLATE) {
         struct zfile *zfil;
 
-        zfil = av_zfile_new(fil->basefile, fil->nod->offset, ent.crc, 1);
+        zfil = av_zfile_new(fil->basefile, fil->nod->offset, ent.crc, AV_ZFILE_DATA_PLAIN);
         fil->data = zfil;
     }
 

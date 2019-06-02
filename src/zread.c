@@ -25,6 +25,11 @@
 /* It is not worth it to compress the state better */
 #define STATE_COMPRESS_LEVEL 1
 
+#define BI(ptr, i)  ((avbyte) (ptr)[i])
+#define DBYTE(ptr) (BI(ptr,0) | (BI(ptr,1)<<8))
+#define QBYTE(ptr) ((avuint) (BI(ptr,0) | (BI(ptr,1)<<8) | \
+                   (BI(ptr,2)<<16) | (BI(ptr,3)<<24)))
+
 struct streamcache {
     int id;
     z_stream s;
@@ -60,12 +65,35 @@ struct zfile {
     int iserror;
     int id; /* Hack: the id of the last used zcache */
     int calccrc;
+    enum av_zfile_data_type data_type;
     avuint crc;
     
     vfile *infile;
     avoff_t dataoff;
     char inbuf[INBUFSIZE];
 };
+
+#define GZHEADER_SIZE 10
+#define GZMAGIC1 0x1f
+#define GZMAGIC2 0x8b
+/* gzip flag byte */
+#define GZFL_ASCII        0x01 /* bit 0 set: file probably ascii text */
+#define GZFL_CONTINUATION 0x02 /* bit 1 set: continuation of multi-part gzip file */
+#define GZFL_EXTRA_FIELD  0x04 /* bit 2 set: extra field present */
+#define GZFL_ORIG_NAME    0x08 /* bit 3 set: original file name present */
+#define GZFL_COMMENT      0x10 /* bit 4 set: file comment present */
+#define GZFL_RESERVED     0xE0 /* bits 5..7: reserved */
+
+#define METHOD_DEFLATE 8
+
+struct zfile_gzip_header_data {
+};
+
+struct zfile_gzip_trailer_data {
+    avuint crc;
+};
+
+static int zfile_parse_gzip_header(struct zfile *fil, struct zfile_gzip_header_data *return_data);
 
 #ifndef USE_SYSTEM_ZLIB
 static int zfile_compress_state(char *state, int statelen, char **resp)
@@ -199,6 +227,15 @@ static int zfile_reset(struct zfile *fil)
     fil->s.adler = 0;
     fil->iseof = 0;
     fil->calccrc = 0;
+
+    if (fil->data_type == AV_ZFILE_DATA_GZIP_ENCAPSULATED) {
+        struct zfile_gzip_header_data header_data;
+        res = zfile_parse_gzip_header(fil, &header_data);
+        if (res != 0) {
+            av_log(AVLOG_ERROR, "gzip header error");
+            fil->iserror = 1;
+        }
+    }
 
     return 0;
 }
@@ -347,6 +384,151 @@ static int zfile_fill_inbuf(struct zfile *fil)
     return 0;
 }
 
+static int zfile_parse_gzip_header(struct zfile *fil, struct zfile_gzip_header_data *return_data)
+{
+    int res = 0;
+
+    if (fil->s.avail_in < GZHEADER_SIZE) {
+        res = zfile_fill_inbuf(fil);
+        if(res < 0) {
+            return res;
+        }
+    }
+
+    if (fil->s.avail_in < GZHEADER_SIZE) {
+        return -EIO;
+    }
+
+    const unsigned char *buf = fil->s.next_in;
+
+    if (buf[0] != GZMAGIC1 || buf[1] != GZMAGIC2) {
+        av_log(AVLOG_ERROR, "ZREAD: File not in GZIP format");
+        return -EIO;
+    }
+
+    int method = buf[2];
+    int flags = buf[3];
+    avsize_t offset = GZHEADER_SIZE;
+
+    if(method != METHOD_DEFLATE) {
+        av_log(AVLOG_ERROR, "ZREAD: File compression is not DEFLATE");
+        return -EIO;
+    }
+
+    if ((flags & GZFL_CONTINUATION) != 0) {
+        if(fil->s.avail_in < offset + 2) {
+            return -EIO;
+        }
+
+        offset += 2;
+    }
+    if ((flags & GZFL_EXTRA_FIELD) != 0) {
+        if(fil->s.avail_in < offset + 2) {
+            return -EIO;
+        }
+
+        avsize_t len = DBYTE(&buf[offset]);
+
+        if(fil->s.avail_in < offset + 2 + len) {
+            return -EIO;
+        }
+
+        offset += 2 + len;
+    }
+    if ((flags & GZFL_ORIG_NAME) != 0) {
+        int c;
+
+        do {
+            if(fil->s.avail_in < offset + 1) {
+                return -EIO;
+            }
+
+            c = buf[offset];
+            offset++;
+        } while (c != '\0');
+    }
+
+    if ((flags & GZFL_COMMENT) != 0) {
+        int c;
+
+        do {
+            if(fil->s.avail_in < offset + 1) {
+                return -EIO;
+            }
+
+            c = buf[offset];
+            offset++;
+        } while (c != '\0');
+    }
+
+    fil->s.total_in += offset;
+    fil->s.avail_in -= offset;
+    fil->s.next_in += offset;
+
+    return 0;
+}
+
+static int zfile_parse_gzip_trailer(struct zfile *fil, struct zfile_gzip_trailer_data *return_data)
+{
+    if (fil->s.avail_in < 8) {
+        int res = zfile_fill_inbuf(fil);
+        if(res < 0) {
+            return res;
+        }
+        if(fil->s.avail_in < 8) {
+            return -EIO;
+        }
+    }
+
+    // the last 8 bytes are the CRC and the uncompressed file size
+    return_data->crc = QBYTE(fil->s.next_in);
+
+    fil->s.total_in += 8;
+    fil->s.avail_in -= 8;
+    fil->s.next_in += 8;
+
+    return 0;
+}
+
+static int zfile_reinit_state(struct zfile *fil)
+{
+    avoff_t total_in = fil->s.total_in;
+    Bytef *next_out = fil->s.next_out;
+    avoff_t avail_out = fil->s.avail_out;
+    avoff_t total_out = fil->s.total_out;
+
+    int res = inflateEnd(&fil->s);
+
+    if (res != Z_OK) {
+        return -EIO;
+    }
+
+    memset(&fil->s, 0, sizeof(z_stream));
+    res = inflateInit2(&fil->s, -MAX_WBITS);
+    if(res != Z_OK) {
+        av_log(AVLOG_ERROR, "ZFILE: inflateInit: %s (%i)",
+               fil->s.msg == NULL ? "" : fil->s.msg, res);
+        return -EIO;
+    }
+
+    fil->s.adler = 0;
+    fil->s.total_in = total_in;
+    fil->s.avail_in = 0;
+    fil->s.next_out = next_out;
+    fil->s.avail_out = avail_out;
+    fil->s.total_out = total_out;
+    fil->iseof = 0;
+
+    struct zfile_gzip_header_data header_data;
+    res = zfile_parse_gzip_header(fil, &header_data);
+    if (res != 0) {
+        av_log(AVLOG_ERROR, "gzip header error");
+        return -EIO;
+    }
+
+    return 0;
+}
+
 static int zfile_inflate(struct zfile *fil, struct zcache *zc)
 {
     int res;
@@ -371,16 +553,53 @@ static int zfile_inflate(struct zfile *fil, struct zcache *zc)
     }
     if(res == Z_STREAM_END) {
         fil->iseof = 1;
+
+        if (fil->data_type == AV_ZFILE_DATA_GZIP_ENCAPSULATED) {
+            struct zfile_gzip_trailer_data trailer_data;
+            int parse_res = zfile_parse_gzip_trailer(fil, &trailer_data);
+            if (parse_res != 0) {
+                return -EIO;
+            }
+            if (fil->calccrc) {
+                fil->crc = trailer_data.crc;
+            }
+        }
         if(fil->calccrc && fil->s.adler != fil->crc) {
             av_log(AVLOG_ERROR, "ZFILE: CRC error");
             return -EIO;
         }
+
+        int crc_ok = 1;
+        int cont = 0;
+
+        // if data is gzip encapsulated and there is some data left,
+        // reset deflate state and continue with next gzip member
+        if (fil->data_type == AV_ZFILE_DATA_GZIP_ENCAPSULATED) {
+            if (fil->s.avail_in > 3) {
+                // check gzip method
+                if (fil->s.next_in[2] == METHOD_DEFLATE) {
+                    int reinit_res = zfile_reinit_state(fil);
+
+                    if (reinit_res != 0) {
+                        return reinit_res;
+                    }
+
+                    crc_ok = 0;
+                    cont = 1;
+                    res = Z_OK;
+                }
+            }
+        }
+
         AV_LOCK(zread_lock);
         if(fil->calccrc)
-            zc->crc_ok = 1;
+            zc->crc_ok = crc_ok;
         zc->size = fil->s.total_out;
         AV_UNLOCK(zread_lock);
-        return 0;
+
+        if (!cont) {
+            return 0;
+        }
     }
     if(res != Z_OK) {
         av_log(AVLOG_ERROR, "ZFILE: inflate: %s (%i)",
@@ -582,7 +801,7 @@ static void zfile_destroy(struct zfile *fil)
     AV_UNLOCK(zread_lock);
 }
 
-struct zfile *av_zfile_new(vfile *vf, avoff_t dataoff, avuint crc, int calccrc)
+struct zfile *av_zfile_new(vfile *vf, avoff_t dataoff, avuint crc, enum av_zfile_data_type data_type)
 {
     int res;
     struct zfile *fil;
@@ -594,7 +813,8 @@ struct zfile *av_zfile_new(vfile *vf, avoff_t dataoff, avuint crc, int calccrc)
     fil->dataoff = dataoff;
     fil->id = 0;
     fil->crc = crc;
-    fil->calccrc = calccrc;
+    fil->calccrc = 1;
+    fil->data_type = data_type;
 
     memset(&fil->s, 0, sizeof(z_stream));
     res = inflateInit2(&fil->s, -MAX_WBITS);
@@ -604,6 +824,15 @@ struct zfile *av_zfile_new(vfile *vf, avoff_t dataoff, avuint crc, int calccrc)
         fil->iserror = 1;
     }
     fil->s.adler = 0;
+
+    if (fil->data_type == AV_ZFILE_DATA_GZIP_ENCAPSULATED) {
+        struct zfile_gzip_header_data header_data;
+        res = zfile_parse_gzip_header(fil, &header_data);
+        if (res != 0) {
+            av_log(AVLOG_ERROR, "gzip header error");
+            fil->iserror = 1;
+        }
+    }
 
     return fil;
 }

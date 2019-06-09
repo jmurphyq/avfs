@@ -40,7 +40,7 @@ libmodules_la_SOURCES = \
 
 if BUILD_DAVSUPPORT
     modules += dav.c
-    libmodules_la_SOURCES += dav.c dav_ls.c
+    libmodules_la_SOURCES += dav_ls.c
 endif
 
 nodist_libmodules_la_SOURCES = \

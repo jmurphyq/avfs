@@ -1,6 +1,7 @@
 /*  
     AVFS: A Virtual File System Library
     Copyright (C) 1998  Miklos Szeredi <miklos@szeredi.hu>
+    Copyright (C) 2019  Ralf Hoffmann <ralf@boomerangsworld.de>
     
     This file can be distributed either under the GNU LGPL, or under
     the GNU GPL. See the file COPYING.LIB and COPYING. 
@@ -29,15 +30,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <neon/ne_auth.h>
 
 
 /* --------------------------------------------------------------------- */
 
 static char AV_UserAgent[128];
-
-static struct uri av_dav_uri_defaults = {
-    "http", NULL, 80, NULL
-};
 
 struct davlocalfile {
     int running;
@@ -83,6 +81,12 @@ static char *dav_hostpath_to_url (char *urlbuf, int buflen,
         len += snprintf (urlbuf+len, buflen-len, "http://");
         rawp += 5;
         while (*rawp == '/') { rawp++; }
+    } else if (strncmp(rawp, "https:", 6) == 0) {
+        len += snprintf (urlbuf+len, buflen-len, "https://");
+        rawp += 6;
+        while (*rawp == '/') { rawp++; }
+    } else {
+        len += snprintf (urlbuf+len, buflen-len, "http://");
     }
 
     for ( ; *rawp != '\0'; rawp++) {
@@ -101,7 +105,7 @@ static char *dav_hostpath_to_url (char *urlbuf, int buflen,
 
     /* add the path, if it's non-empty */
     for (pathp = hp->path; *pathp == '/'; pathp++);
-    if (pathp != '\0') {
+    if (*pathp != '\0') {
         len += snprintf (urlbuf+len, buflen-len, "/%s", pathp);
     }
 
@@ -124,50 +128,57 @@ static void dav_free_localfile(struct davlocalfile *lf)
 
 static int
 dav_supply_creds(int is_for_proxy, void *userdata, const char *realm,
-		const char *hostname, char **username, char **password)
+                 int attempt, char *username, char *password)
 {
     struct pass_session *pass;
-    struct davdata *davdat = (struct davdata *) userdata;
+    struct av_dav_conn *conn = (struct av_dav_conn*)userdata;
+    struct davdata *davdat = conn->data;
 
-    pass = pass_get_password (&(davdat->sessions), realm, hostname);
+    pass = pass_get_password (&(davdat->sessions), realm, conn->uri.host);
     if (pass == NULL) {
-	return -1;
+        return -1;
     }
 
-    /* TODO: really need to dup this? will neon free it? */
-    *username = ne_strdup (pass->username);
-    *password = ne_strdup (pass->password);
-    return 0;
+    strncpy(username, pass->username, NE_ABUFSIZ - 1);
+    strncpy(password, pass->password, NE_ABUFSIZ - 1);
+    username[NE_ABUFSIZ - 1] = '\0';
+    password[NE_ABUFSIZ - 1] = '\0';
+
+    return attempt;
 }
 
 static int
-dav_supply_creds_server(void *userdata, const char *realm,
-		const char *hostname, char **username, char **password)
+dav_supply_creds_server(void *userdata, const char *realm, int attempt,
+                        char *username, char *password)
 {
-    return dav_supply_creds(0, userdata, realm, hostname, username, password);
+    return dav_supply_creds(0, userdata, realm, attempt, username, password);
 }
 
 static int
-dav_supply_creds_proxy(void *userdata, const char *realm, 
-		const char *hostname, char **username, char **password) 
+dav_supply_creds_proxy(void *userdata, const char *realm, int attempt,
+                       char *username, char *password) 
 {
-    return dav_supply_creds(1, userdata, realm, hostname, username, password);
+    return dav_supply_creds(1, userdata, realm, attempt, username, password);
 }
 
 /* ---------------------------------------------------------------------- */
 
 static int
-av_dav_conn_init (struct av_dav_conn *conn, struct davdata *davdat)
+av_dav_conn_init (struct av_dav_conn *conn, struct davdata *davdat,
+                  ne_uri *uri)
 {
-    conn->sesh = http_session_create();
+    conn->sesh = ne_session_create(uri->scheme, uri->host, uri->port);
 
     /* TODO: provide proxy support from http_proxy env var */
     /* TODO: first make sure neon doesn't automatically do this ;) */
     /* http_session_proxy(sess, "proxy.myisp.com", 8080); */
-    http_set_expect100 (conn->sesh, 1);
-    http_set_useragent (conn->sesh, AV_UserAgent);
-    http_set_server_auth (conn->sesh, dav_supply_creds_server, davdat);
-    http_set_proxy_auth (conn->sesh, dav_supply_creds_proxy, davdat);
+
+    /* TODO something is missing to make expect100 work, but it works without too */
+    /* ne_set_session_flag(conn->sesh, NE_SESSFLAG_EXPECT100, 1); */
+    ne_set_useragent (conn->sesh, AV_UserAgent);
+
+    ne_set_server_auth (conn->sesh, dav_supply_creds_server, conn);
+    ne_set_proxy_auth (conn->sesh, dav_supply_creds_proxy, conn);
 
     return 0;
 }
@@ -183,12 +194,9 @@ new_dav_conn (struct davdata *davdat)
         /* skip the busy ones */
         if (conn->isbusy) { continue; }
 
-        if (conn->sesh == NULL) {
-            /* NULL session? This one hasn't been initted yet. */
-	    av_dav_conn_init (conn, davdat);
-            av_log(AVLOG_DEBUG, "DAV: created new HTTP session");
-        }
         conn->isbusy = 1;
+        conn->data = davdat;
+        conn->sesh = NULL;
         return conn;
     }
 
@@ -207,8 +215,8 @@ http_error_to_errno (const char *method, int httpret, const char *errstr)
                                     method, httpret, errstr);
 
     switch (httpret) {
-        case HTTP_ERROR:
-        /* HTTP_ERROR (1) Generic error; use http_get_error(session) */
+        case NE_ERROR:
+        /* Generic error; use http_get_error(session) */
         /* TODO -- fill out more HTTP errors here */
 
         if (!strncmp (errstr, "404", 3)) {
@@ -220,43 +228,33 @@ http_error_to_errno (const char *method, int httpret, const char *errstr)
         }
         break;
 
-        case HTTP_LOOKUP:
-        /* HTTP_LOOKUP (3) Name lookup failed */
+        case NE_LOOKUP:
+        /* Name lookup failed */
         errval = -ECONNREFUSED;
         break;
 
-        case HTTP_AUTH:
-        /* HTTP_AUTH (4) User authentication failed on server */
+        case NE_AUTH:
+        /* User authentication failed on server */
 	errval = -EACCES;
         break;
 
-        case HTTP_AUTHPROXY:
-        /* HTTP_AUTHPROXY (5) User authentication failed on proxy */
+        case NE_PROXYAUTH:
+        /* Proxy authentication failed */
 	errval = -EACCES;
         break;
 
-        case HTTP_SERVERAUTH:
-        /* HTTP_SERVERAUTH (6) Server authentication failed */
-	errval = -EACCES;
-        break;
-
-        case HTTP_PROXYAUTH:
-        /* HTTP_PROXYAUTH (7) Proxy authentication failed */
-	errval = -EACCES;
-        break;
-
-        case HTTP_CONNECT:
-        /* HTTP_CONNECT (8) Could not connect to server */
+        case NE_CONNECT:
+        /* Could not connect to server */
         errval = -ECONNREFUSED;
         break;
 
-        case HTTP_TIMEOUT:
-        /* HTTP_TIMEOUT (9) Connection timed out */
+        case NE_TIMEOUT:
+        /* Connection timed out */
         errval = -ETIMEDOUT;
         break;
 
-        case HTTP_FAILED:
-        /* HTTP_FAILED (10) The precondition failed */
+        case NE_FAILED:
+        /* The precondition failed */
         errval = -ENXIO;
         break;
 
@@ -272,21 +270,42 @@ http_error_to_errno (const char *method, int httpret, const char *errstr)
 
 /* ---------------------------------------------------------------------- */
 
-static void av_get_cb (void *userdata, const char *buf, size_t len)
+static int av_get_cb (void *userdata, const char *buf, size_t len)
 {
     struct davlocalfile *lf = (struct davlocalfile *) userdata;
     int res;
 
-    av_log(AVLOG_DEBUG, "DAV: GET cb: writing %d", len);
+    av_log(AVLOG_DEBUG, "DAV: GET cb: writing %lu", len);
     res = write (lf->fd, buf, len);
     if (res < 0) {
         av_log (AVLOG_ERROR, "DAV: write failed: %s", strerror(errno));
     }
     if (res != len) {
-        av_log (AVLOG_ERROR, "DAV: short write to tmpfile (%i/%i)",
+        av_log (AVLOG_ERROR, "DAV: short write to tmpfile (%i/%lu)",
                 res, len);
     }
     lf->currsize += len;
+
+    return 0;
+}
+
+static int av_http_read_file(ne_session *sess, const char *uri,
+                             ne_block_reader reader, void *userdata)
+{
+    ne_request *req = ne_request_create(sess, "GET", uri);
+    int ret;
+
+    ne_add_response_body_reader(req, ne_accept_2xx, reader, userdata);
+
+    ret = ne_request_dispatch(req);
+
+    if (ret == NE_OK && ne_get_status(req)->klass != 2) {
+        ret = NE_ERROR;
+    }
+
+    ne_request_destroy(req);
+
+    return ret;
 }
 
 static int dav_http_get (struct davdata *davdat, struct davlocalfile *lf)
@@ -300,7 +319,7 @@ static int dav_http_get (struct davdata *davdat, struct davlocalfile *lf)
 
     lf->fd = -1;
 
-    if (uri_parse (lf->url, &(conn->uri), &av_dav_uri_defaults) != 0
+    if (ne_uri_parse (lf->url, &(conn->uri)) != 0
         || conn->uri.path == NULL
         || conn->uri.host == NULL)
     {
@@ -315,25 +334,36 @@ static int dav_http_get (struct davdata *davdat, struct davlocalfile *lf)
         res = -1; goto error;
     }
 
-    http_session_server (conn->sesh, conn->uri.host, conn->uri.port);
+    av_dav_conn_init(conn, davdat, &conn->uri);
+    av_log(AVLOG_DEBUG, "DAV: created new HTTP session");
 
     /* unfortunately the Neon API doesn't allow partial reads.
      * Perhaps redo this using the http.c code to avoid having
      * to download the entire file first */
     av_log(AVLOG_DEBUG, "DAV: GETting '%s'", lf->url);
-    res = http_read_file (conn->sesh, lf->url, av_get_cb, lf);
+    res = av_http_read_file(conn->sesh, lf->url, av_get_cb, lf);
     close (lf->fd); lf->fd = -1;
 
-    if (res != HTTP_OK) {
-        err = http_get_error(conn->sesh);
+    if (res != NE_OK) {
+        err = ne_get_error(conn->sesh);
         res = http_error_to_errno ("GET", res, err);
         goto error;
     }
 
+    if (conn->sesh) {
+        ne_session_destroy(conn->sesh);
+        conn->sesh = NULL;
+    }
+    ne_uri_free(&conn->uri);
     conn->isbusy = 0;
     return 0;
 
 error:
+    if (conn->sesh) {
+        ne_session_destroy(conn->sesh);
+        conn->sesh = NULL;
+    }
+    ne_uri_free(&conn->uri);
     conn->isbusy = 0;
     if (lf->fd > 0) { close (lf->fd); lf->fd = -1; }
     return res;
@@ -490,7 +520,7 @@ populate_av_tree_from_reslist (struct remdirlist *dl, struct av_dav_conn *conn,
 
           av_log (AVLOG_DEBUG, "DAV: adding direntry \"%s\" mode=0%o",
                                         remname, stbuf.mode);
-          av_remote_add (dl, remname, linkname, &stbuf);
+          av_remote_add (dl, shortname, linkname, &stbuf);
       }
 
   skip:
@@ -512,6 +542,9 @@ static int dav_list(struct remote *rem, struct remdirlist *dl)
     struct av_dav_resource *reslist = NULL;
     const char *err;
 
+    // to make valgrind happy
+    memset(urlbuf, 0, sizeof(urlbuf));
+
     url = dav_hostpath_to_url (urlbuf, 511, &(dl->hostpath));
     av_log (AVLOG_DEBUG, "DAV: dav_list called on '%s' flags=%x",
                                         url, dl->flags);
@@ -519,7 +552,7 @@ static int dav_list(struct remote *rem, struct remdirlist *dl)
     conn = new_dav_conn (davdat);
     if (conn == NULL) { return -1; }
 
-    if (uri_parse (url, &(conn->uri), &av_dav_uri_defaults) != 0
+    if (ne_uri_parse (url, &(conn->uri)) != 0
       || conn->uri.path == NULL
       || conn->uri.host == NULL)
     {
@@ -527,10 +560,12 @@ static int dav_list(struct remote *rem, struct remdirlist *dl)
         res = -1; goto error;
     }
 
-    http_session_server (conn->sesh, conn->uri.host, conn->uri.port);
+    av_dav_conn_init(conn, davdat, &conn->uri);
+    av_log(AVLOG_DEBUG, "DAV: created new HTTP session");
+
     res = fetch_resource_list (conn, conn->uri.path, 1, 1, &reslist);
-    if (res != HTTP_OK) {
-        err = http_get_error(conn->sesh);
+    if (res != NE_OK) {
+        err = ne_get_error(conn->sesh);
         res = http_error_to_errno ("PROPFIND", res, err);
         goto error;
     }
@@ -544,10 +579,20 @@ static int dav_list(struct remote *rem, struct remdirlist *dl)
         res = -1; goto error;
     }
 
+    if (conn->sesh) {
+        ne_session_destroy(conn->sesh);
+        conn->sesh = NULL;
+    }
+    ne_uri_free(&conn->uri);
     conn->isbusy = 0;
     return 0;
 
 error:
+    if (conn->sesh) {
+        ne_session_destroy(conn->sesh);
+        conn->sesh = NULL;
+    }
+    ne_uri_free(&conn->uri);
     conn->isbusy = 0;
     return res;
 }
@@ -569,6 +614,9 @@ static int dav_get(struct remote *rem, struct remgetparam *gp)
 
     AV_NEW_OBJ(lf, dav_free_localfile);
 
+    // to make valgrind happy
+    memset(urlbuf, 0, sizeof(urlbuf));
+
     lf->url = av_strdup (dav_hostpath_to_url
                                     (urlbuf, 511, &(gp->hostpath)));
     lf->tmpfile = tmpfile;
@@ -578,9 +626,8 @@ static int dav_get(struct remote *rem, struct remgetparam *gp)
     res = dav_http_get (davdat, lf);
 
     if (res < 0) {
-        av_unref_obj(lf);
-        av_free(lf->url);
         av_del_tmpfile(lf->tmpfile);
+        av_unref_obj(lf);
         return res;
     }
 
@@ -659,7 +706,7 @@ int av_init_module_dav(struct vmodule *module)
 
     av_log(AVLOG_DEBUG, "DAV: initializing");
 
-    sock_init();
+    ne_sock_init();
 
     AV_NEW(davdat);
     memset (&(davdat->allconns), 0, sizeof(davdat->allconns));

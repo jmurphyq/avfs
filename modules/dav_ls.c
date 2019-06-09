@@ -26,14 +26,10 @@
 #include "filebuf.h"
 
 #include <time.h>
-#include <http_request.h>
-#include <dav_props.h>
-#include <uri.h>
-#include <ne_alloc.h>
-
 #include <string.h>
 #include <stdlib.h>
 #include "dav.h"
+#include <neon/ne_dates.h>
 
 struct fetch_context {
   struct av_dav_conn *conn;
@@ -42,25 +38,11 @@ struct fetch_context {
   unsigned int include_target; /* Include resource at href */
 };  
 
-static const dav_propname flat_props[] = {
+static const ne_propname props[] = {
   { "DAV:", "getcontentlength" },
   { "DAV:", "getlastmodified" },
-  { "DAV:", "displayname" },
   { "http://apache.org/dav/props/", "executable" },
-  { NULL }
-};
-
-static const dav_propname complex_props[] = {
   { "DAV:", "resourcetype" },
-  { NULL }
-};
-
-#define ELM_resourcetype (DAV_ELM_207_UNUSED + 1)
-#define ELM_collection (DAV_ELM_207_UNUSED + 4)
-
-static const struct hip_xml_elm complex_elms[] = {
-  { "DAV:", "resourcetype", ELM_resourcetype, 0 },
-  { "DAV:", "collection", ELM_collection, 0 },
   { NULL }
 };
 
@@ -87,20 +69,20 @@ static int compare_resource(const struct av_dav_resource *r1,
   }
 }
 
-static void results(void *userdata, const char *uri,
-          const dav_prop_result_set *set)
+static void results(void *userdata, const ne_uri *uri,
+          const ne_prop_result_set *set)
 {
   struct fetch_context *ctx = userdata;
   struct av_dav_resource *current, *previous, *newres;
   const char *clength, *modtime, *isexec, *abspath;
-  const http_status *status = NULL;
-  
-  av_log (AVLOG_DEBUG, "DAV URI: %s", uri);
+  const ne_status *status = NULL;
 
-  newres = dav_propset_private(set);
-  abspath = uri_abspath(uri);
+  av_log (AVLOG_DEBUG, "DAV URI: %s", uri->path);
 
-  if (uri_compare(ctx->target, abspath) == 0 && !ctx->include_target) {
+  newres = ne_propset_private(set);
+  abspath = uri->path;
+
+  if (ne_path_compare(ctx->target, abspath) == 0 && !ctx->include_target) {
     /* This is the target URI, skip it */
     av_free(newres);
     return;
@@ -108,14 +90,19 @@ static void results(void *userdata, const char *uri,
 
   newres->uri = ne_strdup(abspath);
 
-  clength = dav_propset_value(set, &flat_props[0]);  
-  modtime = dav_propset_value(set, &flat_props[1]);
-  isexec = dav_propset_value(set, &flat_props[2]);
-  
-  if (clength == NULL)
-    status = dav_propset_status(set, &flat_props[0]);
-  if (modtime == NULL)
-    status = dav_propset_status(set, &flat_props[1]);
+  // flat attributes are those declined in the xml start_element
+  // handler.
+  clength = ne_propset_value(set, &props[0]);  
+  modtime = ne_propset_value(set, &props[1]);
+  isexec = ne_propset_value(set, &props[2]);
+
+  if (clength == NULL) {
+      status = ne_propset_status(set, &props[0]);
+  }
+
+  if (modtime == NULL) {
+      status = ne_propset_status(set, &props[1]);
+  }
 
   if (newres->type == resr_normal && status) {
     /* It's an error! */
@@ -146,11 +133,13 @@ static void results(void *userdata, const char *uri,
     newres->is_executable = 0;
   }
 
-  if (modtime)
-    newres->modtime = http_dateparse(modtime);
+  if (modtime) {
+      newres->modtime = ne_httpdate_parse(modtime);
+  }
 
-  if (clength)
-    newres->size = strtol(clength, NULL, 10);
+  if (clength) {
+      newres->size = strtol(clength, NULL, 10);
+  }
 
   for (current = *ctx->list, previous = NULL; current != NULL; 
      previous = current, current=current->next) {
@@ -166,37 +155,43 @@ static void results(void *userdata, const char *uri,
   newres->next = current;
 }
 
-static int end_element(void *userdata, const struct hip_xml_elm *elm, const char *cdata)
+int start_element(void *userdata, int parent,
+                  const char *nspace, const char *name,
+                  const char **atts)
 {
-  dav_propfind_handler *pfh = userdata;
-  struct av_dav_resource *r = dav_propfind_current_private(pfh);
+    ne_propfind_handler *pfh = userdata;
+    struct av_dav_resource *r = ne_propfind_current_private(pfh);
 
-  if (r == NULL) {
-    return 0;
-  }
+    if (parent == 2) {
+        // resourcetype
+        if (strcmp(name, "collection") == 0) {
+            r->type = resr_collection;
+        }
+    } else {
+        if (strcmp(name, "resourcetype") == 0) {
+            return 2;
+        }
+    }
 
-  if (elm->id == ELM_collection) {
-    r->type = resr_collection;
-  }
-
-  return 0;
+    return NE_XML_DECLINE;
 }
 
-static int check_context(hip_xml_elmid parent, hip_xml_elmid child)
+int data_element(void *userdata, int state,
+                 const char *cdata, size_t len)
 {
-  if ((parent == DAV_ELM_prop && child == ELM_resourcetype) ||
-    (parent == ELM_resourcetype && child == ELM_collection))
-  {
     return 0;
-  }
-  return 0;  
+}
+
+int end_element(void *userdata, int state, 
+                const char *nspace, const char *name)
+{
+    return 0;
 }
 
 void free_resource(struct av_dav_resource *res)
 {
-  HTTP_FREE(res->uri);
-  HTTP_FREE(res->displayname);
-  HTTP_FREE(res->error_reason);
+  ne_free(res->uri);
+  ne_free(res->error_reason);
   av_free(res);
 }
 
@@ -209,16 +204,16 @@ void free_resource_list(struct av_dav_resource *res)
   }
 }
 
-static void *create_private(void *userdata, const char *uri)
+static void *create_private(void *userdata, const ne_uri *uri)
 {
-  return ne_calloc(sizeof(struct av_dav_resource));
+    return av_calloc(sizeof(struct av_dav_resource));
 }
 
 int fetch_resource_list(struct av_dav_conn *conn,
                 const char *uri, int depth, int include_target,
                 struct av_dav_resource **reslist)
 {
-  dav_propfind_handler *pfh = dav_propfind_create(conn->sesh, uri, depth);
+  ne_propfind_handler *pfh = ne_propfind_create(conn->sesh, uri, depth);
   int ret;
   struct fetch_context ctx = {0};
   
@@ -228,16 +223,20 @@ int fetch_resource_list(struct av_dav_conn *conn,
   ctx.target = uri;
   ctx.include_target = include_target;
 
-  dav_propfind_set_flat(pfh, flat_props);
+  ne_xml_push_handler(ne_propfind_get_parser(pfh),
+                      start_element,
+                      data_element,
+                      end_element,
+                      pfh);
 
-  hip_xml_push_handler(dav_propfind_get_parser(pfh), complex_elms, 
-             check_context, NULL, end_element, pfh);
+  ne_propfind_set_private(pfh,
+                          create_private,
+                          NULL,
+                          NULL);
 
-  dav_propfind_set_complex(pfh, complex_props, create_private, NULL);
+  ret = ne_propfind_named(pfh, props, results, &ctx);
 
-  ret = dav_propfind_named(pfh, results, &ctx);
-
-  dav_propfind_destroy(pfh);
+  ne_propfind_destroy(pfh);
 
   return ret;
 }

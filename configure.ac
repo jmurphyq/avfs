@@ -94,9 +94,9 @@ AC_MSG_RESULT([$debugmode])
 
 AC_MSG_CHECKING([whether building the dav module is enabled])
 AC_ARG_ENABLE(dav,
-[  --enable-dav            Compile the dav module (needs an xml library)],
+[  --enable-dav            Compile the dav module (requires libneon)],
 [if test "$enableval" = yes; then dav=yes; else dav=no; fi],
-dav=no)
+dav=yes)
 AC_MSG_RESULT([$dav])
 
 AC_ARG_WITH(system-zlib,
@@ -219,31 +219,29 @@ AC_SEARCH_LIBS(nanosleep, posix4)
 AC_SEARCH_LIBS(gethostbyname, nsl)
 AC_SEARCH_LIBS(socket, socket inet)
 
-build_neon_lib=no
+neon_found=no
 if test "$dav" = yes; then
-  dnl We require neon 0.12
-  NEON_REQUIRE(0,12)
-
-  dnl Build neon. We support a VPATH build.
-  NEON_BUNDLED('${top_srcdir}/libneon', [
-      NEON_NORMAL_BUILD
-      NEON_XML_PARSER
-  ])
-#  LIBS=$NEONLIBS
-  DAV=dav.c
-  DAV_LS=dav_ls.c
-  LIBDAV=../libneon/libneon.la
-  build_neon_lib=yes
+  PKG_CHECK_EXISTS([neon],[
+                   PKG_CHECK_MODULES([LIBNEON],[neon >= 0.27.0],
+                                     [neon_found=yes],[neon_found=no])
+                   ])
+  if test "$neon_found" = "yes"; then
+      AC_DEFINE(HAVE_LIBNEON, 1, [Define to 1 if your system has libneon installed])
+      CPPFLAGS="$CPPFLAGS $LIBNEON_CFLAGS"
+      LIBS="$LIBS $LIBNEON_LIBS"
+      DAV=dav.c
+      DAV_LS=dav_ls.c
+  else
+    DAV=
+    DAV_LS=
+  fi
 else
-  NEON_BUILD_BUNDLED=no
-  AC_SUBST(NEON_BUILD_BUNDLED)
   DAV=
   DAV_LS=
   LIBDAV=
 fi
 
-AM_CONDITIONAL(BUILD_NEON_LIB, test x$build_neon_lib = xyes)
-AM_CONDITIONAL(BUILD_DAVSUPPORT, test x$build_neon_lib = xyes)
+AM_CONDITIONAL(BUILD_DAVSUPPORT, test x$neon_found = xyes)
 
 AC_SUBST(DAV)
 AC_SUBST(DAV_LS)
@@ -398,7 +396,6 @@ zlib/Makefile
 bzlib/Makefile
 lib/Makefile
 include/Makefile
-libneon/Makefile
 extfs/Makefile
 scripts/Makefile
 test/Makefile
@@ -443,36 +440,41 @@ include/version.h
 echo ""
 echo "Configuration details:"
 if test "$shared_build" = "yes"; then
-  echo "  Building library                          : yes (recommended: yes)"
+  echo "  Building library        : yes"
 else
-  echo "  Building library                          : no  (recommended: yes)"
+  echo "  Building library        : no"
 fi
 if test "$fuse_build" = "yes"; then
-  echo "  Building avfsd for fuse                   : yes (recommended: yes)"
+  echo "  Building avfsd for fuse : yes"
 else
-  echo "  Building avfsd for fuse                   : no  (recommended: yes)"
+  echo "  Building avfsd for fuse : no"
 fi
 echo ""
 if test "x$use_system_zlib" = "xyes"; then
-  echo "  Use system zlib                           : yes (recommended: no, slower access)"
+  echo "  Use zlib                : system (not recommended, slower random access)"
 else
-  echo "  Use system zlib                           : no  (recommended: no)"
+  echo "  Use zlib                : internal (recommended, faster random access)"
 fi
 if test "x$use_system_bzlib" = "xyes"; then
-  echo "  Use system bzlib                          : yes (recommended: no, slower access)"
+  echo "  Use bzlib               : system (not recommended, slower random access)"
 else
-  echo "  Use system bzlib                          : no  (recommended: no)"
+  echo "  Use bzlib               : internal (recommended, faster random access)"
 fi
 if test "x$use_liblzma" = "xyes"; then
-  echo "  Use liblzma                               : yes (recommended: yes)"
+  echo "  Use liblzma             : yes"
 else
-  echo "  Use liblzma                               : no  (recommended: yes)"
+  echo "  Use liblzma             : no"
 fi
 if test "x$use_libzstd" = "xyes"; then
-  echo "  Use libzstd                               : yes (recommended: yes)"
+  echo "  Use libzstd             : yes"
 else
-  echo "  Use libzstd                               : no  (recommended: yes)"
+  echo "  Use libzstd             : no"
+fi
+if test "x$dav" = "xyes" -a "x$neon_found" = "xyes"; then
+  echo "  WebDAV support          : yes"
+else
+  echo "  WebDAV support          : no"
 fi
 echo ""
-echo "  Installation prefix                       : $prefix"
+echo "  Installation prefix     : $prefix"
 echo ""

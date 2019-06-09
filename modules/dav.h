@@ -3,12 +3,11 @@
 
 #include "passwords.h"
 
-#include <ne_alloc.h>
-#include <http_request.h>
-#include <http_basic.h>
-#include <dav_basic.h>
-#include <dav_props.h>
-#include <uri.h>
+#include <neon/ne_alloc.h>
+#include <neon/ne_request.h>
+#include <neon/ne_basic.h>
+#include <neon/ne_props.h>
+#include <neon/ne_uri.h>
 
 /* --------------------------------------------------------------------- */
 
@@ -21,15 +20,18 @@
  * The DAV connection structure.
  */
 struct av_dav_conn {
-  http_session *sesh;
+  ne_session *sesh;
   char *user;
   char *password;
-  struct uri uri;
+  ne_uri uri;
   int isbusy;
+
+    struct davdata *data; // backlink to global data, needed for
+                          // password management
 };
 
 struct av_dav_fdidat {
-  struct uri *base_uri;
+  ne_uri *base_uri;
   char *tmpname;
   char *remote;
   int rdonly;
@@ -54,7 +56,6 @@ enum av_dav_resource_type {
 
 struct av_dav_resource {
     char *uri;
-    char *displayname;
     enum av_dav_resource_type type;
     size_t size;
     time_t modtime;

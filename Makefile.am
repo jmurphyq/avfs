@@ -8,7 +8,6 @@ SUBDIRS =        \
 	modules  \
 	zlib     \
 	bzlib    \
-	libneon  \
 	lib      \
 	include  \
 	test     \

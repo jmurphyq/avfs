@@ -1,3 +1,8 @@
+2019-06-09  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* dav: update dav module for latest libneon and removed bundled
+	neon.
+
 2019-06-02  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* ugz.c, zread.c: fix handling of gzip files with multiple

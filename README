@@ -127,6 +127,7 @@ Examples
   /#http:www.inf.bme.hu|~mszeredi|avfs|      - homepage of AVFS
   /#http:ftp:||ftp.funet.fi|pub|Linux        - use HTTP to get an ftp URL
                                         (useful if you use a HTTP-only proxy)
+  /#dav:http:host.domain.org/home/           - WebDAV
 
 The environment variable 'http_proxy' is used to set the default value
 of the proxy server. You can also set it's value by writing to the file

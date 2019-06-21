@@ -1,3 +1,7 @@
+2019-06-21  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* bump version to 1.1.0
+
 2019-06-09  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* dav: update dav module for latest libneon and removed bundled
@@ -8,6 +12,10 @@
 	* ugz.c, zread.c: fix handling of gzip files with multiple
 	members. It now extract all members after each other just like
 	gzip does.
+
+2019-05-26  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* remove coda and LD_PRELOAD support
 
 2019-05-24  Ralf Hoffmann <ralf@boomerangsworld.de>
 

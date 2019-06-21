@@ -1,3 +1,12 @@
+Changes from 1.0.6 to 1.1.0 (2019-06-21)
+   - improved handling of single '#' to stop resolving archive handlers
+     when it makes no sense to add another chain
+   - support multiple gzip member in a single file (concatenated gzip
+     files)
+   - updated webdav module with work with latest libneon (which is no
+     longer bundled)
+   - CODA and PRELOAD support has been removed
+
 Changes from 1.0.5 to 1.0.6 (2018-08-26)
    - added support for libzstd (zst files)
    - fixed arbitrary command execution in rsh/ssh module

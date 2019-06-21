@@ -1,8 +1,8 @@
 dnl Process this file with autoconf to produce a configure script.
 
 define(AVFS_MAJOR,[1])
-define(AVFS_MINOR,[0])
-define(AVFS_PATCH,[6])
+define(AVFS_MINOR,[1])
+define(AVFS_PATCH,[0])
 define(AVFS_COMMENT,[])
 
 define(AVFS_VERSION,AVFS_MAJOR[.]AVFS_MINOR[.]AVFS_PATCH[]AVFS_COMMENT)

@@ -1,0 +1,276 @@
+Notes:
+
+This file contains the differences between the original bzlib-1.0.8 version
+and the one used in avfs. The only significant change is the ability to save
+the internal state of decompression for later restore. This enables faster
+seek in compressed files.
+
+
+diff -purN bzip2-1.0.8/bzconf.h bzip2-1.0.8-avfs/bzconf.h
+--- bzip2-1.0.8/bzconf.h	1970-01-01 01:00:00.000000000 +0100
++++ bzip2-1.0.8-avfs/bzconf.h	2019-07-21 12:11:42.588645792 +0200
+@@ -0,0 +1,98 @@
++/* IMPORTANT NOTE: This is not the original bzip2 distribution.
++
++   This file is copyright (C) 2005 Ralf Hoffmann
++   (ralf@boomerangsworld.de)
++
++   The modified software can be distributed under the same licence as
++   the original software (see bellow).
++*/
++
++/*-------------------------------------------------------------*/
++/*--- Library top-level functions.                          ---*/
++/*---                                               bzlib.c ---*/
++/*-------------------------------------------------------------*/
++
++/*--
++  This file is a part of bzip2 and/or libbzip2, a program and
++  library for lossless, block-sorting data compression.
++
++  Copyright (C) 1996-2000 Julian R Seward.  All rights reserved.
++
++  Redistribution and use in source and binary forms, with or without
++  modification, are permitted provided that the following conditions
++  are met:
++
++  1. Redistributions of source code must retain the above copyright
++     notice, this list of conditions and the following disclaimer.
++
++  2. The origin of this software must not be misrepresented; you must 
++     not claim that you wrote the original software.  If you use this 
++     software in a product, an acknowledgment in the product 
++     documentation would be appreciated but is not required.
++
++  3. Altered source versions must be plainly marked as such, and must
++     not be misrepresented as being the original software.
++
++  4. The name of the author may not be used to endorse or promote 
++     products derived from this software without specific prior written 
++     permission.
++
++  THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
++  OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
++  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++  ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++  DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
++  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
++  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
++  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
++  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
++  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++  Julian Seward, Cambridge, UK.
++  jseward@acm.org
++  bzip2/libbzip2 version 1.0 of 21 March 2000
++
++  This program is based on (at least) the work of:
++     Mike Burrows
++     David Wheeler
++     Peter Fenwick
++     Alistair Moffat
++     Radford Neal
++     Ian H. Witten
++     Robert Sedgewick
++     Jon L. Bentley
++
++  For more information on these sources, see the manual.
++--*/
++
++#ifndef BZCONF_H
++#define BZCONF_H
++
++#define BZ_PREFIX 1
++
++#ifdef BZ_PREFIX
++#  define BZ2_blockSort ABZ_BZ2_blockSort
++#  define BZ2_hbAssignCodes ABZ_BZ2_hbAssignCodes
++#  define BZ2_hbCreateDecodeTables ABZ_BZ2_hbCreateDecodeTables
++#  define BZ2_hbMakeCodeLengths ABZ_BZ2_hbMakeCodeLengths
++#  define BZ2_bsInitWrite ABZ_BZ2_bsInitWrite
++#  define BZ2_compressBlock ABZ_BZ2_compressBlock
++#  define BZ2_decompress ABZ_BZ2_decompress
++#  define BZ2_bzBuffToBuffCompress ABZ_BZ2_bzBuffToBuffCompress
++#  define BZ2_bzBuffToBuffDecompress ABZ_BZ2_bzBuffToBuffDecompress
++#  define BZ2_bzCompress ABZ_BZ2_bzCompress
++#  define BZ2_bzCompressEnd ABZ_BZ2_bzCompressEnd
++#  define BZ2_bzCompressInit ABZ_BZ2_bzCompressInit
++#  define BZ2_bzDecompress ABZ_BZ2_bzDecompress
++#  define BZ2_bzDecompressEnd ABZ_BZ2_bzDecompressEnd
++#  define BZ2_bzDecompressInit ABZ_BZ2_bzDecompressInit
++#  define BZ2_bzRestoreBlockEnd ABZ_BZ2_bzRestoreBlockEnd
++#  define BZ2_bzSetBlockEndHandler ABZ_BZ2_bzSetBlockEndHandler
++#  define BZ2_bzlibVersion ABZ_BZ2_bzlibVersion
++#  define BZ2_indexIntoF ABZ_BZ2_indexIntoF
++#  define BZ2_crc32Table ABZ_BZ2_crc32Table
++#  define BZ2_rNums ABZ_BZ2_rNums
++#endif
++
++#endif
+diff -purN bzip2-1.0.8/bzlib.c bzip2-1.0.8-avfs/bzlib.c
+--- bzip2-1.0.8/bzlib.c	2019-07-13 19:50:05.000000000 +0200
++++ bzip2-1.0.8-avfs/bzlib.c	2019-07-21 12:11:42.588645792 +0200
+@@ -1,3 +1,11 @@
++/* IMPORTANT NOTE: This is not the original bzip2 distribution.
++
++   The modifications are copyright (C) 2001 Miklos Szeredi
++   <miklos@szeredi.hu>
++
++   The modified software can be distributed under the same licence as
++   the original software (see bellow).
++*/
+ 
+ /*-------------------------------------------------------------*/
+ /*--- Library top-level functions.                          ---*/
+@@ -523,10 +531,44 @@ int BZ_API(BZ2_bzDecompressInit)
+    s->tt                    = NULL;
+    s->currBlockNo           = 0;
+    s->verbosity             = verbosity;
++   s->blockEndHandler       = NULL;
++   s->blockEndHandlerData   = NULL;
+ 
+    return BZ_OK;
+ }
+ 
++void BZ_API(BZ2_bzSetBlockEndHandler) 
++    (
++        bz_stream *strm,
++        void (*func) (void *data, bz_stream *strm, unsigned int bitsrem,
++                      unsigned int bits, unsigned int crc,
++                      unsigned int blocksize),
++        void *data
++        )
++{
++    DState* s;
++
++    s = strm->state;
++    s->blockEndHandler = func;
++    s->blockEndHandlerData = data;
++}
++
++void BZ_API(BZ2_bzRestoreBlockEnd) 
++    (
++        bz_stream *strm,
++        unsigned int bitsrem,
++        unsigned int crc )
++{
++    DState* s;
++
++    AssertH((bitsrem >= 0 && bitsrem < 8), 2828);
++    s = strm->state;
++    s->bsBuff = 'B' >> (8 - bitsrem);
++    s->bsLive = bitsrem;
++    s->calculatedCombinedCRC = crc;
++}
++
++
+ 
+ /*---------------------------------------------------*/
+ /* Return  True iff data corruption is discovered.
+@@ -823,9 +865,10 @@ int BZ_API(BZ2_bzDecompress) ( bz_stream
+          if (corrupt) return BZ_DATA_ERROR;
+          if (s->nblock_used == s->save_nblock+1 && s->state_out_len == 0) {
+             BZ_FINALISE_CRC ( s->calculatedBlockCRC );
+-            if (s->verbosity >= 3) 
++            if (s->verbosity >= 3) {
+                VPrintf2 ( " {0x%08x, 0x%08x}", s->storedBlockCRC, 
+                           s->calculatedBlockCRC );
++            }
+             if (s->verbosity >= 2) VPrintf0 ( "]" );
+             if (s->calculatedBlockCRC != s->storedBlockCRC)
+                return BZ_DATA_ERROR;
+@@ -833,6 +876,10 @@ int BZ_API(BZ2_bzDecompress) ( bz_stream
+                = (s->calculatedCombinedCRC << 1) | 
+                     (s->calculatedCombinedCRC >> 31);
+             s->calculatedCombinedCRC ^= s->calculatedBlockCRC;
++            if(s->blockEndHandler != NULL)
++                s->blockEndHandler(s->blockEndHandlerData, strm, s->bsLive,
++                                   s->bsBuff, s->calculatedCombinedCRC,
++                                   s->blockSize100k);
+             s->state = BZ_X_BLKHDR_1;
+          } else {
+             return BZ_OK;
+diff -purN bzip2-1.0.8/bzlib.h bzip2-1.0.8-avfs/bzlib.h
+--- bzip2-1.0.8/bzlib.h	2019-07-13 19:50:05.000000000 +0200
++++ bzip2-1.0.8-avfs/bzlib.h	2019-07-21 12:11:42.588645792 +0200
+@@ -1,3 +1,11 @@
++/* IMPORTANT NOTE: This is not the original bzip2 distribution.
++
++   The modifications are copyright (C) 2001 Miklos Szeredi
++   <miklos@szeredi.hu>
++
++   The modified software can be distributed under the same licence as
++   the original software (see bellow).
++*/
+ 
+ /*-------------------------------------------------------------*/
+ /*--- Public header file for the library.                   ---*/
+@@ -22,6 +30,8 @@
+ #ifndef _BZLIB_H
+ #define _BZLIB_H
+ 
++#include "bzconf.h"
++
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+@@ -127,7 +137,19 @@ BZ_EXTERN int BZ_API(BZ2_bzDecompressEnd
+       bz_stream *strm 
+    );
+ 
++BZ_EXTERN void BZ_API(BZ2_bzSetBlockEndHandler) (
++      bz_stream *strm,
++      void (*func) (void *data, bz_stream *strm, unsigned int bitsrem,
++                    unsigned int bits, unsigned int crc,
++                    unsigned int blocksize),
++      void *data
++   );
+ 
++BZ_EXTERN void BZ_API(BZ2_bzRestoreBlockEnd) (
++      bz_stream *strm,
++      unsigned int bitsrem,
++      unsigned int crc
++   );
+ 
+ /*-- High(er) level library functions --*/
+ 
+diff -purN bzip2-1.0.8/bzlib_private.h bzip2-1.0.8-avfs/bzlib_private.h
+--- bzip2-1.0.8/bzlib_private.h	2019-07-13 19:50:05.000000000 +0200
++++ bzip2-1.0.8-avfs/bzlib_private.h	2019-07-21 12:11:42.588645792 +0200
+@@ -1,3 +1,11 @@
++/* IMPORTANT NOTE: This is not the original bzip2 distribution.
++
++   The modifications are copyright (C) 2001 Miklos Szeredi
++   <miklos@szeredi.hu>
++
++   The modified software can be distributed under the same licence as
++   the original software (see bellow).
++*/
+ 
+ /*-------------------------------------------------------------*/
+ /*--- Private header file for the library.                  ---*/
+@@ -408,6 +416,11 @@ typedef
+       Int32    perm   [BZ_N_GROUPS][BZ_MAX_ALPHA_SIZE];
+       Int32    minLens[BZ_N_GROUPS];
+ 
++      /* block end handler */
++      void (*blockEndHandler) (void *, bz_stream *, unsigned int, unsigned int,
++                               unsigned int, unsigned int);
++      void *   blockEndHandlerData;
++
+       /* save area for scalars in the main decompress code */
+       Int32    save_i;
+       Int32    save_j;
+diff -purN bzip2-1.0.8/compress.c bzip2-1.0.8-avfs/compress.c
+--- bzip2-1.0.8/compress.c	2019-07-13 19:50:05.000000000 +0200
++++ bzip2-1.0.8-avfs/compress.c	2019-07-21 12:11:42.588645792 +0200
+@@ -595,6 +595,8 @@ void sendMTFValues ( EState* s )
+ 
+    if (s->verbosity >= 3)
+       VPrintf1( "codes %d\n", s->numZ-nBytes );
++
++   (void)nBytes;
+ }
+ 
+ 

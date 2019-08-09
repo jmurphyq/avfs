@@ -100,3 +100,4 @@ zlib/Makefile
 zlib/Makefile.in
 fuse/avfsd
 include/version.h
+pkgconfig/avfs.pc

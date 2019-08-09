@@ -131,6 +131,12 @@ fi
 AC_SUBST(LIBBZ2)
 AC_SUBST(BZLIB_INCLUDE)
 
+AC_ARG_WITH(pkgconfigdir,
+            AC_HELP_STRING([--with-pkgconfigdir=DIR],[pkgconfig file in DIR @<:@LIBDIR/pkgconfig@:>@]),
+            [pkgconfigdir=$withval],
+            [pkgconfigdir='${libdir}/pkgconfig'])
+AC_SUBST(pkgconfigdir)
+
 dnl Checks for programs.
 cflags="$CFLAGS"
 AC_PROG_CC
@@ -388,6 +394,8 @@ CHECK_LD_VERSIONSCRIPT
 AC_SUBST(install_scriptcomps)
 AC_SUBST(shared_build)
 
+AC_CONFIG_FILES([pkgconfig/avfs.pc])
+
 AC_OUTPUT([
 Makefile
 src/Makefile
@@ -404,6 +412,7 @@ macros/Makefile
 patch/Makefile
 doc/Makefile
 fuse/Makefile
+pkgconfig/Makefile
 
 scripts/avfs-config
 

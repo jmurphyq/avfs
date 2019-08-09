@@ -17,7 +17,8 @@ SUBDIRS =        \
 	macros   \
 	extfs    \
 	doc	\
-	fuse
+	fuse \
+	pkgconfig
 
 EXTRA_DIST =                 \
 	glassfs/Makefile     \

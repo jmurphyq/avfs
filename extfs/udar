@@ -26,7 +26,7 @@ BASENAME="`echo "$2" | sed -e 's/\.[0-9]*\.[Dd][Aa][Rr]$//'`"
 
 mcdarfs_list ()
 {
-$DAR -l "$BASENAME" -N -Q -as 2>/dev/null | gawk -v uuid=$(id -ru) '
+$DAR -l "$BASENAME" -N -Q -as -ay 2>/dev/null | gawk -v uuid=$(id -ru) '
 BEGIN { flag=0 }
 /^-------/ { flag++; if (flag > 1) exit 0; next }
 /^$/ { next }

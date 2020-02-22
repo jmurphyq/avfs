@@ -20,6 +20,10 @@
 
 #define DOS_DIR_SEP_CHAR  '\\'
 
+enum rar_format { RAR,
+                  RAR50
+};
+
 static avbyte good_marker_head[] = 
 { 0x52, 0x61, 0x72, 0x21, 0x1a, 0x07, 0x00 };
 
@@ -36,6 +40,10 @@ typedef avbyte file_header[FILE_HEAD_SIZE];
 #define DBYTE(ptr) ((avushort)(BI(ptr,0) | (BI(ptr,1)<<8)))
 #define QBYTE(ptr) ((avuint)(BI(ptr,0) | (BI(ptr,1)<<8) | \
                    (BI(ptr,2)<<16) | (BI(ptr,3)<<24)))
+#define QQBYTE(ptr) ((avuquad)((avuquad)BI(ptr,0) | ((avuquad)BI(ptr,1)<<8) | \
+                               ((avuquad)BI(ptr,2)<<16) | ((avuquad)BI(ptr,3)<<24) | \
+                               ((avuquad)BI(ptr,4)<<32) | ((avuquad)BI(ptr,5)<<40) | \
+                               ((avuquad)BI(ptr,6)<<48) | ((avuquad)BI(ptr,7)<<56)))
 
 #define bh_CRC(bh)      DBYTE(bh     )
 #define bh_type(bh)     BYTE (bh +  2)
@@ -106,6 +114,26 @@ typedef avbyte file_header[FILE_HEAD_SIZE];
 #define CRC_TABLESIZE 256
 static avuint CRC_table[CRC_TABLESIZE];
 
+/* some rar 5 header values (not complete, just what is necessary for
+   the features */
+enum { RAR5_HEADER_TYPE_MAIN_ARCHIVE_HEADER = 1,
+       RAR5_HEADER_TYPE_FILE_HEADER = 2,
+       RAR5_HEADER_TYPE_END_OF_ARCHIVE = 5 };
+enum { RAR5_HEADER_FLAGS_EXTRA_PRESENT = 1,
+       RAR5_HEADER_FLAGS_DATA_PRESENT = 2 };
+enum { RAR5_HEADER_FILE_HEADER_FILE_FLAGS_DIRECTORY_OBJECT = 1,
+       RAR5_HEADER_FILE_HEADER_FILE_FLAGS_UNIX_TIME_PRESENT = 2,
+       RAR5_HEADER_FILE_HEADER_FILE_FLAGS_CRC_PRESENT = 4,
+       RAR5_HEADER_FILE_HEADER_FILE_FLAGS_UNPACKED_SIZE_UNKNOWN = 8 };
+enum { RAR5_HEADER_FILE_HEADER_HOST_OS_WINDOWS = 0,
+       RAR5_HEADER_FILE_HEADER_HOST_OS_UNIX = 1 };
+enum { RAR5_HEADER_FILE_HEADER_EXTRA_TYPE_FILE_TIME = 3 };
+enum { RAR5_HEADER_FILE_HEADER_EXTRA_FILE_TIME_FLAGS_UNIX_TIME = 0x01,
+       RAR5_HEADER_FILE_HEADER_EXTRA_FILE_TIME_FLAGS_MTIME_PRESENT = 0x02,
+       RAR5_HEADER_FILE_HEADER_EXTRA_FILE_TIME_FLAGS_CTIME_PRESENT = 0x04,
+       RAR5_HEADER_FILE_HEADER_EXTRA_FILE_TIME_FLAGS_ATIME_PRESENT = 0x08,
+       RAR5_HEADER_FILE_HEADER_EXTRA_FILE_TIME_FLAGS_NSEC_PRECISION = 0x10 };
+
 struct rarnode {
     avushort flags;
     avbyte hostos;
@@ -120,6 +148,17 @@ struct rar_entinfo {
     avoff_t datastart;
     block_header bh;
     file_header fh;
+};
+
+struct rar5_entinfo {
+    char *name;
+    char *linkname;
+    avbyte is_dir;
+    avoff_t size;
+    avtimestruc_t mtime;
+    avtimestruc_t atime;
+    avtimestruc_t ctime;
+    avmode_t mode;
 };
 
 struct rarfile {
@@ -182,7 +221,7 @@ static int read_block_header(vfile *vf, block_header bh, int all)
     return size;
 }
 
-static int read_marker_block(vfile *vf)
+static int read_marker_block(vfile *vf, enum rar_format *format)
 {
     int res;
     avbyte buf[MARKER_HEAD_SIZE], *pos = buf;
@@ -195,7 +234,30 @@ static int read_marker_block(vfile *vf)
         if(res < 0)
             return res;
 
-        if (memcmp(buf, good_marker_head, MARKER_HEAD_SIZE) == 0) return 0;
+        if (memcmp(buf, good_marker_head, MARKER_HEAD_SIZE - 1) == 0) {
+            if (buf[6] == 0) {
+                // rar format 1.5
+                *format = RAR;
+                return 0;
+            } else if (buf[6] == 1) {
+                // rar format 5.0
+                *format = RAR50;
+
+                // rar 5.0 uses one additional byte
+                res = av_read_all(vf, (char*)buf, 1);
+                if(res < 0)
+                    return res;
+
+                if (buf[0] != 0) {
+                    return -EINVAL;
+                }
+
+                return 0;
+            } else if (buf[6] == 2) {
+                // rar future format
+                return -ENOTSUP;
+            }
+        }
 
         pos = memchr(buf + 1, good_marker_head[0], MARKER_HEAD_SIZE-1);
         if (pos == NULL) readsize = MARKER_HEAD_SIZE;
@@ -354,6 +416,52 @@ static void insert_rarentry(struct archive *arch, struct rar_entinfo *ei)
     av_unref_obj(ent);
 }
 
+static void fill_rar5entry(struct archive *arch, struct entry *ent,
+                           struct rar5_entinfo *ei)
+{
+    struct rarnode *info;
+    struct archnode *nod;
+
+    nod = av_arch_new_node(arch, ent, ei->is_dir);
+
+    nod->st.mode = ei->mode;
+    nod->st.mtime = ei->mtime;
+    nod->st.atime = ei->atime;
+    nod->st.ctime = ei->ctime;
+    nod->st.size = ei->size;
+    nod->st.blocks = AV_BLOCKS(nod->st.size);
+    nod->st.blksize = 512;
+
+    nod->offset = 0;
+    nod->realsize = 0;
+
+    nod->linkname = NULL;
+
+    AV_NEW_OBJ(info, rarnode_delete);
+    nod->data = info;
+
+    info->flags = 0;
+    info->hostos = 0;
+    info->packer_version = 0;
+    info->method = 0;
+    info->path = av_strdup(ei->name);
+}
+
+static void insert_rar5entry(struct archive *arch, struct rar5_entinfo *ei)
+{
+    struct entry *ent;
+    int entflags = 0;
+    char *path = ei->name;
+
+    ent = av_arch_create(arch, path, entflags);
+    if(ent == NULL) {
+        return;
+    }
+
+    fill_rar5entry(arch, ent, ei);
+    av_unref_obj(ent);
+}
+
 static int crc_additional_header(vfile *vf, struct rar_entinfo *ei, int bytes_crcd, avuint *crc)
 {
     /* In the header there are some optional entries (e.g. salt, exttime; see arcread.ccp::ReadHeader
@@ -443,47 +551,479 @@ static int read_rarentry(vfile *vf, struct rar_entinfo *ei)
     return 0;
 }
 
+// up to 10 bytes, 7 bits of data per byte, bit 7 == 1 indicates
+// continuation. Encoding is in little endian
+static int read_vint(vfile *vf, avuquad *result, avuint *crc)
+{
+    int read_res;
+    int count = 0;
+    avbyte buf[1];
+    avuquad res = 0;
+
+    for (count = 0; count < 10; count++) {
+        read_res = av_read_all(vf, (char*)buf, 1);
+        if (read_res < 0) {
+            av_log(AVLOG_ERROR, "URAR: out of data during vint parsing");
+            return read_res;
+        }
+        *crc = CRC_byte(*crc, buf[0]);
+
+        res |= (buf[0] & 0x7f) << (7 * count);
+        if ((buf[0] & 0x80) == 0) {
+            *result = res;
+            return 0;
+        }
+    }
+
+    av_log(AVLOG_ERROR, "URAR: invalid vint");
+    
+    return -EINVAL;
+}
+
+static int read_uint32(vfile *vf, avuint *result, avuint *crc)
+{
+    avbyte buf[4];
+    int res;
+
+    res = av_read_all(vf, (char*)buf, 4);
+    if (res < 0) {
+        return res;
+    }
+
+    *result = QBYTE(buf);
+
+    if (crc) {
+        *crc = CRC_string(*crc, buf, 4);
+    }
+
+    return 0;
+}
+
+static int read_uint64(vfile *vf, avuquad *result, avuint *crc)
+{
+    avbyte buf[8];
+    int res;
+
+    res = av_read_all(vf, (char*)buf, 8);
+    if (res < 0) {
+        return res;
+    }
+
+    *result = QQBYTE(buf);
+
+    if (crc) {
+        *crc = CRC_string(*crc, buf, 8);
+    }
+
+    return 0;
+}
+
+static int skip_data(vfile *vf, size_t size, avuint *crc)
+{
+    while (size > 0) {
+        avbyte buf[1];
+        int res = av_read_all(vf, (char*)buf, 1);
+        if (res < 0) {
+            av_log(AVLOG_ERROR, "URAR: out of data during skipping data");
+            return res;
+        }
+        *crc = CRC_byte(*crc, buf[0]);
+        size--;
+    }
+
+    return 0;
+}
+
+#define READ_VINT(vf, target, crc) {                                    \
+        int res = read_vint((vf), (target), (crc));                     \
+        if (res < 0) {                                                  \
+            return res;                                                 \
+        }                                                               \
+    }
+
+#define READ_UINT32(vf, target, crc) {                                  \
+        int res = read_uint32((vf), (target), (crc));                   \
+        if (res < 0) {                                                  \
+            return res;                                                 \
+        }                                                               \
+    }
+
+#define READ_UINT64(vf, target, crc) {                                  \
+        int res = read_uint64((vf), (target), (crc));                   \
+        if (res < 0) {                                                  \
+            return res;                                                 \
+        }                                                               \
+    }
+
+static void convert_windows_timestamp(avuquad timestamp,
+                                      avtimestruc_t *ts)
+{
+    // windows timestamps are in 100ns from year 1600something
+    timestamp *= 100;
+    timestamp -= 11644473600000000000ULL;
+
+    ts->sec = timestamp / 1000000000;
+    ts->nsec = timestamp % 1000000000;
+}
+
+static int parse_rar5_time_header(vfile *vf,
+                                  struct rar5_entinfo *ei,
+                                  avuint *crc)
+{
+    // file time
+    avuquad flags;
+    int is_unix;
+
+    READ_VINT(vf, &flags, crc);
+
+    if (flags & RAR5_HEADER_FILE_HEADER_EXTRA_FILE_TIME_FLAGS_UNIX_TIME) {
+        is_unix = 1;
+    } else {
+        is_unix = 0;
+    }
+
+    if (flags & RAR5_HEADER_FILE_HEADER_EXTRA_FILE_TIME_FLAGS_MTIME_PRESENT) {
+        if (is_unix) {
+            avuint mtime;
+            READ_UINT32(vf, &mtime, crc);
+            ei->mtime.sec = mtime;
+        } else {
+            avuquad mtime;
+            READ_UINT64(vf, &mtime, crc);
+            convert_windows_timestamp(mtime, &ei->mtime);
+        }
+    }
+
+    if (flags & RAR5_HEADER_FILE_HEADER_EXTRA_FILE_TIME_FLAGS_CTIME_PRESENT) {
+        if (is_unix) {
+            avuint ctime;
+            READ_UINT32(vf, &ctime, crc);
+            ei->ctime.sec = ctime;
+        } else {
+            avuquad ctime;
+            READ_UINT64(vf, &ctime, crc);
+            convert_windows_timestamp(ctime, &ei->ctime);
+        }
+    }
+
+    if (flags & RAR5_HEADER_FILE_HEADER_EXTRA_FILE_TIME_FLAGS_ATIME_PRESENT) {
+        if (is_unix) {
+            avuint atime;
+            READ_UINT32(vf, &atime, crc);
+            ei->atime.sec = atime;
+        } else {
+            avuquad atime;
+            READ_UINT64(vf, &atime, crc);
+            convert_windows_timestamp(atime, &ei->atime);
+        }
+    }
+
+    if (is_unix && (flags & RAR5_HEADER_FILE_HEADER_EXTRA_FILE_TIME_FLAGS_NSEC_PRECISION)) {
+        if (flags & RAR5_HEADER_FILE_HEADER_EXTRA_FILE_TIME_FLAGS_MTIME_PRESENT) {
+            avuint t;
+            READ_UINT32(vf, &t, crc);
+            ei->mtime.nsec = t;
+        }
+        if (flags & RAR5_HEADER_FILE_HEADER_EXTRA_FILE_TIME_FLAGS_CTIME_PRESENT) {
+            avuint t;
+            READ_UINT32(vf, &t, crc);
+            ei->ctime.nsec = t;
+        }
+        if (flags & RAR5_HEADER_FILE_HEADER_EXTRA_FILE_TIME_FLAGS_ATIME_PRESENT) {
+            avuint t;
+            READ_UINT32(vf, &t, crc);
+            ei->atime.nsec = t;
+        }
+    }
+
+    return 0;
+}
+
+static int parse_rar5_extra_header(vfile *vf,
+                                   avuquad extra_header_bytes,
+                                   struct rar5_entinfo *ei,
+                                   avuint *crc)
+{
+    avoff_t start_pos = vf->ptr;
+
+    while (vf->ptr - start_pos < extra_header_bytes) {
+        avuquad size;
+        avuquad type;
+        avoff_t extra_header_pos;
+        int res;
+
+        READ_VINT(vf, &size, crc);
+
+        extra_header_pos = vf->ptr;
+
+        READ_VINT(vf, &type, crc);
+
+        if (type == RAR5_HEADER_FILE_HEADER_EXTRA_TYPE_FILE_TIME) {
+            res = parse_rar5_time_header(vf, ei, crc);
+            if (res < 0) {
+                return res;
+            }
+        }
+
+        if (vf->ptr - extra_header_pos > size ||
+            extra_header_pos - start_pos + size > extra_header_bytes) {
+            av_log(AVLOG_ERROR, "URAR: invalid extra header");
+            return -EINVAL;
+        }
+
+        res = skip_data(vf, size - (vf->ptr - extra_header_pos), crc);
+        if (res < 0) {
+            return res;
+        }
+    }
+
+    return 0;
+}
+
+static int parse_rar5_file_header(vfile *vf, struct archive *arch,
+                                  avuquad remaining_header_bytes,
+                                  avuint *crc)
+{
+    avoff_t start_pos = vf->ptr;
+    avuquad file_flags;
+    avuquad unpacked_size;
+    avuquad attributes;
+    avuint data_crc = 0;
+    avuquad compression_information;
+    avuquad host_os;
+    avuquad name_length;
+    int res;
+    char *name = NULL;
+    struct rar5_entinfo ei = { NULL, };
+
+    READ_VINT(vf, &file_flags, crc);
+    READ_VINT(vf, &unpacked_size, crc );
+
+    if (file_flags & RAR5_HEADER_FILE_HEADER_FILE_FLAGS_UNPACKED_SIZE_UNKNOWN) {
+        unpacked_size = 0;
+    }
+
+    READ_VINT(vf, &attributes, crc);
+
+    /* uint32? mtime */
+    if (file_flags & RAR5_HEADER_FILE_HEADER_FILE_FLAGS_UNIX_TIME_PRESENT) {
+        avuint mtime;
+        READ_UINT32(vf, &mtime, crc);
+
+        ei.mtime.sec = mtime;
+        ei.ctime = ei.mtime;
+        ei.atime = ei.mtime;
+    }
+
+    /* uint32? data_crc */
+    if (file_flags & RAR5_HEADER_FILE_HEADER_FILE_FLAGS_CRC_PRESENT) {
+        READ_UINT32(vf, &data_crc, crc);
+    }
+
+    READ_VINT(vf, &compression_information, crc);
+    READ_VINT(vf, &host_os, crc);
+    READ_VINT(vf, &name_length, crc);
+
+    if (name_length <= PATH_MAX) {
+        name = av_malloc(name_length + 1);
+
+        res = av_read_all(vf, name, name_length);
+        if (res < 0) {
+            av_free(name);
+            return res;
+        }
+        name[name_length] = '\0';
+        *crc = CRC_string(*crc, (avbyte*)name, name_length);
+    }
+
+    res = parse_rar5_extra_header(vf, remaining_header_bytes - (vf->ptr - start_pos), &ei, crc);
+    if (res < 0) {
+        av_free(name);
+        return res;
+    }
+
+    if (vf->ptr - start_pos > remaining_header_bytes) {
+        av_log(AVLOG_ERROR, "URAR: invalid header");
+        av_free(name);
+        return -EINVAL;
+    }
+
+    res = skip_data(vf, remaining_header_bytes - (vf->ptr - start_pos), crc);
+    if (res < 0) {
+        av_free(name);
+        return res;
+    }
+
+    /* convert file attribute */
+    if (host_os == RAR5_HEADER_FILE_HEADER_HOST_OS_UNIX) {
+        ei.mode = attributes;
+    } else {
+        // handle windows (host_os==0) and unknown identically
+        if (file_flags & RAR5_HEADER_FILE_HEADER_FILE_FLAGS_DIRECTORY_OBJECT) {
+            ei.mode = AV_IFDIR | 0700;
+        } else {
+            ei.mode = AV_IFREG | 0600;
+        }
+    }
+
+    /* add entry to archive */
+    if (name != NULL) {
+        ei.name = name;
+        ei.linkname = NULL;
+        ei.is_dir = file_flags & RAR5_HEADER_FILE_HEADER_FILE_FLAGS_DIRECTORY_OBJECT;
+        ei.size = unpacked_size;
+
+        insert_rar5entry(arch, &ei);
+
+        av_free(ei.name);
+        av_free(ei.linkname);
+    }
+
+    return 0;
+}
+
+/**
+ * parse a block, return <= 0 for errors, > 0 for block type
+ */
+static int parse_rar5_block(vfile *vf, struct archive *arch)
+{
+    int res;
+    avuquad header_size;
+    avuquad header_type;
+    avuquad header_flags;
+    avuquad extra_area_size;
+    avuquad data_size;
+    avuint crc = CRC_START;
+    avuint header_crc;
+    avoff_t headstart;
+
+    READ_UINT32(vf, &header_crc, NULL);
+    READ_VINT(vf, &header_size, &crc);
+
+    /* store current file offset since header flags define visible
+       fields, most of them are variable size. To skip all header
+       bytes including the unknown, we need to know much bytes we
+       already read */
+    headstart = vf->ptr;
+
+    READ_VINT(vf, &header_type, &crc);
+
+    if (header_type < RAR5_HEADER_TYPE_MAIN_ARCHIVE_HEADER ||
+        header_type > RAR5_HEADER_TYPE_END_OF_ARCHIVE) {
+        av_log(AVLOG_ERROR, "URAR: invalid header type");
+        return -EINVAL;
+    }
+
+    READ_VINT(vf, &header_flags, &crc);
+
+    /* vint? extra_area_size */
+    if (header_flags & RAR5_HEADER_FLAGS_EXTRA_PRESENT) {
+        READ_VINT(vf, &extra_area_size, &crc);
+    } else {
+        extra_area_size = 0;
+    }
+
+    /* vint? data_size */
+    if (header_flags & RAR5_HEADER_FLAGS_DATA_PRESENT) {
+        READ_VINT(vf, &data_size, &crc);
+    } else {
+        data_size = 0;
+    }
+
+    /* now we basically have all important fields, parse interesting block or skip the rest */
+    if (vf->ptr - headstart > header_size) {
+        av_log(AVLOG_ERROR, "URAR: invalid header size");
+        return -EINVAL;
+    }
+
+    if (header_type == RAR5_HEADER_TYPE_FILE_HEADER) {
+        res = parse_rar5_file_header(vf, arch, header_size - (vf->ptr - headstart), &crc);
+        if (res < 0) {
+            return res;
+        }
+    } else {
+        res = skip_data(vf, header_size - (vf->ptr - headstart), &crc);
+        if (res < 0) {
+            return res;
+        }
+    }
+
+    /* check header CRC */
+    if (~crc != header_crc) {
+        av_log(AVLOG_ERROR, "URAR: invalid crc");
+        return -EINVAL;
+    }
+
+    /* skip the data area as well, but it is not part of the CRC */
+    if (header_flags & RAR5_HEADER_FLAGS_DATA_PRESENT) {
+        av_lseek(vf, data_size, AVSEEK_CUR);
+    }
+
+    return header_type;
+}
+
+static int read_rar5file(vfile *vf, struct archive *arch)
+{
+    while (1) {
+        int res = parse_rar5_block(vf, arch);
+        if (res < 0) {
+            return res;
+        } else if (res == 0) {
+            return -EINVAL;
+        } else if (res == RAR5_HEADER_TYPE_END_OF_ARCHIVE) {
+            break;
+        }
+    }
+
+    return 0;
+}
+
 static int read_rarfile(vfile *vf, struct archive *arch)
 {
     avoff_t headstart;
     int res;
+    enum rar_format format;
 
-    res = read_marker_block(vf);
+    res = read_marker_block(vf, &format);
     if(res < 0)
         return res;
 
-    res = read_archive_header(vf);
-    if(res < 0)
-        return res;
-
-    headstart = vf->ptr;
-    while(1) {
-        struct rar_entinfo ei;
-    
-        res = read_block_header(vf, ei.bh, 0);
+    if (format == RAR) {
+        res = read_archive_header(vf);
         if(res < 0)
             return res;
-        if(res == 0)
-            break;
 
-        if (bh_type(ei.bh) == B_FILE) {
-            ei.name = NULL;
-            ei.linkname = NULL;
+        headstart = vf->ptr;
+        while(1) {
+            struct rar_entinfo ei;
+    
+            res = read_block_header(vf, ei.bh, 0);
+            if(res < 0)
+                return res;
+            if(res == 0)
+                break;
 
-            res = read_rarentry(vf, &ei);
-            if(res < 0) {
+            if (bh_type(ei.bh) == B_FILE) {
+                ei.name = NULL;
+                ei.linkname = NULL;
+
+                res = read_rarentry(vf, &ei);
+                if(res < 0) {
+                    av_free(ei.name);
+                    av_free(ei.linkname);
+                    return res;
+                }
+                ei.datastart = vf->ptr;
+
+                insert_rarentry(arch, &ei);
                 av_free(ei.name);
                 av_free(ei.linkname);
-                return res;
             }
-            ei.datastart = vf->ptr;
-
-            insert_rarentry(arch, &ei);
-            av_free(ei.name);
-            av_free(ei.linkname);
+            av_lseek(vf, headstart + bh_size(ei.bh), AVSEEK_SET);
+            headstart = vf->ptr;
         }
-        av_lseek(vf, headstart + bh_size(ei.bh), AVSEEK_SET);
-        headstart = vf->ptr;
+    } else if (format == RAR50) {
+        return read_rar5file(vf, arch);
     }
 
     return 0;

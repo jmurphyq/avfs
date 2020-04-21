@@ -317,6 +317,7 @@ int av_zstdfile_size(struct zstdfile *fil, struct zstdcache *zc, avoff_t *sizep)
 static void zstdfile_destroy(struct zstdfile *fil)
 {
     AV_LOCK(zstdread_lock);
+    zstd_delete_stream(fil->s);
     AV_UNLOCK(zstdread_lock);
 }
 

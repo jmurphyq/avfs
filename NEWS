@@ -1,5 +1,7 @@
-Changes from 1.1.1 to 1.1.2 (20xx-xx-xx)
+Changes from 1.1.1 to 1.1.2 (2020-04-27)
   - add support for rar 5.0 files
+  - fix memleak in zstd support
+  - small fix for extfs udar module
 
 Changes from 1.1.0 to 1.1.1 (2019-08-09)
    - updated internal bzlib to 1.0.8 to fix security bug

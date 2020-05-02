@@ -30,6 +30,8 @@
 # Caveat emptor.
 # Learn Latin.
 
+export LC_ALL=C
+
 # Define your awk
 AWK=@AWK@
 
@@ -53,8 +55,10 @@ mc_lha_fs_list()
          # Invent a generic permission
          $1 = (filename ~ /\/$/) ? "drwxr-xr-x":"-rwxr--r--";
          # Print it
-         printf "%s 1 %-8s %-8s %-8d %s %s %s %s\n",
-                 $1, uid, gid, $2, $4, $5, $6, filename;
+         if (length(filename) > 0) {
+            printf "%s 1 %-8s %-8s %-8d %s %s %s %s\n",
+                    $1, uid, gid, $2, $4, $5, $6, filename;
+         }
          # Get the next line of the list
          next;
       }

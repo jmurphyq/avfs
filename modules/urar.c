@@ -17,6 +17,7 @@
 
 #include <fcntl.h>
 #include <unistd.h>
+#include <limits.h>
 
 #define DOS_DIR_SEP_CHAR  '\\'
 

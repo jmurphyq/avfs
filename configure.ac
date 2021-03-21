@@ -373,9 +373,23 @@ if test "$ac_cv_use_zstd" = "yes"; then
     dnl AC_MSG_RESULT($have_libzstd)
 fi
 
+dnl ================================================================
+dnl == check for liblzip                                          ==
+dnl ================================================================
+
+use_liblzip=no
+AC_ARG_WITH(lzip,AC_HELP_STRING([--with-lzip],[use lzip (default is YES)]),
+            ac_cv_use_lzip=$withval, ac_cv_use_lzip=yes)
+if test "$ac_cv_use_lzip" = "yes"; then
+    AC_CHECK_HEADERS(lzlib.h, [AC_CHECK_LIB(lz, LZ_decompress_open,
+        [LIBS="$LIBS -llz"
+         AC_DEFINE(HAVE_LIBLZIP, 1, [Define to 1 if your system has liblzip installed])
+        use_liblzip=yes])])
+fi
 
 AM_CONDITIONAL(USE_LIBLZMA, test x$use_liblzma = xyes)
 AM_CONDITIONAL(USE_LIBZSTD, test x$use_libzstd = xyes)
+AM_CONDITIONAL(USE_LIBLZIP, test x$use_liblzip = xyes)
 AM_CONDITIONAL(INSTALL_FUSE, test x$install_fuse = xyes)
 
 dnl ================================================================
@@ -483,6 +497,11 @@ if test "x$dav" = "xyes" -a "x$neon_found" = "xyes"; then
   echo "  WebDAV support          : yes"
 else
   echo "  WebDAV support          : no"
+fi
+if test "x$use_liblzip" = "xyes"; then
+  echo "  Use liblzip             : yes"
+else
+  echo "  Use liblzip             : no"
 fi
 echo ""
 echo "  Installation prefix     : $prefix"

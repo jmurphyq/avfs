@@ -35,6 +35,10 @@ if USE_LIBZSTD
     modules += uzstd.c
 endif
 
+if USE_LIBLZIP
+    modules += ulzip.c
+endif
+
 libmodules_la_SOURCES = \
 	$(modules)
 

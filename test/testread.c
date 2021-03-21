@@ -32,7 +32,7 @@ int main( int argc, char **argv )
   
     fd = virt_open( argv[1], O_RDONLY, 0 );
     if ( fd >= 0 ) {
-        ssize_t total_len;
+        ssize_t total_len = 0;
 
         for (;;) {
             len = virt_read( fd, buf, sizeof( buf ) );

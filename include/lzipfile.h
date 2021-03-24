@@ -22,5 +22,6 @@ avssize_t av_lzipfile_pread(struct lzipfile *fil, struct lzipcache *zc, char *bu
 struct lzipfile *av_lzipfile_new(vfile *vf);
 int av_lzipfile_size(struct lzipfile *fil, struct lzipcache *zc, avoff_t *sizep);
 struct lzipcache *av_lzipcache_new();
+avoff_t av_lzipcache_size(struct lzipcache *zc);
 
 #endif /* LZIPFILE_H */

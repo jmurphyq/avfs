@@ -18,27 +18,39 @@
 #include <fcntl.h>
 #include <lzlib.h>
 
+#define INDEXDISTANCE 1048576
+#define LOOKUP_COST_DISTANCE (16 * 1024) // cost for searching for
+                                         // cached member post instead
+                                         // of just seeking forward
+
 #define INBUFSIZE 16384
 #define OUTBUFSIZE 32768
 
-static int lzipread_nextid;
 static AV_LOCK_DECL(lzipread_lock);
 
+struct lzipindex {
+    avoff_t o_offset;          /* The number of output bytes */
+    avoff_t i_offset;        /* The offset within the input file where the member begins */
+    struct lzipindex *next;
+};
+
 struct lzipcache {
-    int id;
-    avoff_t size;
+    avoff_t cachesize;  // size of cache used to decide for cleanup
+    avoff_t nextindex;  // min position when next index should happen
+    avoff_t size;       // output file size
+    struct lzipindex *indexes;
 };
 
 struct lzipfile {
     struct LZ_Decoder *decoder;
     int iseof;
     int iserror;
-    int id; /* The id of the last used lzipcache */
     
     vfile *infile;
 
     avoff_t total_in;
     avoff_t total_out;
+    avoff_t last_member_pos;
 
     char *outbuf;
     size_t outbuf_size;
@@ -75,7 +87,45 @@ static int lzipfile_reset(struct lzipfile *fil)
     fil->iseof = 0;
     fil->iserror = 0;
     fil->total_in = fil->total_out = 0;
+    fil->last_member_pos = 0;
     return lzip_new_decoder(&fil->decoder);
+}
+
+static int lzipfile_save_index(struct lzipfile *fil, struct lzipcache *zc,
+                               avoff_t o_offset,
+                               avoff_t i_offset)
+{
+    struct lzipindex **zp;
+    struct lzipindex *zi;
+
+    for(zp = &zc->indexes; *zp != NULL; zp = &(*zp)->next);
+
+    AV_NEW(zi);
+    zi->o_offset = o_offset;
+    zi->i_offset = i_offset;
+    zi->next = NULL;
+    
+    *zp = zi;
+
+    zc->nextindex += INDEXDISTANCE;
+    zc->cachesize += sizeof(*zi);
+    
+    return 0;
+}
+
+static struct lzipindex *lzipcache_find_index(struct lzipcache *c, avoff_t offset)
+{
+    struct lzipindex *prevzi;
+    struct lzipindex *zi;
+    
+    prevzi = NULL;
+    for(zi = c->indexes; zi != NULL; zi = zi->next) {
+        if(zi->o_offset > offset)
+            break;
+        prevzi = zi;
+    }
+
+    return prevzi;
 }
 
 static int lzipfile_fill_inbuf(struct lzipfile *fil)
@@ -123,6 +173,17 @@ static int lzipfile_decompress(struct lzipfile *fil, struct lzipcache *zc)
         if( ret < 0 ) {
             av_log(AVLOG_ERROR, "LZIP: decompress error");
             return -EIO;
+        }
+        if (LZ_decompress_member_finished(fil->decoder)){
+            AV_LOCK(lzipread_lock);
+            if(fil->total_out + ret >= zc->nextindex) {
+                res = lzipfile_save_index(fil, zc,
+                                          fil->total_out + ret,
+                                          fil->last_member_pos + LZ_decompress_member_position(fil->decoder));
+            }
+            AV_UNLOCK(lzipread_lock);
+
+            fil->last_member_pos += LZ_decompress_member_position(fil->decoder);
         }
 
         fil->total_out += ret;
@@ -203,27 +264,66 @@ static int lzipfile_skip_to(struct lzipfile *fil, struct lzipcache *zc,
     return 0;
 }
 
+static int lzipfile_seek(struct lzipfile *fil, struct lzipcache *zc, avoff_t offset)
+{
+    struct lzipindex *zi;
+
+    if ( fil->total_out < offset && offset - fil->total_out < LOOKUP_COST_DISTANCE ) {
+        // do nothing if we just need to go slightly forward
+        return 0;
+    }
+    
+    zi = lzipcache_find_index(zc, offset);
+
+    if(zi == NULL) {
+        if (fil->total_out > offset) {
+            return lzipfile_reset(fil);
+        }
+    } else {
+        int res;
+
+        if ( zi->o_offset < fil->total_out &&
+             offset > fil->total_out ) {
+            return 0;
+        }
+
+        res = lzipfile_reset(fil);
+        if ( res < 0 ) {
+            return res;
+        }
+        fil->total_in = zi->i_offset;
+        fil->total_out = zi->o_offset;
+        fil->last_member_pos = zi->i_offset;
+
+        LZ_decompress_sync_to_member(fil->decoder);
+    }
+    
+    return 0;
+}
+
+static int lzipfile_goto(struct lzipfile *fil, struct lzipcache *zc, avoff_t offset)
+{
+    int res;
+
+    AV_LOCK(lzipread_lock);
+    res = lzipfile_seek(fil, zc, offset);
+    AV_UNLOCK(lzipread_lock);
+    if(res == 0) {
+        res = lzipfile_skip_to(fil, zc, offset);
+    }
+
+    return res;
+}
+
 static avssize_t av_lzipfile_do_pread(struct lzipfile *fil, struct lzipcache *zc,
                                       char *buf, avsize_t nbyte, avoff_t offset)
 {
     avssize_t res;
     avoff_t curroff;
 
-    fil->id = zc->id;
-
     curroff = fil->total_out;
     if(offset != curroff) {
-        AV_LOCK(lzipread_lock);
-        if ( curroff > offset ) {
-            res = lzipfile_reset( fil );
-        } else {
-            res = 0;
-        }
-        AV_UNLOCK(lzipread_lock);
-        if(res < 0)
-            return res;
-
-        res = lzipfile_skip_to(fil, zc, offset);
+        res = lzipfile_goto(fil, zc, offset);
         if(res < 0)
             return res;
     }
@@ -262,11 +362,7 @@ int av_lzipfile_size(struct lzipfile *fil, struct lzipcache *zc, avoff_t *sizep)
         return 0;
     }
 
-    fil->id = zc->id;
-
-    AV_LOCK(lzipread_lock);
     res = lzipfile_reset( fil );
-    AV_UNLOCK(lzipread_lock);
     if(res < 0)
         return res;
 
@@ -289,9 +385,7 @@ int av_lzipfile_size(struct lzipfile *fil, struct lzipcache *zc, avoff_t *sizep)
 
 static void lzipfile_destroy(struct lzipfile *fil)
 {
-    AV_LOCK(lzipread_lock);
     lzip_delete_decoder(fil->decoder);
-    AV_UNLOCK(lzipread_lock);
 }
 
 struct lzipfile *av_lzipfile_new(vfile *vf)
@@ -303,8 +397,8 @@ struct lzipfile *av_lzipfile_new(vfile *vf)
     fil->iseof = 0;
     fil->iserror = 0;
     fil->infile = vf;
-    fil->id = 0;
     fil->total_in = fil->total_out = 0;
+    fil->last_member_pos = 0;
 
     res = lzip_new_decoder(&fil->decoder);
     if(res < 0)
@@ -315,6 +409,13 @@ struct lzipfile *av_lzipfile_new(vfile *vf)
 
 static void lzipcache_destroy(struct lzipcache *zc)
 {
+    struct lzipindex *zi;
+    struct lzipindex *nextzi;
+
+    for(zi = zc->indexes; zi != NULL; zi = nextzi) {
+        nextzi = zi->next;
+        av_free(zi);
+    }
 }
 
 struct lzipcache *av_lzipcache_new()
@@ -323,13 +424,14 @@ struct lzipcache *av_lzipcache_new()
 
     AV_NEW_OBJ(zc, lzipcache_destroy);
     zc->size = -1;
+    zc->cachesize = 0;
+    zc->indexes = NULL;
+    zc->nextindex = INDEXDISTANCE;
 
-    AV_LOCK(lzipread_lock);
-    if(lzipread_nextid == 0)
-        lzipread_nextid = 1;
-
-    zc->id = lzipread_nextid++;
-    AV_UNLOCK(lzipread_lock);
-    
     return zc;
+}
+
+avoff_t av_lzipcache_size(struct lzipcache *zc)
+{
+    return zc->cachesize;
 }

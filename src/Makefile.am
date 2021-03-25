@@ -46,6 +46,10 @@ if USE_LIBZSTD
 libavfscore_la_SOURCES += zstdread.c
 endif
 
+if USE_LIBLZIP
+libavfscore_la_SOURCES += lzipread.c
+endif
+
 noinst_HEADERS = \
 	archint.h \
 	filtprog.h \

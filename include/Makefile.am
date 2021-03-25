@@ -43,4 +43,8 @@ if USE_LIBZSTD
 noinst_HEADERS += zstdfile.h
 endif
 
+if USE_LIBLZIP
+noinst_HEADERS += lzipfile.h
+endif
+
 BUILT_SOURCES = version.h

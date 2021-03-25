@@ -12,12 +12,14 @@
 
 #include "lzipfile.h"
 #include "filecache.h"
+#include "cache.h"
 #include "oper.h"
 #include "version.h"
 
 struct lzipnode {
+    avmutex lock;
     struct avstat sig;
-    struct lzipcache *cache;
+    struct cacheobj *cache;
     avino_t ino;
 };
 
@@ -31,6 +33,7 @@ struct lziphandle {
 static void lzipnode_destroy(struct lzipnode *nod)
 {
     av_unref_obj(nod->cache);
+    AV_FREELOCK(nod->lock);
 }
 
 static struct lzipnode *lzip_new_node(ventry *ve, struct avstat *stbuf)
@@ -38,8 +41,9 @@ static struct lzipnode *lzip_new_node(ventry *ve, struct avstat *stbuf)
     struct lzipnode *nod;
 
     AV_NEW_OBJ(nod, lzipnode_destroy);
+    AV_INITLOCK(nod->lock);
     nod->sig = *stbuf;
-    nod->cache = av_lzipcache_new();
+    nod->cache = NULL;
     nod->ino = av_new_ino(ve->mnt->avfs);
     
     return nod;
@@ -102,6 +106,33 @@ static int lzip_getnode(ventry *ve, vfile *base, struct lzipnode **resp)
 
     *resp = nod;
     return 0;
+}
+
+static struct lzipcache *lzip_getcache(ventry *base, struct lzipnode *nod)
+{
+    struct lzipcache *cache;
+    
+    cache = (struct lzipcache *) av_cacheobj_get(nod->cache);
+    if(cache == NULL) {
+        int res;
+        char *name;
+
+        res = av_generate_path(base, &name);
+        if(res < 0)
+            name = NULL;
+        else
+            name = av_stradd(name, "(index)", NULL);
+
+        cache = av_lzipcache_new();
+        av_unref_obj(nod->cache);
+
+        /* FIXME: the cacheobj should only be created when the lzipcache
+           is nonempty */
+        nod->cache = av_cacheobj_new(cache, name);
+        av_free(name); 
+    }
+
+    return cache;
 }
 
 static int lzip_lookup(ventry *ve, const char *name, void **newp)
@@ -183,10 +214,37 @@ static avssize_t lzip_read(vfile *vf, char *buf, avsize_t nbyte)
 {
     avssize_t res;
     struct lziphandle *fil = (struct lziphandle *) vf->data;
- 
-    res = av_lzipfile_pread(fil->zfil, fil->node->cache, buf, nbyte, vf->ptr);
-    if(res > 0)
+    struct lzipcache *zc;
+    struct cacheobj *cobj;
+    avoff_t prev_cachesize;
+
+    AV_LOCK(fil->node->lock);
+    zc = lzip_getcache(vf->mnt->base, fil->node);
+    cobj = fil->node->cache;
+    av_ref_obj(cobj);
+    AV_UNLOCK(fil->node->lock);
+
+    prev_cachesize = av_lzipcache_size(zc);
+    
+    res = av_lzipfile_pread(fil->zfil, zc, buf, nbyte, vf->ptr);
+    if(res > 0) {
+        avoff_t new_cachesize;
+
         vf->ptr += res;
+
+        new_cachesize = av_lzipcache_size(zc);
+        if (new_cachesize != prev_cachesize) {
+            av_cacheobj_setsize(cobj, new_cachesize);
+        }
+    } else {
+        AV_LOCK(fil->node->lock);
+        av_unref_obj(fil->node->cache);
+        fil->node->cache = NULL;
+        AV_UNLOCK(fil->node->lock);
+    }
+
+    av_unref_obj(zc);
+    av_unref_obj(cobj);
 
     return res;
 }
@@ -198,19 +256,31 @@ static int lzip_getattr(vfile *vf, struct avstat *buf, int attrmask)
     struct lzipnode *nod = fil->node;
     avoff_t size;
     const int basemask = AVA_MODE | AVA_UID | AVA_GID | AVA_MTIME | AVA_ATIME | AVA_CTIME;
+    struct lzipcache *zc;
+    struct cacheobj *cobj;
 
     res = av_fgetattr(fil->base, buf, basemask);
     if(res < 0)
         return res;
 
+    AV_LOCK(fil->node->lock);
+    zc = lzip_getcache(vf->mnt->base, fil->node);
+    cobj = fil->node->cache;
+    av_ref_obj(cobj);
+    AV_UNLOCK(fil->node->lock);
+
     if((attrmask & (AVA_SIZE | AVA_BLKCNT)) != 0) {
-        res = av_lzipfile_size(fil->zfil, fil->node->cache, &size);
+        res = av_lzipfile_size(fil->zfil, zc, &size);
         if(res == 0 && size == -1) {
             fil->zfil = av_lzipfile_new(fil->base);
-            res = av_lzipfile_size(fil->zfil, fil->node->cache, &size);
+            res = av_lzipfile_size(fil->zfil, zc, &size);
         }
-        if(res < 0)
+        if(res < 0) {
+            av_unref_obj(zc);
+            av_unref_obj(cobj);
+
             return res;
+        }
 
         buf->size = size;
         buf->blocks = AV_BLOCKS(buf->size);
@@ -222,6 +292,9 @@ static int lzip_getattr(vfile *vf, struct avstat *buf, int attrmask)
     buf->ino = nod->ino;
     buf->nlink = 1;
     
+    av_unref_obj(zc);
+    av_unref_obj(cobj);
+
     return 0;
 }
 

@@ -159,6 +159,7 @@ The following "handlers" are available now:
   #ucftp_ctl         control ftp sessions   
   #ugz               gunzip                 builtin (1)
   #ugzip             gunzip                 uses gzip
+  #ulzip             unlzip                 builtin
   #urar              unrar                  builtin list + uses rar to extract
   #utar              untar                  builtin
   #uxz               unxz/unlzma            builtin

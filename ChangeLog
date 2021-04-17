@@ -1,3 +1,8 @@
+2021-04-17  Ralf Hoffmann <ralf@boomerangsworld.de>
+
+	* add support for ls output with SElinux attributes
+	  (patch from Bert Cosemans)
+
 2021-04-04  Ralf Hoffmann <ralf@boomerangsworld.de>
 
 	* add support for lzip (ulzip module for .lz files)
